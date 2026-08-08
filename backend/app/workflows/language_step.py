@@ -2,7 +2,7 @@ import logging
 from typing import Any
 
 from app.services.supply_rules import with_signal_defaults
-from app.workflows.langchain_openclaw import recommend_supply_response
+from app.workflows.minimax_recommend import recommend_supply_response
 
 logger = logging.getLogger(__name__)
 

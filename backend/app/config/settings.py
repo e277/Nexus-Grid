@@ -23,8 +23,19 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://postgres:postgres@db:5432/nexus"
     redis_url: str = "redis://redis:6379/0"
 
-    openai_api_key: str = ""
     cmdop_api_key: str = ""
+
+    # LLM provider for the workflow's recommendation step. MiniMax exposes
+    # an OpenAI-compatible chat completions endpoint, called directly via
+    # httpx (see app/workflows/minimax_recommend.py) — no LangChain/OpenAI
+    # dependency.
+    minimax_api_key: str = ""
+    minimax_base_url: str = "https://api.minimax.io/v1"
+    minimax_model: str = "MiniMax-M2"
+
+    sho_api_key: str = ""
+    sho_base_url: str = ""
+    sho_model: str = ""
 
     # Backend selection: safe in-memory defaults; compose/prod opt into
     # redis/postgres for durability across restarts and replicas

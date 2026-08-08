@@ -13,7 +13,7 @@ React frontend (frontend/src)
 FastAPI backend (backend/app/main.py)
    ├── Domain APIs (farmers, crops, buyers, shipments, logistics, climate, customs)
    ├── Event bus (memory or Redis) → SupervisorAgent → specialist agents
-   ├── LangGraph workflow (/workflow) → one LLM call (gpt-4o-mini via LangChain)
+   ├── LangGraph workflow (/workflow) → one LLM call (MiniMax, direct HTTP)
    └── Background SupplyAgent poll loop
         ▼
 Postgres (SQLAlchemy models) + Redis (docker-compose.yml)
@@ -23,11 +23,12 @@ There are three layers of "intelligence," connected through an event bus and a L
 
 ## 2. The LLM Connection
 
-The only place a model is invoked is `backend/app/workflows/langchain_openclaw.py`:
+The only place a model is invoked is `backend/app/workflows/minimax_recommend.py`:
 
-- `recommend_supply_response()` builds a prompt from supply-chain context (crop, quantity, farmer, island, market/weather/demand/logistics signals) and calls **OpenAI `gpt-4o-mini`** through LangChain's `init_chat_model` (temperature 0.4).
-- The API key comes from `OPENAI_API_KEY` in the environment or `.env` (see `app/config/settings.py`).
-- **Graceful degradation**: if LangChain isn't installed or the key is missing, the function returns a `{"source": "stub", ...}` payload instead of raising, so the workflow keeps running without an LLM.
+- `recommend_supply_response()` builds a prompt from supply-chain context (crop, quantity, farmer, island, market/weather/demand/logistics signals) and POSTs it directly to **MiniMax**'s OpenAI-compatible chat completions endpoint via `httpx` — no LangChain or OpenAI SDK involved.
+- The request goes to `{MINIMAX_BASE_URL}/chat/completions` with `Authorization: Bearer {MINIMAX_API_KEY}`, model `MINIMAX_MODEL` (default `MiniMax-M2`), temperature 0.4.
+- Keys/URLs come from the environment or `.env` (see `app/config/settings.py`).
+- **Graceful degradation**: if `MINIMAX_API_KEY` is unset, or the HTTP call fails for any reason (network, auth, timeout), the function returns a `{"source": "stub"|"error", ...}` payload instead of raising, so the workflow keeps running without an LLM.
 
 ### OpenClaw / cmdop
 
@@ -89,7 +90,7 @@ perceive → assess → recommend → plan → (approval gate) → execute → m
 **Workflow-driven (includes the LLM):**
 1. A client POSTs to `/workflow` with a supply signal.
 2. LangGraph runs perceive → assess, classifying supply risk from quantity.
-3. `recommend` calls gpt-4o-mini (or returns a stub without a key).
+3. `recommend` calls MiniMax (or returns a stub without a key).
 4. `plan` builds a concrete action; urgent plans may hold for human approval.
 5. `execute` → `monitor` (may re-plan once on disruption) → `recover`, with the full state history checkpointed per thread id.
 
@@ -99,7 +100,9 @@ All settings live in `app/config/settings.py` (env vars / `.env`):
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `OPENAI_API_KEY` | Enables the LLM recommendation step | empty (stub mode) |
+| `MINIMAX_API_KEY` | Enables the LLM recommendation step | empty (stub mode) |
+| `MINIMAX_BASE_URL` | MiniMax's OpenAI-compatible endpoint | `https://api.minimax.io/v1` |
+| `MINIMAX_MODEL` | MiniMax model id to call | `MiniMax-M2` |
 | `CMDOP_API_KEY` | Enables the OpenClaw runtime client | empty (unconfigured) |
 | `DATABASE_URL` | Postgres connection | compose default |
 | `REDIS_URL` | Redis connection | compose default |

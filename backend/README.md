@@ -92,7 +92,7 @@ All settings are read from the environment (or `.env`) via `app/config/settings.
 | ------------------------------- | ------------------------------------------------ | --------------------------------------------- |
 | `DATABASE_URL`                | `postgresql://postgres:postgres@db:5432/nexus` | SQLAlchemy connection URL                     |
 | `REDIS_URL`                   | `redis://redis:6379/0`                         | Redis connection URL                          |
-| `OPENAI_API_KEY`              | (empty)                                          | Enables LLM recommendation step               |
+| `MINIMAX_API_KEY`             | (empty)                                          | Enables LLM recommendation step (MiniMax)     |
 | `CMDOP_API_KEY`               | (empty)                                          | Enables the OpenClaw agent runtime client     |
 | `EVENT_BUS_BACKEND`           | `memory`                                       | `redis` = durable Redis Streams bus         |
 | `CHECKPOINTER_BACKEND`        | `memory`                                       | `sqlite` or `postgres` = durable workflow state |
@@ -148,6 +148,6 @@ alembic upgrade head
 ```
 
 The response contains the state updates from each workflow phase. The LLM
-recommendation step activates when `OPENAI_API_KEY` is set; otherwise it
+recommendation step activates when `MINIMAX_API_KEY` is set; otherwise it
 returns a stub explaining what is missing (see
-`app/workflows/langchain_openclaw.py`).
+`app/workflows/minimax_recommend.py`).
