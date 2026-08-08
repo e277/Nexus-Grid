@@ -26,8 +26,7 @@ class Settings(BaseSettings):
 
     # LLM provider for the workflow's recommendation step. MiniMax exposes
     # an OpenAI-compatible chat completions endpoint, called directly via
-    # httpx (see app/workflows/minimax_recommend.py) — no LangChain/OpenAI
-    # dependency.
+    # httpx (see app/workflows/minimax_recommend.py)
     minimax_api_key: str = ""
     minimax_base_url: str = "https://api.minimax.io/v1"
     minimax_model: str = "MiniMax-M2"

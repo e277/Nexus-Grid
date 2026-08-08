@@ -38,7 +38,6 @@ The objective is to reduce food waste, improve regional food security, and optim
 
 - OpenClaw (agent runtime)
 - LangGraph (workflow orchestration)
-- LangChain (if needed)
 
 **Frontend**
 

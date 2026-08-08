@@ -1,8 +1,7 @@
 """LLM recommendation step (direct MiniMax call) with optional OpenClaw runtime.
 
 MiniMax exposes an OpenAI-compatible chat completions endpoint, so the
-recommendation step talks to it directly over HTTP via ``httpx`` — no
-LangChain/OpenAI dependency required. OpenClaw is a separate *agent
+recommendation step talks to it directly over HTTP via ``httpx``. OpenClaw is a separate *agent
 runtime* client (a themed wrapper over the cmdop SDK), loaded through the
 compat shim in ``app.integrations.openclaw_compat`` and only constructed
 when ``CMDOP_API_KEY`` is configured. Until execution agents dispatch real

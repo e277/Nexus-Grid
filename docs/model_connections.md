@@ -25,7 +25,7 @@ There are three layers of "intelligence," connected through an event bus and a L
 
 The only place a model is invoked is `backend/app/workflows/minimax_recommend.py`:
 
-- `recommend_supply_response()` builds a prompt from supply-chain context (crop, quantity, farmer, island, market/weather/demand/logistics signals) and POSTs it directly to **MiniMax**'s OpenAI-compatible chat completions endpoint via `httpx` — no LangChain or OpenAI SDK involved.
+- `recommend_supply_response()` builds a prompt from supply-chain context (crop, quantity, farmer, island, market/weather/demand/logistics signals) and POSTs it directly to **MiniMax**'s OpenAI-compatible chat completions endpoint via `httpx`.
 - The request goes to `{MINIMAX_BASE_URL}/chat/completions` with `Authorization: Bearer {MINIMAX_API_KEY}`, model `MINIMAX_MODEL` (default `MiniMax-M2`), temperature 0.4.
 - Keys/URLs come from the environment or `.env` (see `app/config/settings.py`).
 - **Graceful degradation**: if `MINIMAX_API_KEY` is unset, or the HTTP call fails for any reason (network, auth, timeout), the function returns a `{"source": "stub"|"error", ...}` payload instead of raising, so the workflow keeps running without an LLM.
