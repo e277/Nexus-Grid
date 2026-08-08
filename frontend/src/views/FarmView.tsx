@@ -3,6 +3,7 @@ import { api } from "../api";
 import { BarChart } from "../components/charts/BarChart";
 import { DataTable } from "../components/DataTable";
 import { FormError, SubmitButton, TextField } from "../components/Fields";
+import { Modal } from "../components/Modal";
 import { Panel } from "../components/Panel";
 import { StatTile } from "../components/StatTile";
 import { usePoll } from "../hooks";
@@ -19,11 +20,13 @@ export function FarmView() {
   const [fName, setFName] = useState("");
   const [fIsland, setFIsland] = useState("");
   const [fCapacity, setFCapacity] = useState("");
+  const [showFarmerModal, setShowFarmerModal] = useState(false);
   // Crop form
   const [cFarmerId, setCFarmerId] = useState("");
   const [cName, setCName] = useState("");
   const [cQty, setCQty] = useState("");
   const [cHarvest, setCHarvest] = useState("");
+  const [showCropModal, setShowCropModal] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [spoilage, setSpoilage] = useState<Record<string, unknown> | null>(null);
@@ -71,8 +74,12 @@ export function FarmView() {
         </Panel>
       ) : null}
 
-    <div className="grid gap-6 lg:grid-cols-2">
-      <Panel title="Farmers" subtitle="Registered producers" noPad>
+      <Panel
+        title="Farmers"
+        subtitle="Registered producers"
+        noPad
+        action={{ label: "+ Add farmer", onClick: () => setShowFarmerModal(true) }}
+      >
         <DataTable
           rows={data.farmers}
           rowKey={(f) => f.id}
@@ -85,29 +92,12 @@ export function FarmView() {
         />
       </Panel>
 
-      <Panel title="Register farmer" subtitle="Add a new farmer to the platform">
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit(() =>
-              api.createFarmer({
-                name: fName,
-                island: fIsland || null,
-                capacity: fCapacity ? Number(fCapacity) : null,
-              })
-            ).then(() => setFName(""));
-          }}
-        >
-          <TextField label="Name" value={fName} onChange={setFName} required />
-          <TextField label="Island" value={fIsland} onChange={setFIsland} />
-          <TextField label="Capacity" value={fCapacity} onChange={setFCapacity} type="number" />
-          <FormError message={formError} />
-          <SubmitButton busy={busy}>Add farmer</SubmitButton>
-        </form>
-      </Panel>
-
-      <Panel title="Crop inventory" subtitle="All logged harvests and quantities" noPad>
+      <Panel
+        title="Crop inventory"
+        subtitle="All logged harvests and quantities"
+        noPad
+        action={{ label: "+ Log harvest", onClick: () => setShowCropModal(true) }}
+      >
         <DataTable
           rows={data.crops}
           rowKey={(c) => c.id}
@@ -130,37 +120,73 @@ export function FarmView() {
           ]}
         />
         {spoilage ? (
-          <p className="mt-3 rounded-md border border-ng-border bg-ng-bg px-3 py-2 text-sm text-ng-secondary">
+          <p className="m-5 mt-0 rounded-md border border-ng-border bg-ng-well px-3 py-2 text-sm text-ng-secondary">
             <span className="font-semibold">{String(spoilage.risk)} risk:</span>{" "}
             {String(spoilage.explanation)}
           </p>
         ) : null}
       </Panel>
 
-      <Panel title="Log harvest" subtitle="Record a new crop lot">
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit(() =>
-              api.createCrop({
-                farmer_id: Number(cFarmerId),
-                crop_name: cName,
-                quantity: Number(cQty),
-                harvest_date: cHarvest || null,
-              })
-            ).then(() => setCName(""));
-          }}
-        >
-          <TextField label="Farmer ID" value={cFarmerId} onChange={setCFarmerId} type="number" required />
-          <TextField label="Crop name" value={cName} onChange={setCName} required />
-          <TextField label="Quantity" value={cQty} onChange={setCQty} type="number" required />
-          <TextField label="Harvest date" value={cHarvest} onChange={setCHarvest} type="date" />
-          <FormError message={formError} />
-          <SubmitButton busy={busy}>Add crop</SubmitButton>
-        </form>
-      </Panel>
-    </div>
+      {showFarmerModal ? (
+        <Modal title="Add farmer" subtitle="Register a new farmer on the platform" onClose={() => setShowFarmerModal(false)}>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit(() =>
+                api.createFarmer({
+                  name: fName,
+                  island: fIsland || null,
+                  capacity: fCapacity ? Number(fCapacity) : null,
+                })
+              ).then(() => {
+                setFName("");
+                setFIsland("");
+                setFCapacity("");
+                setShowFarmerModal(false);
+              });
+            }}
+          >
+            <TextField label="Name" value={fName} onChange={setFName} required />
+            <TextField label="Island" value={fIsland} onChange={setFIsland} />
+            <TextField label="Capacity" value={fCapacity} onChange={setFCapacity} type="number" />
+            <FormError message={formError} />
+            <SubmitButton busy={busy}>Add farmer</SubmitButton>
+          </form>
+        </Modal>
+      ) : null}
+
+      {showCropModal ? (
+        <Modal title="Log harvest" subtitle="Record a new crop lot" onClose={() => setShowCropModal(false)}>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit(() =>
+                api.createCrop({
+                  farmer_id: Number(cFarmerId),
+                  crop_name: cName,
+                  quantity: Number(cQty),
+                  harvest_date: cHarvest || null,
+                })
+              ).then(() => {
+                setCFarmerId("");
+                setCName("");
+                setCQty("");
+                setCHarvest("");
+                setShowCropModal(false);
+              });
+            }}
+          >
+            <TextField label="Farmer ID" value={cFarmerId} onChange={setCFarmerId} type="number" required />
+            <TextField label="Crop name" value={cName} onChange={setCName} required />
+            <TextField label="Quantity" value={cQty} onChange={setCQty} type="number" required />
+            <TextField label="Harvest date" value={cHarvest} onChange={setCHarvest} type="date" />
+            <FormError message={formError} />
+            <SubmitButton busy={busy}>Add crop</SubmitButton>
+          </form>
+        </Modal>
+      ) : null}
     </div>
   );
 }

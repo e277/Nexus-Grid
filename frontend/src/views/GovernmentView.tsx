@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "../api";
 import { DataTable } from "../components/DataTable";
 import { FormError, SelectField, SubmitButton, TextField } from "../components/Fields";
+import { Modal } from "../components/Modal";
 import { Panel } from "../components/Panel";
 import { StatTile } from "../components/StatTile";
 import { StatusActions } from "../components/StatusActions";
@@ -26,8 +27,11 @@ async function loadGovernment() {
   return { weather, customs, activities, audits };
 }
 
+type ModalKind = "customs" | "weather" | null;
+
 export function GovernmentView() {
   const { data, error, refresh } = usePoll(loadGovernment);
+  const [openModal, setOpenModal] = useState<ModalKind>(null);
 
   const [wType, setWType] = useState("storm");
   const [wSeverity, setWSeverity] = useState("medium");
@@ -64,94 +68,35 @@ export function GovernmentView() {
         <StatTile label="Audit entries" value={data.audits.length} />
       </div>
 
-    <div className="grid gap-6 lg:grid-cols-2">
-      <Panel title="Customs queue">
-        <form
-          className="mb-4 space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit(() =>
-              api.createCustomsDocument({
-                shipment_id: Number(cShipmentId),
-                document_type: cDocType,
-                status: "draft" as never,
-              })
-            ).then(() => {
-              setCShipmentId("");
-              setCDocType("");
-            });
-          }}
-        >
-          <TextField label="Shipment ID" value={cShipmentId} onChange={setCShipmentId} type="number" required />
-          <TextField label="Document type" value={cDocType} onChange={setCDocType} required />
-          <SubmitButton busy={busy}>Create document</SubmitButton>
-        </form>
-        <DataTable
-          rows={data.customs}
-          rowKey={(d) => d.id}
-          empty="No customs documents."
-          columns={[
-            { label: "Doc", render: (d) => `#${d.id} · ${d.document_type}` },
-            { label: "Shipment", render: (d) => d.shipment_id, numeric: true },
-            { label: "Status", render: (d) => <StatusPill value={d.status} /> },
-            {
-              label: "Decision",
-              render: (d) => (
-                <StatusActions
-                  current={d.status}
-                  transitions={CUSTOMS_TRANSITIONS}
-                  busy={busy}
-                  onSelect={(next) =>
-                    submit(() => api.setCustomsStatus(d.id, next as never))
-                  }
-                />
-              ),
-            },
-          ]}
-        />
-        <FormError message={formError} />
-      </Panel>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel title="Customs queue" action={{ label: "+ Create document", onClick: () => setOpenModal("customs") }}>
+          <DataTable
+            rows={data.customs}
+            rowKey={(d) => d.id}
+            empty="No customs documents."
+            columns={[
+              { label: "Doc", render: (d) => `#${d.id} · ${d.document_type}` },
+              { label: "Shipment", render: (d) => d.shipment_id, numeric: true },
+              { label: "Status", render: (d) => <StatusPill value={d.status} /> },
+              {
+                label: "Decision",
+                render: (d) => (
+                  <StatusActions
+                    current={d.status}
+                    transitions={CUSTOMS_TRANSITIONS}
+                    busy={busy}
+                    onSelect={(next) =>
+                      submit(() => api.setCustomsStatus(d.id, next as never))
+                    }
+                  />
+                ),
+              },
+            ]}
+          />
+          <FormError message={formError} />
+        </Panel>
 
-      <Panel title="Issue weather alert">
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit(() =>
-              api.createWeatherEvent({
-                event_type: wType,
-                severity: wSeverity as never,
-                affected_islands: wIslands || null,
-              })
-            ).then(() => setWIslands(""));
-          }}
-        >
-          <SelectField
-            label="Event type"
-            value={wType}
-            onChange={setWType}
-            options={["storm", "hurricane", "flood", "drought"].map((v) => ({
-              value: v,
-              label: v,
-            }))}
-          />
-          <SelectField
-            label="Severity"
-            value={wSeverity}
-            onChange={setWSeverity}
-            options={["low", "medium", "high", "severe"].map((v) => ({
-              value: v,
-              label: v,
-            }))}
-          />
-          <TextField
-            label="Affected islands (comma-separated)"
-            value={wIslands}
-            onChange={setWIslands}
-          />
-          <SubmitButton busy={busy}>Publish alert</SubmitButton>
-        </form>
-        <div className="mt-6">
+        <Panel title="Weather alerts" action={{ label: "+ Issue alert", onClick: () => setOpenModal("weather") }}>
           <DataTable
             rows={data.weather}
             rowKey={(w) => w.id}
@@ -163,49 +108,120 @@ export function GovernmentView() {
               { label: "Severity", render: (w) => <StatusPill value={w.severity} /> },
             ]}
           />
-        </div>
-      </Panel>
+        </Panel>
 
-      <Panel title="Agent activity">
-        <DataTable
-          rows={data.activities}
-          rowKey={(a) => a.id}
-          empty="No agent decisions recorded yet."
-          columns={[
-            {
-              label: "Agent",
-              render: (a) => (
-                <span className="font-mono text-xs text-ng-secondary">{a.agent_name}</span>
-              ),
-            },
-            { label: "Action", render: (a) => a.action },
-            {
-              label: "Confidence",
-              render: (a) =>
-                a.confidence != null ? `${Math.round(a.confidence * 100)}%` : "—",
-              numeric: true,
-            },
-          ]}
-        />
-      </Panel>
+        <Panel title="Agent activity">
+          <DataTable
+            rows={data.activities}
+            rowKey={(a) => a.id}
+            empty="No agent decisions recorded yet."
+            columns={[
+              {
+                label: "Agent",
+                render: (a) => (
+                  <span className="font-mono text-xs text-ng-secondary">{a.agent_name}</span>
+                ),
+              },
+              { label: "Action", render: (a) => a.action },
+              {
+                label: "Confidence",
+                render: (a) =>
+                  a.confidence != null ? `${Math.round(a.confidence * 100)}%` : "—",
+                numeric: true,
+              },
+            ]}
+          />
+        </Panel>
 
-      <Panel title="Audit trail">
-        <DataTable
-          rows={data.audits}
-          rowKey={(a) => a.id}
-          empty="No audit entries."
-          columns={[
-            { label: "Actor", render: (a) => a.actor },
-            { label: "Action", render: (a) => a.action },
-            {
-              label: "Entity",
-              render: (a) =>
-                a.entity_type ? `${a.entity_type} #${a.entity_id ?? "?"}` : "—",
-            },
-          ]}
-        />
-      </Panel>
-    </div>
+        <Panel title="Audit trail">
+          <DataTable
+            rows={data.audits}
+            rowKey={(a) => a.id}
+            empty="No audit entries."
+            columns={[
+              { label: "Actor", render: (a) => a.actor },
+              { label: "Action", render: (a) => a.action },
+              {
+                label: "Entity",
+                render: (a) =>
+                  a.entity_type ? `${a.entity_type} #${a.entity_id ?? "?"}` : "—",
+              },
+            ]}
+          />
+        </Panel>
+      </div>
+
+      {openModal === "customs" ? (
+        <Modal title="Create customs document" onClose={() => setOpenModal(null)}>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit(() =>
+                api.createCustomsDocument({
+                  shipment_id: Number(cShipmentId),
+                  document_type: cDocType,
+                  status: "draft" as never,
+                })
+              ).then(() => {
+                setCShipmentId("");
+                setCDocType("");
+                setOpenModal(null);
+              });
+            }}
+          >
+            <TextField label="Shipment ID" value={cShipmentId} onChange={setCShipmentId} type="number" required />
+            <TextField label="Document type" value={cDocType} onChange={setCDocType} required />
+            <SubmitButton busy={busy}>Create document</SubmitButton>
+          </form>
+        </Modal>
+      ) : null}
+
+      {openModal === "weather" ? (
+        <Modal title="Issue weather alert" onClose={() => setOpenModal(null)}>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit(() =>
+                api.createWeatherEvent({
+                  event_type: wType,
+                  severity: wSeverity as never,
+                  affected_islands: wIslands || null,
+                })
+              ).then(() => {
+                setWIslands("");
+                setOpenModal(null);
+              });
+            }}
+          >
+            <SelectField
+              label="Event type"
+              value={wType}
+              onChange={setWType}
+              options={["storm", "hurricane", "flood", "drought"].map((v) => ({
+                value: v,
+                label: v,
+              }))}
+            />
+            <SelectField
+              label="Severity"
+              value={wSeverity}
+              onChange={setWSeverity}
+              options={["low", "medium", "high", "severe"].map((v) => ({
+                value: v,
+                label: v,
+              }))}
+            />
+            <TextField
+              label="Affected islands (comma-separated)"
+              value={wIslands}
+              onChange={setWIslands}
+            />
+            <SubmitButton busy={busy}>Publish alert</SubmitButton>
+          </form>
+        </Modal>
+      ) : null}
     </div>
   );
 }

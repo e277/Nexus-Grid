@@ -3,6 +3,7 @@ import { api } from "../api";
 import { SegmentedBar } from "../components/charts/SegmentedBar";
 import { DataTable } from "../components/DataTable";
 import { FormError, SelectField, SubmitButton, TextField } from "../components/Fields";
+import { Modal } from "../components/Modal";
 import { Panel } from "../components/Panel";
 import { StatTile } from "../components/StatTile";
 import { StatusActions } from "../components/StatusActions";
@@ -35,10 +36,12 @@ export function MarketView() {
   const [bName, setBName] = useState("");
   const [bIsland, setBIsland] = useState("");
   const [bType, setBType] = useState("retailer");
+  const [showBuyerModal, setShowBuyerModal] = useState(false);
   const [dBuyerId, setDBuyerId] = useState("");
   const [dCrop, setDCrop] = useState("");
   const [dQty, setDQty] = useState("");
   const [dNeededBy, setDNeededBy] = useState("");
+  const [showDemandModal, setShowDemandModal] = useState(false);
   const [lookupCrop, setLookupCrop] = useState("");
   const [insight, setInsight] = useState<Record<string, unknown> | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -87,8 +90,7 @@ export function MarketView() {
         />
       </Panel>
 
-    <div className="grid gap-6 lg:grid-cols-2">
-      <Panel title="Buyers">
+      <Panel title="Buyers" action={{ label: "+ Add buyer", onClick: () => setShowBuyerModal(true) }}>
         <DataTable
           rows={data.buyers}
           rowKey={(b) => b.id}
@@ -101,37 +103,7 @@ export function MarketView() {
         />
       </Panel>
 
-      <Panel title="Register buyer">
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit(() =>
-              api.createBuyer({
-                name: bName,
-                island: bIsland || null,
-                buyer_type: bType as never,
-              })
-            ).then(() => setBName(""));
-          }}
-        >
-          <TextField label="Name" value={bName} onChange={setBName} required />
-          <TextField label="Island" value={bIsland} onChange={setBIsland} />
-          <SelectField
-            label="Type"
-            value={bType}
-            onChange={setBType}
-            options={["retailer", "wholesaler", "government"].map((v) => ({
-              value: v,
-              label: v,
-            }))}
-          />
-          <FormError message={formError} />
-          <SubmitButton busy={busy}>Add buyer</SubmitButton>
-        </form>
-      </Panel>
-
-      <Panel title="Demand">
+      <Panel title="Demand" action={{ label: "+ Create demand", onClick: () => setShowDemandModal(true) }}>
         <DataTable
           rows={data.demands}
           rowKey={(d) => d.id}
@@ -156,31 +128,7 @@ export function MarketView() {
         />
       </Panel>
 
-      <Panel title="Create demand">
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit(() =>
-              api.createDemand({
-                buyer_id: Number(dBuyerId),
-                crop_name: dCrop,
-                quantity: Number(dQty),
-                needed_by: dNeededBy || null,
-              })
-            ).then(() => setDCrop(""));
-          }}
-        >
-          <TextField label="Buyer ID" value={dBuyerId} onChange={setDBuyerId} type="number" required />
-          <TextField label="Crop name" value={dCrop} onChange={setDCrop} required />
-          <TextField label="Quantity" value={dQty} onChange={setDQty} type="number" required />
-          <TextField label="Needed by" value={dNeededBy} onChange={setDNeededBy} type="date" />
-          <FormError message={formError} />
-          <SubmitButton busy={busy}>Create demand</SubmitButton>
-        </form>
-      </Panel>
-
-      <Panel title="Market intelligence">
+      <Panel title="Market intelligence" subtitle="Forecast and shortage lookups">
         <form
           className="flex items-end gap-3"
           onSubmit={(e) => {
@@ -201,12 +149,80 @@ export function MarketView() {
           </button>
         </form>
         {insight ? (
-          <p className="mt-4 rounded-md border border-ng-border bg-ng-bg px-3 py-2 text-sm text-ng-secondary">
+          <p className="mt-4 rounded-md border border-ng-border bg-ng-well px-3 py-2 text-sm text-ng-secondary">
             {String(insight.explanation)}
           </p>
         ) : null}
       </Panel>
-    </div>
+
+      {showBuyerModal ? (
+        <Modal title="Add buyer" subtitle="Register a new buyer" onClose={() => setShowBuyerModal(false)}>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit(() =>
+                api.createBuyer({
+                  name: bName,
+                  island: bIsland || null,
+                  buyer_type: bType as never,
+                })
+              ).then(() => {
+                setBName("");
+                setBIsland("");
+                setBType("retailer");
+                setShowBuyerModal(false);
+              });
+            }}
+          >
+            <TextField label="Name" value={bName} onChange={setBName} required />
+            <TextField label="Island" value={bIsland} onChange={setBIsland} />
+            <SelectField
+              label="Type"
+              value={bType}
+              onChange={setBType}
+              options={["retailer", "wholesaler", "government"].map((v) => ({
+                value: v,
+                label: v,
+              }))}
+            />
+            <FormError message={formError} />
+            <SubmitButton busy={busy}>Add buyer</SubmitButton>
+          </form>
+        </Modal>
+      ) : null}
+
+      {showDemandModal ? (
+        <Modal title="Create demand" subtitle="Register a buyer's demand request" onClose={() => setShowDemandModal(false)}>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit(() =>
+                api.createDemand({
+                  buyer_id: Number(dBuyerId),
+                  crop_name: dCrop,
+                  quantity: Number(dQty),
+                  needed_by: dNeededBy || null,
+                })
+              ).then(() => {
+                setDBuyerId("");
+                setDCrop("");
+                setDQty("");
+                setDNeededBy("");
+                setShowDemandModal(false);
+              });
+            }}
+          >
+            <TextField label="Buyer ID" value={dBuyerId} onChange={setDBuyerId} type="number" required />
+            <TextField label="Crop name" value={dCrop} onChange={setDCrop} required />
+            <TextField label="Quantity" value={dQty} onChange={setDQty} type="number" required />
+            <TextField label="Needed by" value={dNeededBy} onChange={setDNeededBy} type="date" />
+            <FormError message={formError} />
+            <SubmitButton busy={busy}>Create demand</SubmitButton>
+          </form>
+        </Modal>
+      ) : null}
     </div>
   );
 }

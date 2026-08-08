@@ -8,9 +8,8 @@ import { GovernmentView } from "./views/GovernmentView";
 import { LogisticsView } from "./views/LogisticsView";
 import { MarketView } from "./views/MarketView";
 import { OverviewView } from "./views/OverviewView";
-import { WorkflowView } from "./views/WorkflowView";
 
-type TabId = "overview" | "farm" | "market" | "logistics" | "government" | "workflow";
+export type TabId = "overview" | "farm" | "market" | "logistics" | "government";
 
 interface Tab {
   id: TabId;
@@ -55,16 +54,6 @@ const GovIcon = () => (
   </svg>
 );
 
-const WorkflowIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden>
-    <circle cx="2.25" cy="7.5" r="1.75" stroke="currentColor" strokeWidth="1.2" />
-    <circle cx="7.5" cy="2.5" r="1.75" stroke="currentColor" strokeWidth="1.2" />
-    <circle cx="7.5" cy="12.5" r="1.75" stroke="currentColor" strokeWidth="1.2" />
-    <circle cx="12.75" cy="7.5" r="1.75" stroke="currentColor" strokeWidth="1.2" />
-    <path d="M3.8 6.6L6.2 3.7M6.2 11.3L3.8 8.4M8.8 3.7L11.2 6.6M11.2 8.4L8.8 11.3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-  </svg>
-);
-
 const BellIcon = () => (
   <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden>
     <path d="M7.5 1.5C5.567 1.5 4 3.067 4 5V8.5L2.5 10H12.5L11 8.5V5C11 3.067 9.433 1.5 7.5 1.5Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
@@ -72,13 +61,23 @@ const BellIcon = () => (
   </svg>
 );
 
+function timeAgo(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.round(ms / 60_000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  return `${Math.round(hr / 24)}d ago`;
+}
+
 const TABS: Tab[] = [
   { id: "overview",    label: "Overview",    roles: null,                                          icon: <OverviewIcon /> },
   { id: "farm",        label: "Farm",        roles: ["farmer","government","admin"],                icon: <FarmIcon /> },
   { id: "market",      label: "Market",      roles: ["buyer","government","admin"],                 icon: <MarketIcon /> },
   { id: "logistics",   label: "Logistics",   roles: ["logistics","government","admin"],             icon: <LogisticsIcon /> },
   { id: "government",  label: "Government",  roles: ["government","admin"],                        icon: <GovIcon /> },
-  { id: "workflow",    label: "Workflow",     roles: ["government","admin"],                        icon: <WorkflowIcon /> },
 ];
 
 const TAB_LABELS: Record<TabId, string> = {
@@ -87,13 +86,15 @@ const TAB_LABELS: Record<TabId, string> = {
   market:     "Market Demand",
   logistics:  "Logistics",
   government: "Government",
-  workflow:   "Workflow Builder",
 };
 
 export default function App() {
   const [authenticated, setAuthenticated] = useState(() => getToken() !== null);
   const [user, setUser] = useState<{ email: string; role: string } | null>(null);
   const [tab, setTab] = useState<TabId>("overview");
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const [lastSeenId, setLastSeenId] = useState<number | null>(null);
 
   function logout() {
     clearToken();
@@ -113,6 +114,34 @@ export default function App() {
     () => (authenticated ? api.health() : Promise.resolve(null)),
     30_000
   );
+
+  const { data: recentActivity } = usePoll(
+    () =>
+      authenticated
+        ? api.agentActivities({ limit: 5 }).catch(() => null)
+        : Promise.resolve(null),
+    20_000
+  );
+
+  const unreadCount = recentActivity
+    ? recentActivity.filter((a) => lastSeenId === null || a.id > lastSeenId).length
+    : 0;
+
+  function toggleNotifications() {
+    setAvatarOpen(false);
+    setNotifOpen((open) => {
+      const next = !open;
+      if (next && recentActivity && recentActivity.length > 0) {
+        setLastSeenId(Math.max(...recentActivity.map((a) => a.id)));
+      }
+      return next;
+    });
+  }
+
+  function toggleAvatar() {
+    setNotifOpen(false);
+    setAvatarOpen((open) => !open);
+  }
 
   if (!authenticated) {
     return <LoginPanel onAuthenticated={() => setAuthenticated(true)} />;
@@ -207,27 +236,88 @@ export default function App() {
               <span className="text-xs text-ng-secondary">Connecting…</span>
             )}
 
-            <button
-              aria-label="Notifications"
-              className="relative flex h-8 w-8 items-center justify-center rounded-md border border-ng-border bg-ng-surface text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent focus-visible:ring-offset-1"
-            >
-              <BellIcon />
-            </button>
+            <div className="relative z-30">
+              <button
+                aria-label="Notifications"
+                onClick={toggleNotifications}
+                className="relative flex h-8 w-8 items-center justify-center rounded-md border border-ng-border bg-ng-surface text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent focus-visible:ring-offset-1"
+              >
+                <BellIcon />
+                {unreadCount > 0 ? (
+                  <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-ng-danger px-1 text-[9px] font-bold text-white">
+                    {unreadCount}
+                  </span>
+                ) : null}
+              </button>
+              {notifOpen ? (
+                <div className="absolute right-0 top-[calc(100%+6px)] z-30 w-80 rounded-[10px] border border-ng-border bg-ng-surface shadow-ng-md">
+                  <div className="border-b border-ng-border px-4 py-2.5">
+                    <p className="text-sm font-semibold text-ng-primary">Recent agent activity</p>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {recentActivity === null ? (
+                      <p className="px-4 py-4 text-sm text-ng-secondary">Visible to government and admin roles.</p>
+                    ) : recentActivity.length === 0 ? (
+                      <p className="px-4 py-4 text-sm text-ng-secondary">No agent activity yet.</p>
+                    ) : (
+                      recentActivity.map((a) => (
+                        <div key={a.id} className="border-b border-ng-border px-4 py-2.5 last:border-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono text-xs text-ng-accent">{a.agent_name}</span>
+                            <span className="text-ng-2xs text-ng-secondary">{timeAgo(a.created_at)}</span>
+                          </div>
+                          <p className="mt-0.5 text-sm text-ng-primary">{a.action}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
 
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ng-accent to-purple-600 text-[11px] font-bold text-white">
-              {initials}
+            <div className="relative z-30">
+              <button
+                onClick={toggleAvatar}
+                aria-label="Account menu"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ng-accent to-purple-600 text-[11px] font-bold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent focus-visible:ring-offset-1"
+              >
+                {initials}
+              </button>
+              {avatarOpen ? (
+                <div className="absolute right-0 top-[calc(100%+6px)] z-30 w-56 rounded-[10px] border border-ng-border bg-ng-surface shadow-ng-md">
+                  <div className="border-b border-ng-border px-4 py-3">
+                    <p className="truncate text-sm font-semibold text-ng-primary">{user?.email ?? "—"}</p>
+                    <p className="text-xs capitalize text-ng-secondary">{user?.role ?? "—"}</p>
+                  </div>
+                  <button
+                    onClick={logout}
+                    className="w-full px-4 py-2.5 text-left text-sm text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
+
+          {notifOpen || avatarOpen ? (
+            <div
+              className="fixed inset-0 z-20"
+              onClick={() => {
+                setNotifOpen(false);
+                setAvatarOpen(false);
+              }}
+            />
+          ) : null}
         </header>
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-6">
-          {tab === "overview"   && <OverviewView />}
+          {tab === "overview"   && <OverviewView onNavigate={setTab} user={user} />}
           {tab === "farm"       && <FarmView />}
           {tab === "market"     && <MarketView />}
           {tab === "logistics"  && <LogisticsView />}
           {tab === "government" && <GovernmentView />}
-          {tab === "workflow"   && <WorkflowView />}
         </main>
       </div>
     </div>

@@ -178,6 +178,8 @@ export const api = {
   workflowStatus: () => get<{ workflow: string; status: string }> ("/workflow/status"),
   triggerWorkflow: (body: Record<string, unknown>) =>
     post<WorkflowResult>("/workflow/trigger", body),
+  resumeWorkflow: (threadId: string, decision: "approved" | "rejected") =>
+    post<WorkflowResult>(`/workflow/${threadId}/resume`, { decision }),
   agentActivities: (params?: { skip?: number; limit?: number; agent_name?: string }) =>
     get<AgentActivity[]>(buildPath("/agent-activities/", params)),
   auditLogs: (params?: { skip?: number; limit?: number; actor?: string; entity_type?: string }) =>

@@ -159,5 +159,6 @@ export interface WorkflowResult {
     thread_id: string;
     values: Record<string, unknown>[];
     updates: Record<string, Record<string, unknown>>[];
+    interrupt?: Record<string, unknown>;
   };
 }

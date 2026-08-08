@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api, UnauthorizedError } from "../api";
+import type { TabId } from "../App";
 import { BarChart } from "../components/charts/BarChart";
 import { Meter } from "../components/charts/Meter";
 import { SegmentedBar } from "../components/charts/SegmentedBar";
@@ -9,6 +10,7 @@ import { StatTile } from "../components/StatTile";
 import { StatusPill } from "../components/StatusPill";
 import { usePoll } from "../hooks";
 import type { AgentActivity } from "../types";
+import { WorkflowView } from "./WorkflowView";
 
 // Same semantic tokens StatusPill already maps these statuses to.
 const SHIPMENT_STATUS_COLOR: Record<string, string> = {
@@ -54,36 +56,15 @@ async function loadOverview() {
   return { overview, shipments, demands, weather, farmers, crops, buyers, ports, activities };
 }
 
-export function OverviewView() {
+interface OverviewViewProps {
+  onNavigate: (tab: TabId) => void;
+  user: { email: string; role: string } | null;
+}
+
+export function OverviewView({ onNavigate, user }: OverviewViewProps) {
+  const canRunWorkflow = user?.role === "government" || user?.role === "admin";
   const { data, error } = usePoll(loadOverview);
   const [heroCollapsed, setHeroCollapsed] = useState(false);
-  const [workflowBusyStep, setWorkflowBusyStep] = useState<string | null>(null);
-  const [workflowFeedback, setWorkflowFeedback] = useState<{ step: string; message: string } | null>(null);
-  const [workflowError, setWorkflowError] = useState<string | null>(null);
-
-  async function runWorkflowStep(stepKey: string, payload: Record<string, unknown>) {
-    setWorkflowBusyStep(stepKey);
-    setWorkflowError(null);
-    setWorkflowFeedback(null);
-
-    try {
-      const result = await api.triggerWorkflow(payload);
-      const final = result.result.values.at(-1) as
-        | { decision?: string; execution?: { status?: string }; recommendation?: { recommendation?: string } }
-        | undefined;
-      const detail = [final?.decision, final?.execution?.status, final?.recommendation?.recommendation]
-        .filter(Boolean)
-        .join(" · ");
-      setWorkflowFeedback({
-        step: stepKey,
-        message: detail ? `Triggered · ${detail}` : `Triggered · ${result.result.status}`,
-      });
-    } catch (err) {
-      setWorkflowError(err instanceof Error ? err.message : "Workflow trigger failed");
-    } finally {
-      setWorkflowBusyStep(null);
-    }
-  }
 
   if (error) {
     return (
@@ -107,7 +88,15 @@ export function OverviewView() {
   const openDemands = demands.filter((d) => d.status === "open");
   const activeShipments = shipments.filter((s) => ["planned", "in_transit", "delayed"].includes(s.status));
 
-  const workflowSteps = [
+  const workflowSteps: {
+    key: string;
+    title: string;
+    description: string;
+    detail: string;
+    location: string;
+    state: "done" | "pending";
+    targetTab: TabId;
+  }[] = [
     {
       key: "supply",
       title: "1. Register farm supply",
@@ -115,14 +104,7 @@ export function OverviewView() {
       detail: `${farmers.length} farmer record(s) and ${crops.length} crop lot(s) are already available.`,
       location: "Farm view",
       state: farmers.length > 0 ? "done" : "pending",
-      payload: {
-        crop_name: crops[0]?.crop_name ?? "banana",
-        quantity: crops[0]?.quantity ?? 240,
-        event: "inventory_checked",
-        message: "Register farm supply for the walkthrough",
-        demand_signal: "stable",
-        logistics_status: "normal",
-      },
+      targetTab: "farm",
     },
     {
       key: "demand",
@@ -131,14 +113,7 @@ export function OverviewView() {
       detail: `${buyers.length} buyer(s) are on file and ${openDemands.length} demand request(s) are still open.`,
       location: "Market view",
       state: buyers.length > 0 && demands.length > 0 ? "done" : "pending",
-      payload: {
-        crop_name: openDemands[0]?.crop_name ?? crops[0]?.crop_name ?? "banana",
-        quantity: openDemands[0]?.quantity ?? 120,
-        event: "shortage",
-        message: "Demand signal received for the walkthrough",
-        demand_signal: "urgent",
-        logistics_status: "normal",
-      },
+      targetTab: "market",
     },
     {
       key: "shipment",
@@ -147,36 +122,21 @@ export function OverviewView() {
       detail: `${activeShipments.length} shipment(s) are currently active across ${ports.length} port record(s).`,
       location: "Logistics view",
       state: activeShipments.length > 0 || shipments.length > 0 ? "done" : "pending",
-      payload: {
-        crop_name: crops[0]?.crop_name ?? "banana",
-        quantity: activeShipments[0]?.quantity ?? shipments[0]?.quantity ?? 80,
-        event: "inventory_checked",
-        message: "Book the shipment for the walkthrough",
-        logistics_status: activeShipments.length > 0 ? "constrained" : "normal",
-      },
+      targetTab: "logistics",
     },
     {
       key: "hazard",
-      title: "4. Flag hazards and approvals",
-      description: "Record weather disruptions and assign the right operational response.",
-      detail: `${weather.length} hazard alert(s) are in the feed and the workflow can be triggered once the data is complete.`,
-      location: "Weather + workflow controls",
+      title: "4. Flag hazards",
+      description: "Record weather disruptions so the workflow has real risk signal to reason over.",
+      detail: `${weather.length} hazard alert(s) are in the feed.`,
+      location: "Government view",
       state: weather.length > 0 ? "done" : "pending",
-      payload: {
-        crop_name: crops[0]?.crop_name ?? "banana",
-        quantity: crops[0]?.quantity ?? 240,
-        event: "shortage",
-        message: "Hazard and approval escalation from the walkthrough",
-        weather_risk: weather[0]?.severity ?? "high",
-        logistics_status: ports.find((port) => port.status !== "open") ? "constrained" : "normal",
-        require_approval: true,
-      },
+      targetTab: "government",
     },
   ];
 
   const completedSteps = workflowSteps.filter((step) => step.state === "done").length;
   const progressPercent = Math.round((completedSteps / workflowSteps.length) * 100);
-  const nextStep = workflowSteps.find((step) => step.state !== "done");
 
   return (
     <>
@@ -211,60 +171,42 @@ export function OverviewView() {
         </div>
       </section>
 
-      <div className={`mb-6 grid gap-4 lg:grid-cols-[1.3fr_0.7fr] ${heroCollapsed ? "hidden" : ""}`}>
-        <Panel title="Operator workflow order" subtitle="What to enter and when" noPad>
-          <div className="grid gap-3 p-4 md:grid-cols-2">
+      <div className={`mb-6 ${heroCollapsed ? "hidden" : ""}`}>
+        <Panel title="Autonomous workflow" subtitle="Data readiness, then run it end to end" noPad>
+          <div className="flex flex-wrap items-center gap-2 border-b border-ng-border p-4">
             {workflowSteps.map((step) => {
               const isDone = step.state === "done";
               return (
-                <div
-                  key={step.title}
-                  className={`rounded-[10px] border p-4 ${isDone ? "border-ng-success-bd bg-ng-success-bg" : "border-ng-border bg-ng-surface"}`}
+                <button
+                  key={step.key}
+                  type="button"
+                  onClick={() => onNavigate(step.targetTab)}
+                  title={step.description}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    isDone
+                      ? "border-ng-success-bd bg-ng-success-bg text-ng-success-tx"
+                      : "border-ng-border bg-ng-surface text-ng-secondary hover:bg-ng-bg"
+                  }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-ng-primary">{step.title}</p>
-                      <p className="mt-1 text-sm text-ng-secondary">{step.description}</p>
-                    </div>
-                    <span className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[.6px] ${isDone ? "bg-ng-success-bg text-ng-success-tx" : "bg-ng-accent-lit text-ng-accent"}`}>
-                      {isDone ? "Ready" : "Next"}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm text-ng-secondary">{step.detail}</p>
-                  <p className="mt-3 text-[11px] font-semibold uppercase tracking-[.6px] text-ng-secondary">{step.location}</p>
-                  <button
-                    type="button"
-                    onClick={() => void runWorkflowStep(step.key, step.payload)}
-                    disabled={workflowBusyStep === step.key}
-                    className="mt-4 rounded-md border border-ng-accent px-3 py-2 text-sm font-semibold text-ng-accent transition-colors hover:bg-ng-accent-lit disabled:cursor-not-allowed disabled:opacity-60"
+                  <span
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                      isDone ? "bg-ng-success text-white" : "bg-ng-muted text-ng-muted-tx"
+                    }`}
                   >
-                    {workflowBusyStep === step.key ? "Running…" : "Trigger workflow"}
-                  </button>
-                  {workflowFeedback?.step === step.key ? (
-                    <p className="mt-3 rounded-md bg-ng-surface px-3 py-2 text-sm text-ng-secondary">
-                      {workflowFeedback.message}
-                    </p>
-                  ) : null}
-                  {workflowError && workflowFeedback?.step !== step.key ? (
-                    <p className="mt-3 rounded-md border border-ng-warning-bd bg-ng-warning-bg px-3 py-2 text-sm text-ng-warning-tx">
-                      {workflowError}
-                    </p>
-                  ) : null}
-                </div>
+                    {isDone ? "✓" : step.key === "supply" ? "1" : step.key === "demand" ? "2" : step.key === "shipment" ? "3" : "4"}
+                  </span>
+                  {step.title.replace(/^\d+\.\s*/, "")}
+                </button>
               );
             })}
           </div>
-        </Panel>
 
-        <Panel title="Suggested next action" subtitle="Use this when the queue is empty">
-          {nextStep ? (
-            <div>
-              <p className="text-sm font-semibold text-ng-primary">{nextStep.title}</p>
-              <p className="mt-2 text-sm leading-6 text-ng-secondary">{nextStep.description}</p>
-              <p className="mt-3 text-sm text-ng-secondary">{nextStep.detail}</p>
+          {canRunWorkflow ? (
+            <div className="p-4">
+              <WorkflowView />
             </div>
           ) : (
-            <p className="text-sm text-ng-secondary">The workflow is ready. The next action can be triggered from the orchestration controls.</p>
+            <p className="p-4 text-sm text-ng-secondary">Running the workflow is visible to government and admin roles.</p>
           )}
         </Panel>
       </div>
