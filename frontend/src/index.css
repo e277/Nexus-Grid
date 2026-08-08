@@ -1,3 +1,65 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --color-bg:             #FAFAF9;
+    --color-surface:        #FFFFFF;
+    --color-border:         #E5E5E0;
+    --color-text-primary:   #27272A;
+    --color-text-secondary: #71717A;
+    --color-text-disabled:  #A1A1AA;
+    --color-accent:         #2563EB;
+    --color-accent-hover:   #1D4ED8;
+    --color-accent-active:  #1E40AF;
+    --color-accent-light:   #EFF6FF;
+    --color-accent-fg:      #FFFFFF;
+    --color-success:        #059669;
+    --color-success-bg:     #ECFDF5;
+    --color-success-border: #A7F3D0;
+    --color-success-text:   #065F46;
+    --color-warning:        #D97706;
+    --color-warning-bg:     #FFFBEB;
+    --color-warning-border: #FDE68A;
+    --color-warning-text:   #92400E;
+    --color-danger:         #DC2626;
+    --color-danger-bg:      #FEF2F2;
+    --color-danger-border:  #FECACA;
+    --color-danger-text:    #991B1B;
+    --color-info-bg:        #F0F9FF;
+    --color-info-border:    #BAE6FD;
+    --color-info-text:      #0C4A6E;
+    --color-muted-bg:       #F4F4F5;
+    --color-muted-border:   #E4E4E7;
+    --color-muted-text:     #52525B;
+    --color-row-alt:        #FAFAF9;
+
+    /* Chart categorical palette (dataviz skill, palette.md) — slots 1-3 consumed this pass */
+    --chart-1: #2a78d6; /* blue */
+    --chart-2: #eb6834; /* orange */
+    --chart-3: #1baf7a; /* aqua — below 3:1 on this surface, always pair with a direct label */
+
+    /* Shadow scale — reserved for floating elements (tooltips/popovers), not Panels */
+    --shadow-xs: 0 1px 2px rgba(16,16,15,.04);
+    --shadow-sm: 0 1px 3px rgba(16,16,15,.06), 0 1px 2px rgba(16,16,15,.04);
+    --shadow-md: 0 4px 12px rgba(16,16,15,.08);
+  }
+
+  html {
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+    line-height: 1.6;
+  }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-muted-border); }
+}

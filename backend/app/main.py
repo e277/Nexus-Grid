@@ -4,6 +4,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.agents.runner import start_agents
 from app.api import (
@@ -29,7 +30,9 @@ from app.core.metrics import MetricsMiddleware
 from app.core.rate_limit import RateLimitMiddleware
 from app.core.security import get_current_user, require_role
 from app.database import Base, engine
-from app.events import configure_event_bus, event_bus, register_event_handlers
+from app.events import event_bus, register_event_handlers
+from app.services.demo_seed import seed_demo_data
+from app.database import get_db
 
 
 @asynccontextmanager
@@ -40,12 +43,23 @@ async def lifespan(app: FastAPI):
     # Create DB tables if they do not already exist (Alembic owns real migrations)
     Base.metadata.create_all(bind=engine)
 
-    configure_event_bus(settings.event_bus_backend, settings.redis_url)
     register_event_handlers()
-    await event_bus.start()
+    try:
+        await event_bus.start()
+    except Exception:
+        app.state.event_bus_startup_error = True
+
+    db = next(get_db())
+    try:
+        seed_demo_data(db)
+    finally:
+        db.close()
 
     if not settings.skip_agent_startup:
-        app.state.agent_task = start_agents(app)
+        try:
+            app.state.agent_task = start_agents(app)
+        except Exception:
+            app.state.agent_startup_error = True
 
     yield
 
@@ -57,7 +71,10 @@ async def lifespan(app: FastAPI):
             await task
         except asyncio.CancelledError:
             pass
-    await event_bus.stop()
+    try:
+        await event_bus.stop()
+    except Exception:
+        pass
 
 
 settings = get_settings()
@@ -70,6 +87,16 @@ app = FastAPI(
 
 app.add_middleware(MetricsMiddleware)
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5175",
+        "http://127.0.0.1:5175",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Every route requires a valid JWT except health, metrics, auth, and "/".
 # Write endpoints additionally declare require_role(...) in their routers.

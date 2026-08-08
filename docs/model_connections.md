@@ -57,14 +57,12 @@ perceive → assess → recommend → plan → (approval gate) → execute → m
 
 - **`BaseAgent`** (`base.py`) defines the contract: `handle(db, payload) → AgentResult` (action + confidence 0..1 + rationale + outputs), a bounded in-memory `deque` of the last 50 results, per-agent logging, and persistence of every decision as an `AgentActivity` row for auditing.
 - **`SupervisorAgent`** (`supervisor.py`) is the single dispatch point. A routing table maps events to specialists:
-
-  | Event | Specialist |
-  |---|---|
+  | Event                                             | Specialist              |
+  | ------------------------------------------------- | ----------------------- |
   | `buyer.request.created`, `crop.harvest.ready` | DemandIntelligenceAgent |
-  | `weather.alert` | ClimateRiskAgent |
-  | `shipment.delayed`, `customs.approved` | LogisticsAgent |
-  | `shipment.departed` | CustomsAgent |
-
+  | `weather.alert`                                 | ClimateRiskAgent        |
+  | `shipment.delayed`, `customs.approved`        | LogisticsAgent          |
+  | `shipment.departed`                             | CustomsAgent            |
 - **`SupplyAgent` poll loop** (`runner.py`): started at app startup (unless `SKIP_AGENT_STARTUP`), it opens a DB session every `AGENT_POLL_INTERVAL_SECONDS` (default 10s) and runs supply checks that can emit events.
 
 ## 5. The Event Bus (Glue)
@@ -83,11 +81,13 @@ perceive → assess → recommend → plan → (approval gate) → execute → m
 ## 7. End-to-End Flows
 
 **Event-driven (rules only):**
+
 1. A domain API writes data (e.g. a shipment is marked delayed) and publishes `shipment.delayed`.
 2. The event bus delivers it to a handler, which calls the SupervisorAgent.
 3. The supervisor routes to the LogisticsAgent, whose decision is logged, remembered, and persisted as an `AgentActivity` row.
 
 **Workflow-driven (includes the LLM):**
+
 1. A client POSTs to `/workflow` with a supply signal.
 2. LangGraph runs perceive → assess, classifying supply risk from quantity.
 3. `recommend` calls MiniMax (or returns a stub without a key).
@@ -98,13 +98,13 @@ perceive → assess → recommend → plan → (approval gate) → execute → m
 
 All settings live in `app/config/settings.py` (env vars / `.env`):
 
-| Variable | Purpose | Default |
-|---|---|---|
-| `MINIMAX_API_KEY` | Enables the LLM recommendation step | empty (stub mode) |
-| `MINIMAX_BASE_URL` | MiniMax's OpenAI-compatible endpoint | `https://api.minimax.io/v1` |
-| `MINIMAX_MODEL` | MiniMax model id to call | `MiniMax-M2` |
-| `CMDOP_API_KEY` | Enables the OpenClaw runtime client | empty (unconfigured) |
-| `DATABASE_URL` | Postgres connection | compose default |
-| `CHECKPOINTER_BACKEND` | `memory` \| `sqlite` \| `postgres` | `memory` |
-| `SKIP_AGENT_STARTUP` | Disable the SupplyAgent poll loop | `false` |
-| `AGENT_POLL_INTERVAL_SECONDS` | Poll loop cadence | `10` |
+| Variable                        | Purpose                                  | Default                       |
+| ------------------------------- | ---------------------------------------- | ----------------------------- |
+| `MINIMAX_API_KEY`             | Enables the LLM recommendation step      | empty (stub mode)             |
+| `MINIMAX_BASE_URL`            | MiniMax's OpenAI-compatible endpoint     | `https://api.minimax.io/v1` |
+| `MINIMAX_MODEL`               | MiniMax model id to call                 | `MiniMax-M2`                |
+| `CMDOP_API_KEY`               | Enables the OpenClaw runtime client      | empty (unconfigured)          |
+| `DATABASE_URL`                | Postgres connection                      | compose default               |
+| `CHECKPOINTER_BACKEND`        | `memory` \| `sqlite` \| `postgres` | `memory`                    |
+| `SKIP_AGENT_STARTUP`          | Disable the SupplyAgent poll loop        | `false`                     |
+| `AGENT_POLL_INTERVAL_SECONDS` | Poll loop cadence                        | `10`                        |

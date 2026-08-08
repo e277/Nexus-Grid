@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { api } from "../api";
+import { BarChart } from "../components/charts/BarChart";
 import { DataTable } from "../components/DataTable";
 import { FormError, SubmitButton, TextField } from "../components/Fields";
 import { Panel } from "../components/Panel";
+import { StatTile } from "../components/StatTile";
 import { usePoll } from "../hooks";
 
 async function loadFarm() {
@@ -39,12 +41,38 @@ export function FarmView() {
     }
   }
 
-  if (error) return <p className="text-sm text-amber-800">Failed to load: {error}</p>;
-  if (!data) return <p className="text-sm text-slate-400">Loading…</p>;
+  if (error) return <p className="rounded-md border border-ng-warning-bd bg-ng-warning-bg px-4 py-3 text-sm text-ng-warning-tx">Failed to load: {error}</p>;
+  if (!data) return <p className="text-sm text-ng-secondary">Loading…</p>;
+
+  const totalInventory = data.crops.reduce((sum, c) => sum + c.quantity, 0);
+  const quantityByCrop = new Map<string, number>();
+  for (const c of data.crops) {
+    quantityByCrop.set(c.crop_name, (quantityByCrop.get(c.crop_name) ?? 0) + c.quantity);
+  }
 
   return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+        <StatTile label="Farmers" value={data.farmers.length} />
+        <StatTile label="Crop lots" value={data.crops.length} />
+        <StatTile label="Total inventory" value={totalInventory.toLocaleString()} hint="units across all lots" />
+      </div>
+
+      {quantityByCrop.size > 0 ? (
+        <Panel title="Inventory by crop" subtitle="Total logged quantity across all farmers">
+          <BarChart
+            categories={Array.from(quantityByCrop.entries()).map(([crop_name, quantity]) => ({
+              key: crop_name,
+              label: crop_name,
+              values: { quantity },
+            }))}
+            series={[{ key: "quantity", label: "Quantity", colorVar: "var(--chart-1)" }]}
+          />
+        </Panel>
+      ) : null}
+
     <div className="grid gap-6 lg:grid-cols-2">
-      <Panel title="Farmers">
+      <Panel title="Farmers" subtitle="Registered producers" noPad>
         <DataTable
           rows={data.farmers}
           rowKey={(f) => f.id}
@@ -57,7 +85,7 @@ export function FarmView() {
         />
       </Panel>
 
-      <Panel title="Register farmer">
+      <Panel title="Register farmer" subtitle="Add a new farmer to the platform">
         <form
           className="space-y-4"
           onSubmit={(e) => {
@@ -79,7 +107,7 @@ export function FarmView() {
         </form>
       </Panel>
 
-      <Panel title="Crop inventory">
+      <Panel title="Crop inventory" subtitle="All logged harvests and quantities" noPad>
         <DataTable
           rows={data.crops}
           rowKey={(c) => c.id}
@@ -92,7 +120,7 @@ export function FarmView() {
               label: "Spoilage",
               render: (c) => (
                 <button
-                  className="rounded-md border border-slate-300 px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-100"
+                  className="rounded border border-ng-border px-2 py-0.5 text-xs text-ng-secondary transition-colors hover:bg-ng-bg"
                   onClick={() => api.spoilage(c.id).then(setSpoilage).catch(() => null)}
                 >
                   check
@@ -102,14 +130,14 @@ export function FarmView() {
           ]}
         />
         {spoilage ? (
-          <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          <p className="mt-3 rounded-md border border-ng-border bg-ng-bg px-3 py-2 text-sm text-ng-secondary">
             <span className="font-semibold">{String(spoilage.risk)} risk:</span>{" "}
             {String(spoilage.explanation)}
           </p>
         ) : null}
       </Panel>
 
-      <Panel title="Log harvest">
+      <Panel title="Log harvest" subtitle="Record a new crop lot">
         <form
           className="space-y-4"
           onSubmit={(e) => {
@@ -132,6 +160,7 @@ export function FarmView() {
           <SubmitButton busy={busy}>Add crop</SubmitButton>
         </form>
       </Panel>
+    </div>
     </div>
   );
 }

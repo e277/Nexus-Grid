@@ -3,6 +3,7 @@ import { api } from "../api";
 import { DataTable } from "../components/DataTable";
 import { FormError, SelectField, SubmitButton, TextField } from "../components/Fields";
 import { Panel } from "../components/Panel";
+import { StatTile } from "../components/StatTile";
 import { StatusActions } from "../components/StatusActions";
 import { StatusPill } from "../components/StatusPill";
 import { usePoll } from "../hooks";
@@ -31,10 +32,8 @@ export function GovernmentView() {
   const [wType, setWType] = useState("storm");
   const [wSeverity, setWSeverity] = useState("medium");
   const [wIslands, setWIslands] = useState("");
-  const [wfCrop, setWfCrop] = useState("");
-  const [wfQty, setWfQty] = useState("");
-  const [wfEvent, setWfEvent] = useState("surplus");
-  const [wfResult, setWfResult] = useState<string | null>(null);
+  const [cShipmentId, setCShipmentId] = useState("");
+  const [cDocType, setCDocType] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -51,12 +50,42 @@ export function GovernmentView() {
     }
   }
 
-  if (error) return <p className="text-sm text-amber-800">Failed to load: {error}</p>;
-  if (!data) return <p className="text-sm text-slate-400">Loading…</p>;
+  if (error) return <p className="rounded-md border border-ng-warning-bd bg-ng-warning-bg px-4 py-3 text-sm text-ng-warning-tx">Failed to load: {error}</p>;
+  if (!data) return <p className="text-sm text-ng-secondary">Loading…</p>;
+
+  const pendingCustoms = data.customs.filter((d) => d.status === "submitted");
 
   return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <StatTile label="Pending customs" value={pendingCustoms.length} hint="awaiting approval/rejection" />
+        <StatTile label="Weather alerts" value={data.weather.length} />
+        <StatTile label="Agent activity" value={data.activities.length} />
+        <StatTile label="Audit entries" value={data.audits.length} />
+      </div>
+
     <div className="grid gap-6 lg:grid-cols-2">
       <Panel title="Customs queue">
+        <form
+          className="mb-4 space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit(() =>
+              api.createCustomsDocument({
+                shipment_id: Number(cShipmentId),
+                document_type: cDocType,
+                status: "draft" as never,
+              })
+            ).then(() => {
+              setCShipmentId("");
+              setCDocType("");
+            });
+          }}
+        >
+          <TextField label="Shipment ID" value={cShipmentId} onChange={setCShipmentId} type="number" required />
+          <TextField label="Document type" value={cDocType} onChange={setCDocType} required />
+          <SubmitButton busy={busy}>Create document</SubmitButton>
+        </form>
         <DataTable
           rows={data.customs}
           rowKey={(d) => d.id}
@@ -137,47 +166,6 @@ export function GovernmentView() {
         </div>
       </Panel>
 
-      <Panel title="Trigger orchestration workflow">
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setWfResult(null);
-            submit(async () => {
-              const result = await api.triggerWorkflow({
-                crop_name: wfCrop,
-                quantity: Number(wfQty),
-                event: wfEvent,
-              });
-              const final = result.result.values.at(-1) as
-                | { execution?: { status?: string }; decision?: string }
-                | undefined;
-              setWfResult(
-                `Run ${result.result.status} · decision: ${final?.decision ?? "—"} · execution: ${final?.execution?.status ?? "—"}`
-              );
-            });
-          }}
-        >
-          <TextField label="Crop" value={wfCrop} onChange={setWfCrop} required />
-          <TextField label="Quantity" value={wfQty} onChange={setWfQty} type="number" required />
-          <SelectField
-            label="Event"
-            value={wfEvent}
-            onChange={setWfEvent}
-            options={["surplus", "shortage", "inventory_checked"].map((v) => ({
-              value: v,
-              label: v,
-            }))}
-          />
-          <SubmitButton busy={busy}>Run workflow</SubmitButton>
-          {wfResult ? (
-            <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">
-              {wfResult}
-            </p>
-          ) : null}
-        </form>
-      </Panel>
-
       <Panel title="Agent activity">
         <DataTable
           rows={data.activities}
@@ -187,7 +175,7 @@ export function GovernmentView() {
             {
               label: "Agent",
               render: (a) => (
-                <span className="font-mono text-xs text-slate-600">{a.agent_name}</span>
+                <span className="font-mono text-xs text-ng-secondary">{a.agent_name}</span>
               ),
             },
             { label: "Action", render: (a) => a.action },
@@ -217,6 +205,7 @@ export function GovernmentView() {
           ]}
         />
       </Panel>
+    </div>
     </div>
   );
 }

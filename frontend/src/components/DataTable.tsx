@@ -22,26 +22,32 @@ export function DataTable<T>({
   limit = 10,
 }: DataTableProps<T>) {
   if (rows.length === 0) {
-    return <p className="text-sm text-slate-400">{empty}</p>;
+    return <p className="py-2 text-sm text-ng-secondary">{empty}</p>;
   }
   return (
-    <table className="w-full text-sm">
+    <table className="w-full border-collapse text-sm">
       <thead>
-        <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
+        <tr className="border-b border-ng-border bg-ng-bg">
           {columns.map((c) => (
-            <th key={c.label} className="pb-2 pr-4">
+            <th
+              key={c.label}
+              className={`px-4 py-2.5 text-[10px] font-bold uppercase tracking-[.6px] text-ng-secondary ${c.numeric ? "text-right" : "text-left"}`}
+            >
               {c.label}
             </th>
           ))}
         </tr>
       </thead>
-      <tbody className="divide-y divide-slate-100">
-        {rows.slice(0, limit).map((row) => (
-          <tr key={rowKey(row)}>
+      <tbody>
+        {rows.slice(0, limit).map((row, i) => (
+          <tr
+            key={rowKey(row)}
+            className={`border-b border-ng-border transition-colors last:border-0 hover:bg-ng-accent-lit ${i % 2 === 1 ? "bg-ng-row-alt" : ""}`}
+          >
             {columns.map((c) => (
               <td
                 key={c.label}
-                className={`py-2 pr-4 text-slate-700 ${c.numeric ? "tabular-nums" : ""}`}
+                className={`h-12 px-4 align-middle text-[13px] text-ng-primary ${c.numeric ? "text-right tabular-nums" : ""}`}
               >
                 {c.render(row)}
               </td>

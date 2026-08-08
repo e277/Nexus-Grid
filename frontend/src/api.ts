@@ -71,45 +71,91 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 const get = <T>(path: string) => request<T>("GET", path);
 const post = <T>(path: string, body: unknown) => request<T>("POST", path, body);
 const patch = <T>(path: string, body: unknown) => request<T>("PATCH", path, body);
+function buildPath(path: string, params?: Record<string, string | number | boolean | undefined>) {
+  if (!params) return path;
 
+  const query = Object.entries(params)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+    .join("&");
+
+  return query ? `${path}${path.includes("?") ? "&" : "?"}${query}` : path;
+}
 export const api = {
   health: () => get<Health>("/health/"),
+  login: async (email: string, password: string) => {
+    const body = new URLSearchParams({ username: email, password });
+    const response = await fetch(`${BASE}/auth/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new Error(payload?.detail ?? `Login failed (${response.status})`);
+    }
+    return response.json() as Promise<{ access_token: string }>;
+  },
+  register: (body: { email: string; password: string; role: string }) =>
+    post<{ email: string; role: string }> ("/auth/register", body),
   me: () => get<{ email: string; role: string }>("/auth/me"),
 
   // Core domain
-  farmers: () => get<Farmer[]>("/farmers/"),
+  farmers: (params?: { skip?: number; limit?: number }) =>
+    get<Farmer[]>(buildPath("/farmers/", params)),
+  getFarmer: (id: number) => get<Farmer>(`/farmers/${id}`),
   createFarmer: (body: Partial<Farmer>) => post<Farmer>("/farmers/", body),
-  crops: () => get<Crop[]>("/crops/"),
+  crops: (params?: { skip?: number; limit?: number }) =>
+    get<Crop[]>(buildPath("/crops/", params)),
+  getCrop: (id: number) => get<Crop>(`/crops/${id}`),
   createCrop: (body: Partial<Crop>) => post<Crop>("/crops/", body),
-  buyers: () => get<Buyer[]>("/buyers/"),
+  buyers: (params?: { skip?: number; limit?: number }) =>
+    get<Buyer[]>(buildPath("/buyers/", params)),
+  getBuyer: (id: number) => get<Buyer>(`/buyers/${id}`),
   createBuyer: (body: Partial<Buyer>) => post<Buyer>("/buyers/", body),
-  demands: () => get<Demand[]>("/demands/"),
+  demands: (params?: { skip?: number; limit?: number; status?: DemandStatus }) =>
+    get<Demand[]>(buildPath("/demands/", params)),
+  getDemand: (id: number) => get<Demand>(`/demands/${id}`),
   createDemand: (body: Partial<Demand>) => post<Demand>("/demands/", body),
   setDemandStatus: (id: number, status: DemandStatus) =>
     patch<Demand>(`/demands/${id}/status`, { status }),
-  shipments: () => get<Shipment[]>("/shipments/"),
+  shipments: (params?: { skip?: number; limit?: number; status?: ShipmentStatus }) =>
+    get<Shipment[]>(buildPath("/shipments/", params)),
+  getShipment: (id: number) => get<Shipment>(`/shipments/${id}`),
   createShipment: (body: Partial<Shipment>) => post<Shipment>("/shipments/", body),
   setShipmentStatus: (id: number, status: ShipmentStatus) =>
     patch<Shipment>(`/shipments/${id}/status`, { status }),
 
   // Logistics network
-  carriers: () => get<Carrier[]>("/carriers/"),
+  carriers: (params?: { skip?: number; limit?: number; active?: boolean }) =>
+    get<Carrier[]>(buildPath("/carriers/", params)),
+  getCarrier: (id: number) => get<Carrier>(`/carriers/${id}`),
   createCarrier: (body: Partial<Carrier>) => post<Carrier>("/carriers/", body),
-  warehouses: () => get<Warehouse[]>("/warehouses/"),
+  warehouses: (params?: { skip?: number; limit?: number; island?: string }) =>
+    get<Warehouse[]>(buildPath("/warehouses/", params)),
+  getWarehouse: (id: number) => get<Warehouse>(`/warehouses/${id}`),
   createWarehouse: (body: Partial<Warehouse>) => post<Warehouse>("/warehouses/", body),
-  ports: () => get<Port[]>("/ports/"),
+  ports: (params?: { skip?: number; limit?: number; status?: PortStatus }) =>
+    get<Port[]>(buildPath("/ports/", params)),
+  getPort: (id: number) => get<Port>(`/ports/${id}`),
   createPort: (body: Partial<Port>) => post<Port>("/ports/", body),
   setPortStatus: (id: number, status: PortStatus) =>
     patch<Port>(`/ports/${id}/status`, { status }),
-  tradeRoutes: () => get<TradeRoute[]>("/trade-routes/"),
+  tradeRoutes: (params?: { skip?: number; limit?: number; active?: boolean }) =>
+    get<TradeRoute[]>(buildPath("/trade-routes/", params)),
+  getTradeRoute: (id: number) => get<TradeRoute>(`/trade-routes/${id}`),
   createTradeRoute: (body: Partial<TradeRoute>) =>
     post<TradeRoute>("/trade-routes/", body),
 
   // Climate & customs
-  weatherEvents: () => get<WeatherEvent[]>("/weather-events/"),
+  weatherEvents: (params?: { skip?: number; limit?: number; severity?: string }) =>
+    get<WeatherEvent[]>(buildPath("/weather-events/", params)),
+  getWeatherEvent: (id: number) => get<WeatherEvent>(`/weather-events/${id}`),
   createWeatherEvent: (body: Partial<WeatherEvent>) =>
     post<WeatherEvent>("/weather-events/", body),
-  customsDocuments: () => get<CustomsDocument[]>("/customs-documents/"),
+  customsDocuments: (params?: { skip?: number; limit?: number; shipment_id?: number; status?: CustomsStatus }) =>
+    get<CustomsDocument[]>(buildPath("/customs-documents/", params)),
+  getCustomsDocument: (id: number) => get<CustomsDocument>(`/customs-documents/${id}`),
   createCustomsDocument: (body: Partial<CustomsDocument>) =>
     post<CustomsDocument>("/customs-documents/", body),
   setCustomsStatus: (id: number, status: CustomsStatus) =>
@@ -129,8 +175,11 @@ export const api = {
     get<Record<string, unknown>>(`/intelligence/shortage/${encodeURIComponent(crop)}`),
 
   // Orchestration & observability
+  workflowStatus: () => get<{ workflow: string; status: string }> ("/workflow/status"),
   triggerWorkflow: (body: Record<string, unknown>) =>
     post<WorkflowResult>("/workflow/trigger", body),
-  agentActivities: () => get<AgentActivity[]>("/agent-activities/?limit=25"),
-  auditLogs: () => get<AuditLog[]>("/audit-logs/?limit=25"),
+  agentActivities: (params?: { skip?: number; limit?: number; agent_name?: string }) =>
+    get<AgentActivity[]>(buildPath("/agent-activities/", params)),
+  auditLogs: (params?: { skip?: number; limit?: number; actor?: string; entity_type?: string }) =>
+    get<AuditLog[]>(buildPath("/audit-logs/", params)),
 };

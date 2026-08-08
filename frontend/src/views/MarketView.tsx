@@ -1,11 +1,20 @@
 import { useState } from "react";
 import { api } from "../api";
+import { SegmentedBar } from "../components/charts/SegmentedBar";
 import { DataTable } from "../components/DataTable";
 import { FormError, SelectField, SubmitButton, TextField } from "../components/Fields";
 import { Panel } from "../components/Panel";
+import { StatTile } from "../components/StatTile";
 import { StatusActions } from "../components/StatusActions";
 import { StatusPill } from "../components/StatusPill";
 import { usePoll } from "../hooks";
+
+// buyer_type is true nominal identity (no good/bad meaning) -> categorical slots
+const BUYER_TYPE_COLOR: Record<string, string> = {
+  retailer: "var(--chart-1)",
+  wholesaler: "var(--chart-2)",
+  government: "var(--chart-3)",
+};
 
 // Mirrors the backend demand transition map
 const DEMAND_TRANSITIONS: Record<string, string[]> = {
@@ -48,10 +57,36 @@ export function MarketView() {
     }
   }
 
-  if (error) return <p className="text-sm text-amber-800">Failed to load: {error}</p>;
-  if (!data) return <p className="text-sm text-slate-400">Loading…</p>;
+  if (error) return <p className="rounded-md border border-ng-warning-bd bg-ng-warning-bg px-4 py-3 text-sm text-ng-warning-tx">Failed to load: {error}</p>;
+  if (!data) return <p className="text-sm text-ng-secondary">Loading…</p>;
+
+  const openDemands = data.demands.filter((d) => d.status === "open");
+  const matchedDemands = data.demands.filter((d) => d.status === "matched");
+  const buyerTypeCounts = data.buyers.reduce<Record<string, number>>((acc, b) => {
+    acc[b.buyer_type] = (acc[b.buyer_type] ?? 0) + 1;
+    return acc;
+  }, {});
 
   return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <StatTile label="Buyers" value={data.buyers.length} />
+        <StatTile label="Open demand" value={openDemands.length} />
+        <StatTile label="Matched demand" value={matchedDemands.length} />
+        <StatTile label="Total demand" value={data.demands.length} />
+      </div>
+
+      <Panel title="Buyer type mix">
+        <SegmentedBar
+          segments={Object.entries(buyerTypeCounts).map(([type, count]) => ({
+            key: type,
+            label: type,
+            value: count,
+            colorVar: BUYER_TYPE_COLOR[type] ?? "var(--chart-1)",
+          }))}
+        />
+      </Panel>
+
     <div className="grid gap-6 lg:grid-cols-2">
       <Panel title="Buyers">
         <DataTable
@@ -160,17 +195,18 @@ export function MarketView() {
           <button
             type="button"
             onClick={() => api.shortage(lookupCrop).then(setInsight).catch(() => null)}
-            className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+            className="rounded-md border border-ng-border bg-ng-surface px-4 py-2 text-sm font-medium text-ng-secondary transition-colors hover:bg-ng-bg"
           >
             Shortage
           </button>
         </form>
         {insight ? (
-          <p className="mt-4 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          <p className="mt-4 rounded-md border border-ng-border bg-ng-bg px-3 py-2 text-sm text-ng-secondary">
             {String(insight.explanation)}
           </p>
         ) : null}
       </Panel>
+    </div>
     </div>
   );
 }
