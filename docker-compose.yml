@@ -15,28 +15,20 @@ services:
       timeout: 5s
       retries: 10
 
-  redis:
-    image: redis:7
-    ports:
-      - "6379:6379"
-
   web:
     build:
       context: ./backend
     depends_on:
       db:
         condition: service_healthy
-      redis:
-        condition: service_started
     env_file:
       - ./backend/.env
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/nexus
-      - REDIS_URL=redis://redis:6379/0
-      # Durable backends: events + rate limits in Redis, checkpoints in Postgres
-      - EVENT_BUS_BACKEND=redis
-      - RATE_LIMIT_BACKEND=redis
-      - CHECKPOINTER_BACKEND=postgres
+      - ENVIRONMENT=development
+      - EVENT_BUS_BACKEND=memory
+      - RATE_LIMIT_BACKEND=memory
+      - CHECKPOINTER_BACKEND=memory
     ports:
       - "8005:8005"
     # --reload picks up files synced in by `docker compose watch`
@@ -62,7 +54,7 @@ services:
     depends_on:
       - web
     environment:
-      # Proxy /api/* to the backend container instead of localhost
+      # Proxy /api/* to the backend container via Docker Compose service discovery.
       - BACKEND_URL=http://web:8005
     ports:
       - "5175:5173"

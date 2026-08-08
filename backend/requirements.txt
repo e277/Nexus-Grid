@@ -11,9 +11,6 @@ alembic==1.14.1
 psycopg[binary]==3.3.4  # psycopg v3, required by langgraph-checkpoint-postgres
 psycopg-pool==3.3.1
 
-# Cache / messaging
-redis==8.0.1
-
 # LLM / orchestration
 langgraph==1.2.6
 langgraph-checkpoint-sqlite==3.1.0

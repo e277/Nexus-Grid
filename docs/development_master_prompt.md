@@ -31,7 +31,6 @@ The objective is to reduce food waste, improve regional food security, and optim
 - SQLAlchemy
 - PostgreSQL
 - Alembic
-- Redis
 - Celery (later)
 - Docker
 

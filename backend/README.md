@@ -91,12 +91,11 @@ All settings are read from the environment (or `.env`) via `app/config/settings.
 | Variable                        | Default                                          | Purpose                                       |
 | ------------------------------- | ------------------------------------------------ | --------------------------------------------- |
 | `DATABASE_URL`                | `postgresql://postgres:postgres@db:5432/nexus` | SQLAlchemy connection URL                     |
-| `REDIS_URL`                   | `redis://redis:6379/0`                         | Redis connection URL                          |
 | `MINIMAX_API_KEY`             | (empty)                                          | Enables LLM recommendation step (MiniMax)     |
 | `CMDOP_API_KEY`               | (empty)                                          | Enables the OpenClaw agent runtime client     |
-| `EVENT_BUS_BACKEND`           | `memory`                                       | `redis` = durable Redis Streams bus         |
-| `CHECKPOINTER_BACKEND`        | `memory`                                       | `sqlite` or `postgres` = durable workflow state |
-| `RATE_LIMIT_BACKEND`          | `memory`                                       | `redis` = limits shared across replicas     |
+| `EVENT_BUS_BACKEND`           | `memory`                                         | In-process event bus backend                  |
+| `CHECKPOINTER_BACKEND`        | `memory`                                         | `sqlite` or `postgres` = durable workflow state |
+| `RATE_LIMIT_BACKEND`          | `memory`                                         | In-process rate limiter backend               |
 | `SKIP_AGENT_STARTUP`          | `0`                                            | Set`1` to disable the background agent loop |
 | `AGENT_POLL_INTERVAL_SECONDS` | `10`                                           | Agent check cadence                           |
 | `SECRET_KEY`                  | (dev default)                                    | JWT signing key — set 32+ bytes in production |
@@ -110,7 +109,7 @@ From the repository root:
 docker-compose up --build
 ```
 
-This starts `web` (FastAPI on port 8005), `db` (PostgreSQL), and `redis`.
+This starts `web` (FastAPI on port 8005) and `db` (PostgreSQL).
 
 ## Testing
 

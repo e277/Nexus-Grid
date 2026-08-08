@@ -1,10 +1,9 @@
 """Event bus core: in-process backend and the module-level proxy.
 
 ``event_bus`` is a proxy so call sites (`from app.events import event_bus`)
-never change when the backend does. The backend is selected at startup by
-``configure_event_bus``: the default in-process dispatcher, or the durable
-Redis Streams backend (`app.events.redis_bus`). Subscriptions registered on
-the proxy are replayed onto any newly configured backend.
+never change when the backend does. ``EventBus`` is the default and only
+in-process dispatcher. Subscriptions registered on the proxy are replayed
+onto any newly configured backend.
 
 Event names follow the dotted convention from the roadmap, e.g.
 ``crop.harvest.ready``, ``shipment.delayed``, ``weather.alert``.
@@ -92,16 +91,3 @@ class EventBusProxy:
 
 
 event_bus = EventBusProxy(EventBus())
-
-
-def configure_event_bus(backend_name: str, redis_url: str | None = None) -> None:
-    """Select the event bus backend ("memory" or "redis") at startup."""
-    if backend_name == "redis":
-        from app.events.redis_bus import RedisEventBus
-
-        event_bus.set_backend(RedisEventBus(redis_url or "redis://localhost:6379/0"))
-        logger.info("Event bus backend: redis streams")
-    else:
-        if not isinstance(event_bus.backend, EventBus):
-            event_bus.set_backend(EventBus())
-        logger.info("Event bus backend: in-process memory")

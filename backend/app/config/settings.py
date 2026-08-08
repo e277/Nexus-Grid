@@ -21,7 +21,6 @@ class Settings(BaseSettings):
     environment: str = "development"
 
     database_url: str = "postgresql://postgres:postgres@db:5432/nexus"
-    redis_url: str = "redis://redis:6379/0"
 
     cmdop_api_key: str = ""
 
@@ -37,12 +36,11 @@ class Settings(BaseSettings):
     sho_base_url: str = ""
     sho_model: str = ""
 
-    # Backend selection: safe in-memory defaults; compose/prod opt into
-    # redis/postgres for durability across restarts and replicas
-    event_bus_backend: str = "memory"  # memory | redis
+    # Backend selection: safe in-memory defaults for local development.
+    event_bus_backend: str = "memory"
     checkpointer_backend: str = "memory"  # memory | sqlite | postgres
     checkpointer_sqlite_path: str = "data/checkpoints.db"
-    rate_limit_backend: str = "memory"  # memory | redis
+    rate_limit_backend: str = "memory"
 
     # Agent runtime
     skip_agent_startup: bool = False

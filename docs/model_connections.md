@@ -12,11 +12,11 @@ React frontend (frontend/src)
         ▼
 FastAPI backend (backend/app/main.py)
    ├── Domain APIs (farmers, crops, buyers, shipments, logistics, climate, customs)
-   ├── Event bus (memory or Redis) → SupervisorAgent → specialist agents
+   ├── Event bus (in-process) → SupervisorAgent → specialist agents
    ├── LangGraph workflow (/workflow) → one LLM call (MiniMax, direct HTTP)
    └── Background SupplyAgent poll loop
         ▼
-Postgres (SQLAlchemy models) + Redis (docker-compose.yml)
+Postgres (SQLAlchemy models) (docker-compose.yml)
 ```
 
 There are three layers of "intelligence," connected through an event bus and a LangGraph workflow. Only one of them calls a real LLM.
@@ -71,14 +71,14 @@ perceive → assess → recommend → plan → (approval gate) → execute → m
 
 `backend/app/events/` provides the bus that connects domain activity to the agents:
 
-- Backend is selected by `EVENT_BUS_BACKEND`: `memory` (default, in-process) or `redis` (`redis_bus.py`, durable/multi-replica).
-- `main.py`'s lifespan configures the bus, registers handlers (`handlers.py`), and starts it; handlers dispatch events into `supervisor.dispatch(db, event, payload)`.
+- `EventBus` (`bus.py`) is a synchronous in-process publish/subscribe dispatcher — the only backend.
+- `main.py`'s lifespan registers handlers (`handlers.py`) and starts the bus; handlers dispatch events into `supervisor.dispatch(db, event, payload)`.
 
 ## 6. Data & Security Layers
 
 - **Models** (`app/models/`): SQLAlchemy entities — farmers, crops, buyers, demands, shipments, carriers, warehouses, ports, trade routes, weather events, customs documents, users, plus `AgentActivity` and `AuditLog`. Tables are created at startup; Alembic owns real migrations.
 - **Auth**: every route except `/`, `/health`, `/metrics`, and `/auth` requires a JWT (`get_current_user`); observability routes (`/agent-activities`, `/audit-logs`) additionally require the `government` role.
-- **Middleware**: request metrics and rate limiting (memory or Redis backend).
+- **Middleware**: request metrics and rate limiting (in-process, memory-backed sliding window).
 
 ## 7. End-to-End Flows
 
@@ -105,9 +105,6 @@ All settings live in `app/config/settings.py` (env vars / `.env`):
 | `MINIMAX_MODEL` | MiniMax model id to call | `MiniMax-M2` |
 | `CMDOP_API_KEY` | Enables the OpenClaw runtime client | empty (unconfigured) |
 | `DATABASE_URL` | Postgres connection | compose default |
-| `REDIS_URL` | Redis connection | compose default |
-| `EVENT_BUS_BACKEND` | `memory` \| `redis` | `memory` |
 | `CHECKPOINTER_BACKEND` | `memory` \| `sqlite` \| `postgres` | `memory` |
-| `RATE_LIMIT_BACKEND` | `memory` \| `redis` | `memory` |
 | `SKIP_AGENT_STARTUP` | Disable the SupplyAgent poll loop | `false` |
 | `AGENT_POLL_INTERVAL_SECONDS` | Poll loop cadence | `10` |
