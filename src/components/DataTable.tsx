@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 
+import { cn } from "../lib/utils";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+
 export interface Column<T> {
   label: string;
   render: (row: T) => ReactNode;
@@ -22,39 +25,31 @@ export function DataTable<T>({
   limit = 10,
 }: DataTableProps<T>) {
   if (rows.length === 0) {
-    return <p className="py-2 text-sm text-ng-secondary">{empty}</p>;
+    return <p className="px-5 py-4 text-sm text-ng-secondary">{empty}</p>;
   }
+
   return (
-    <table className="w-full border-collapse text-sm">
-      <thead>
-        <tr className="border-b border-ng-border bg-ng-bg">
+    <Table>
+      <TableHeader>
+        <TableRow className="hover:bg-transparent">
           {columns.map((c) => (
-            <th
-              key={c.label}
-              className={`px-4 py-2.5 text-[10px] font-bold uppercase tracking-[.6px] text-ng-secondary ${c.numeric ? "text-right" : "text-left"}`}
-            >
+            <TableHead key={c.label} className={cn(c.numeric && "text-right")}>
               {c.label}
-            </th>
+            </TableHead>
           ))}
-        </tr>
-      </thead>
-      <tbody>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {rows.slice(0, limit).map((row, i) => (
-          <tr
-            key={rowKey(row)}
-            className={`border-b border-ng-border transition-colors last:border-0 hover:bg-ng-accent-lit ${i % 2 === 1 ? "bg-ng-row-alt" : ""}`}
-          >
+          <TableRow key={rowKey(row)} className={cn(i % 2 === 1 && "bg-ng-row-alt")}>
             {columns.map((c) => (
-              <td
-                key={c.label}
-                className={`h-12 px-4 align-middle text-[13px] text-ng-primary ${c.numeric ? "text-right tabular-nums" : ""}`}
-              >
+              <TableCell key={c.label} className={cn(c.numeric && "text-right tabular-nums")}>
                 {c.render(row)}
-              </td>
+              </TableCell>
             ))}
-          </tr>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
