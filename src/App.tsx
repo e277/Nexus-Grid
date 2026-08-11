@@ -1,8 +1,6 @@
-import { useEffect, useState } from "react";
-import { api, UnauthorizedError } from "./api";
-import { clearToken, getToken } from "./auth";
-import { LoginPanel } from "./components/LoginPanel";
-import { setUnauthorizedHandler, usePoll } from "./hooks";
+import { useState } from "react";
+import { api } from "./api";
+import { usePoll } from "./hooks";
 import { FarmView } from "./views/FarmView";
 import { GovernmentView } from "./views/GovernmentView";
 import { LogisticsView } from "./views/LogisticsView";
@@ -14,7 +12,6 @@ export type TabId = "overview" | "farm" | "market" | "logistics" | "government";
 interface Tab {
   id: TabId;
   label: string;
-  roles: string[] | null;
   icon: React.ReactNode;
   badge?: string;
 }
@@ -73,11 +70,11 @@ function timeAgo(iso: string | null | undefined): string {
 }
 
 const TABS: Tab[] = [
-  { id: "overview",    label: "Overview",    roles: null,                                          icon: <OverviewIcon /> },
-  { id: "farm",        label: "Farm",        roles: ["farmer","government","admin"],                icon: <FarmIcon /> },
-  { id: "market",      label: "Market",      roles: ["buyer","government","admin"],                 icon: <MarketIcon /> },
-  { id: "logistics",   label: "Logistics",   roles: ["logistics","government","admin"],             icon: <LogisticsIcon /> },
-  { id: "government",  label: "Government",  roles: ["government","admin"],                        icon: <GovIcon /> },
+  { id: "overview",    label: "Overview",    icon: <OverviewIcon /> },
+  { id: "farm",        label: "Farm",        icon: <FarmIcon /> },
+  { id: "market",      label: "Market",      icon: <MarketIcon /> },
+  { id: "logistics",   label: "Logistics",   icon: <LogisticsIcon /> },
+  { id: "government",  label: "Government",  icon: <GovIcon /> },
 ];
 
 const TAB_LABELS: Record<TabId, string> = {
@@ -89,37 +86,14 @@ const TAB_LABELS: Record<TabId, string> = {
 };
 
 export default function App() {
-  const [authenticated, setAuthenticated] = useState(() => getToken() !== null);
-  const [user, setUser] = useState<{ email: string; role: string } | null>(null);
   const [tab, setTab] = useState<TabId>("overview");
   const [notifOpen, setNotifOpen] = useState(false);
-  const [avatarOpen, setAvatarOpen] = useState(false);
   const [lastSeenId, setLastSeenId] = useState<number | null>(null);
 
-  function logout() {
-    clearToken();
-    setUser(null);
-    setTab("overview");
-    setAuthenticated(false);
-  }
-
-  useEffect(() => { setUnauthorizedHandler(logout); }, []);
-
-  useEffect(() => {
-    if (!authenticated) return;
-    api.me().then(setUser).catch((err) => { if (err instanceof UnauthorizedError) logout(); });
-  }, [authenticated]);
-
-  const { data: health } = usePoll(
-    () => (authenticated ? api.health() : Promise.resolve(null)),
-    30_000
-  );
+  const { data: health } = usePoll(() => api.health(), 30_000);
 
   const { data: recentActivity } = usePoll(
-    () =>
-      authenticated
-        ? api.agentActivities({ limit: 5 }).catch(() => null)
-        : Promise.resolve(null),
+    () => api.agentActivities({ limit: 5 }).catch(() => null),
     20_000
   );
 
@@ -128,7 +102,6 @@ export default function App() {
     : 0;
 
   function toggleNotifications() {
-    setAvatarOpen(false);
     setNotifOpen((open) => {
       const next = !open;
       if (next && recentActivity && recentActivity.length > 0) {
@@ -137,23 +110,6 @@ export default function App() {
       return next;
     });
   }
-
-  function toggleAvatar() {
-    setNotifOpen(false);
-    setAvatarOpen((open) => !open);
-  }
-
-  if (!authenticated) {
-    return <LoginPanel onAuthenticated={() => setAuthenticated(true)} />;
-  }
-
-  const visibleTabs = TABS.filter(
-    (t) => t.roles === null || (user !== null && t.roles.includes(user.role))
-  );
-
-  const initials = user
-    ? user.email.split("@")[0].slice(0, 2).toUpperCase()
-    : "–";
 
   return (
     <div className="flex h-screen overflow-hidden bg-ng-bg">
@@ -168,7 +124,7 @@ export default function App() {
           </div>
           <div>
             <p className="text-sm font-bold leading-tight tracking-tight text-ng-primary">Nexus-Grid</p>
-            <p className="text-[10px] font-medium uppercase tracking-wide text-ng-secondary">v1.0 · Operator</p>
+            <p className="text-[10px] font-medium uppercase tracking-wide text-ng-secondary">v1.0 · Orchestration</p>
           </div>
         </div>
 
@@ -177,7 +133,7 @@ export default function App() {
           <p className="px-2.5 pb-1 pt-2.5 text-[10px] font-bold uppercase tracking-[.8px] text-ng-secondary">
             Workspace
           </p>
-          {visibleTabs.map((t) => (
+          {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
@@ -195,21 +151,17 @@ export default function App() {
           ))}
         </nav>
 
-        {/* User */}
-        <div className="shrink-0 border-t border-ng-border p-2">
-          <button
-            onClick={logout}
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left transition-colors hover:bg-ng-bg"
-          >
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ng-accent to-purple-600 text-[10px] font-bold text-white">
-              {initials}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold text-ng-primary">{user?.email ?? "—"}</p>
-              <p className="text-[11px] capitalize text-ng-secondary">{user?.role ?? "—"}</p>
-            </div>
-            <span className="text-xs text-ng-secondary">Sign out</span>
-          </button>
+        {/* Runtime */}
+        <div className="shrink-0 border-t border-ng-border px-4 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-[.8px] text-ng-secondary">
+            Runtime
+          </p>
+          <p className="mt-1 truncate text-xs text-ng-primary">
+            {health ? `${health.app} ${health.version}` : "—"}
+          </p>
+          <p className="text-[11px] capitalize text-ng-secondary">
+            {health?.environment ?? "connecting…"}
+          </p>
         </div>
       </aside>
 
@@ -256,7 +208,7 @@ export default function App() {
                   </div>
                   <div className="max-h-80 overflow-y-auto">
                     {recentActivity === null ? (
-                      <p className="px-4 py-4 text-sm text-ng-secondary">Visible to government and admin roles.</p>
+                      <p className="px-4 py-4 text-sm text-ng-secondary">Agent activity is unavailable.</p>
                     ) : recentActivity.length === 0 ? (
                       <p className="px-4 py-4 text-sm text-ng-secondary">No agent activity yet.</p>
                     ) : (
@@ -275,45 +227,16 @@ export default function App() {
               ) : null}
             </div>
 
-            <div className="relative z-30">
-              <button
-                onClick={toggleAvatar}
-                aria-label="Account menu"
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-ng-accent to-purple-600 text-[11px] font-bold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent focus-visible:ring-offset-1"
-              >
-                {initials}
-              </button>
-              {avatarOpen ? (
-                <div className="absolute right-0 top-[calc(100%+6px)] z-30 w-56 rounded-[10px] border border-ng-border bg-ng-surface shadow-ng-md">
-                  <div className="border-b border-ng-border px-4 py-3">
-                    <p className="truncate text-sm font-semibold text-ng-primary">{user?.email ?? "—"}</p>
-                    <p className="text-xs capitalize text-ng-secondary">{user?.role ?? "—"}</p>
-                  </div>
-                  <button
-                    onClick={logout}
-                    className="w-full px-4 py-2.5 text-left text-sm text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary"
-                  >
-                    Sign out
-                  </button>
-                </div>
-              ) : null}
-            </div>
           </div>
 
-          {notifOpen || avatarOpen ? (
-            <div
-              className="fixed inset-0 z-20"
-              onClick={() => {
-                setNotifOpen(false);
-                setAvatarOpen(false);
-              }}
-            />
+          {notifOpen ? (
+            <div className="fixed inset-0 z-20" onClick={() => setNotifOpen(false)} />
           ) : null}
         </header>
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-6">
-          {tab === "overview"   && <OverviewView onNavigate={setTab} user={user} />}
+          {tab === "overview"   && <OverviewView onNavigate={setTab} />}
           {tab === "farm"       && <FarmView />}
           {tab === "market"     && <MarketView />}
           {tab === "logistics"  && <LogisticsView />}

@@ -1,12 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { UnauthorizedError } from "./api";
-
-let onUnauthorized: (() => void) | null = null;
-
-/** Registered once by the app shell: called when any request hits a 401. */
-export function setUnauthorizedHandler(handler: () => void): void {
-  onUnauthorized = handler;
-}
 
 interface PollState<T> {
   data: T | null;
@@ -14,7 +6,7 @@ interface PollState<T> {
   refresh: () => void;
 }
 
-/** Load data now and refresh on an interval; 401s route to the app shell. */
+/** Load data now and refresh on an interval. */
 export function usePoll<T>(loader: () => Promise<T>, intervalMs = 10_000): PollState<T> {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,10 +27,6 @@ export function usePoll<T>(loader: () => Promise<T>, intervalMs = 10_000): PollS
         })
         .catch((err) => {
           if (cancelled) return;
-          if (err instanceof UnauthorizedError) {
-            onUnauthorized?.();
-            return;
-          }
           setError(err instanceof Error ? err.message : "Request failed");
         });
     }

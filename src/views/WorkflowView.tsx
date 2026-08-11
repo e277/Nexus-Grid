@@ -217,7 +217,7 @@ export function WorkflowView() {
 
   return (
     <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
-      <Panel title="Run a scenario" subtitle="Crop lots sourced from demo_seed.py">
+      <Panel title="Run a scenario" subtitle="Crop lots from the seeded dataset">
         {loadError ? <FormError message={loadError} /> : null}
         <form
           className="space-y-4"

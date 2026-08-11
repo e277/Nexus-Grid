@@ -1,6 +1,6 @@
-// Visual representation of backend/app/workflows/supply_chain_graph.py.
-// Node ids below must match the LangGraph node names exactly, since
-// `/workflow/trigger`'s `updates` entries are keyed by node name.
+// Visual representation of the supply-chain workflow graph.
+// Node ids below must match the graph's node names exactly, since
+// `/api/workflow/trigger`'s `updates` entries are keyed by node name.
 
 export type NodeStatus = "pending" | "running" | "done" | "skipped";
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api, UnauthorizedError } from "../api";
+import { api } from "../api";
 import type { TabId } from "../App";
 import { BarChart } from "../components/charts/BarChart";
 import { Meter } from "../components/charts/Meter";
@@ -45,24 +45,17 @@ async function loadOverview() {
     api.ports(),
   ]);
 
-  let activities: AgentActivity[] | null = null;
-  try {
-    activities = await api.agentActivities();
-  } catch (err) {
-    if (err instanceof UnauthorizedError) throw err;
-    activities = null;
-  }
+  // Soft-fails so one unavailable panel never blanks the whole dashboard.
+  const activities: AgentActivity[] | null = await api.agentActivities().catch(() => null);
 
   return { overview, shipments, demands, weather, farmers, crops, buyers, ports, activities };
 }
 
 interface OverviewViewProps {
   onNavigate: (tab: TabId) => void;
-  user: { email: string; role: string } | null;
 }
 
-export function OverviewView({ onNavigate, user }: OverviewViewProps) {
-  const canRunWorkflow = user?.role === "government" || user?.role === "admin";
+export function OverviewView({ onNavigate }: OverviewViewProps) {
   const { data, error } = usePoll(loadOverview);
   const [heroCollapsed, setHeroCollapsed] = useState(false);
 
@@ -201,13 +194,9 @@ export function OverviewView({ onNavigate, user }: OverviewViewProps) {
             })}
           </div>
 
-          {canRunWorkflow ? (
-            <div className="p-4">
-              <WorkflowView />
-            </div>
-          ) : (
-            <p className="p-4 text-sm text-ng-secondary">Running the workflow is visible to government and admin roles.</p>
-          )}
+          <div className="p-4">
+            <WorkflowView />
+          </div>
         </Panel>
       </div>
 
@@ -342,7 +331,7 @@ export function OverviewView({ onNavigate, user }: OverviewViewProps) {
         <div className="lg:col-span-2">
           <Panel title="Agent activity" subtitle="Autonomous decisions this orchestration cycle" noPad>
             {activities === null ? (
-              <p className="px-5 py-4 text-sm text-ng-secondary">Visible to government and admin roles.</p>
+              <p className="px-5 py-4 text-sm text-ng-secondary">Agent activity is unavailable.</p>
             ) : (
               <DataTable
                 rows={activities}
