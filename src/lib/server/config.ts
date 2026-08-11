@@ -31,11 +31,7 @@ export interface Settings {
   skipAgentStartup: boolean;
   agentPollIntervalSeconds: number;
 
-  /** Security */
-  secretKey: string;
-  accessTokenExpireMinutes: number;
   rateLimitPerMinute: number;
-
   logLevel: string;
 }
 
@@ -79,11 +75,7 @@ export function getSettings(): Settings {
     skipAgentStartup: bool("SKIP_AGENT_STARTUP", false),
     agentPollIntervalSeconds: int("AGENT_POLL_INTERVAL_SECONDS", 10),
 
-    // Dev-only default; set SECRET_KEY (32+ bytes) in every real environment
-    secretKey: str("SECRET_KEY", "dev-only-nexus-grid-secret-key-change-in-production"),
-    accessTokenExpireMinutes: int("ACCESS_TOKEN_EXPIRE_MINUTES", 60),
     rateLimitPerMinute: int("RATE_LIMIT_PER_MINUTE", 120),
-
     logLevel: str("LOG_LEVEL", "INFO"),
   };
   return cached;
