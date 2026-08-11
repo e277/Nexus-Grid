@@ -132,6 +132,13 @@ export function fetchAgroclimate(force = false): Promise<Snapshot<MonthlyClimate
         ),
       };
     },
-    { force }
+    {
+      force,
+      pending: {
+        source: "agroclimate",
+        publisher: "NASA POWER (agroclimatology)",
+        endpoint: ENDPOINT,
+      },
+    }
   );
 }

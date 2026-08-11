@@ -231,6 +231,72 @@ export function ruleSignals(picture: RegionalPicture): CoordinationSignal[] {
   return signals;
 }
 
+const INTERPRETATION_TTL_MS = 15 * 60 * 1000;
+
+const globalInterpretation = globalThis as typeof globalThis & {
+  __nexusGridSignals?: { result: InterpretationResult; expiresAt: number };
+  __nexusGridSignalsInflight?: Promise<InterpretationResult>;
+};
+
+/**
+ * Interpretation, cached and revalidated behind the request.
+ *
+ * The underlying call is a model round-trip over the whole regional picture —
+ * far too slow to sit in a polling loop, and billed per call. Readers get the
+ * last interpretation immediately while a stale one refreshes, and concurrent
+ * readers share a single in-flight call.
+ */
+export async function interpretCached(
+  picture: RegionalPicture,
+  force = false
+): Promise<InterpretationResult> {
+  const cached = globalInterpretation.__nexusGridSignals;
+
+  const start = (): Promise<InterpretationResult> => {
+    if (globalInterpretation.__nexusGridSignalsInflight) {
+      return globalInterpretation.__nexusGridSignalsInflight;
+    }
+    const run = interpret(picture)
+      .then((result) => {
+        globalInterpretation.__nexusGridSignals = {
+          result,
+          expiresAt: Date.now() + INTERPRETATION_TTL_MS,
+        };
+        return result;
+      })
+      .finally(() => {
+        globalInterpretation.__nexusGridSignalsInflight = undefined;
+      });
+    globalInterpretation.__nexusGridSignalsInflight = run;
+    return run;
+  };
+
+  if (force) return start();
+
+  if (!cached) {
+    // First read: start the model call but do not wait on it — a round-trip
+    // over the whole picture takes ten seconds or more. Rule-derived signals
+    // are returned meanwhile, labelled as such, and the console's next poll
+    // picks up the interpretation.
+    void start().catch(() => {
+      /* falls back to rules until a call succeeds */
+    });
+    return {
+      source: "rules",
+      signals: ruleSignals(picture),
+      note: "Interpreting in the background — showing rule-derived signals until it returns.",
+      generated_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+    };
+  }
+
+  if (cached.expiresAt <= Date.now()) {
+    void start().catch(() => {
+      /* the previous result stays served until a refresh succeeds */
+    });
+  }
+  return cached.result;
+}
+
 /** Interpret the regional picture into coordination signals. */
 export async function interpret(picture: RegionalPicture): Promise<InterpretationResult> {
   const generatedAt = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");

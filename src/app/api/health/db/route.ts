@@ -17,6 +17,13 @@ export const GET = api(() => {
       store: "in-memory (observability only)",
       agent_activities: agentActivities.count(),
       audit_logs: auditLogs.count(),
+      // The store, source caches, agent memory, and workflow checkpointer are
+      // all process-local. Surfacing the pid makes it checkable from outside
+      // whether requests are landing in one process or several — if this value
+      // varies across calls, those singletons are not shared and none of them
+      // can be trusted.
+      pid: process.pid,
+      uptime_seconds: Math.round(process.uptime()),
     };
   } catch (error) {
     return {

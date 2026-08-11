@@ -10,6 +10,7 @@ const STATUS_CLASS: Record<SourceProvenance["status"], string> = {
   live: "bg-ng-success-bg text-ng-success-tx border-ng-success-bd",
   cached: "bg-ng-info-bg text-ng-info-tx border-ng-muted-bd",
   empty: "bg-ng-muted text-ng-muted-tx border-ng-muted-bd",
+  pending: "bg-ng-info-bg text-ng-info-tx border-ng-muted-bd animate-pulse",
   unauthorized: "bg-ng-warning-bg text-ng-warning-tx border-ng-warning-bd",
   unavailable: "bg-ng-danger-bg text-ng-danger-tx border-ng-danger-bd",
 };
@@ -18,6 +19,7 @@ const STATUS_MEANING: Record<SourceProvenance["status"], string> = {
   live: "Fetched from the publisher",
   cached: "Publisher unreachable — last good snapshot",
   empty: "Reachable, returned nothing usable",
+  pending: "First fetch in progress",
   unauthorized: "Requires credentials this deployment lacks",
   unavailable: "Publisher failed",
 };
@@ -29,7 +31,7 @@ function usd(value: number): string {
 }
 
 export function SourcesView() {
-  const { data, error, refresh } = usePoll<PictureResponse>(() => api.picture(), 300_000);
+  const { data, error, refresh } = usePoll<PictureResponse>(() => api.picture(), 12_000);
   const [refreshing, setRefreshing] = useState(false);
 
   async function forceRefresh() {
@@ -85,15 +87,20 @@ export function SourcesView() {
                   {source.covers ? ` · covers ${source.covers}` : ""}
                 </span>
               </div>
-              <a
-                href={source.endpoint}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="mt-1 inline-flex items-center gap-1 font-mono text-ng-2xs text-ng-accent underline decoration-dotted underline-offset-2 hover:decoration-solid focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent focus-visible:ring-offset-1"
-              >
+              <p className="mt-1 break-all font-mono text-ng-2xs text-ng-secondary">
                 {source.endpoint}
-                <ExternalLink size={10} aria-hidden />
-              </a>
+              </p>
+              {source.documentation ? (
+                <a
+                  href={source.documentation}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="mt-1 inline-flex items-center gap-1 text-ng-2xs font-medium text-ng-accent underline decoration-dotted underline-offset-2 hover:decoration-solid focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent focus-visible:ring-offset-1"
+                >
+                  Open {source.publisher}
+                  <ExternalLink size={10} aria-hidden />
+                </a>
+              ) : null}
               <p className="mt-1 text-[11px] text-ng-secondary">
                 {STATUS_MEANING[source.status]} · fetched{" "}
                 {new Date(source.fetched_at).toLocaleString()}

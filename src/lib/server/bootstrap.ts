@@ -8,6 +8,7 @@
 
 import { startAgents } from "./agents/runner";
 import { registerEventHandlers } from "./events";
+import { fetchAllSources } from "./sources";
 
 const globalBootstrap = globalThis as typeof globalThis & {
   __nexusGridBootstrapped?: boolean;
@@ -18,6 +19,13 @@ export function ensureBootstrapped(): void {
   globalBootstrap.__nexusGridBootstrapped = true;
 
   registerEventHandlers();
+
+  // Warm the source caches in the background. Reads never block on the
+  // network, so without this the first page load would show every source as
+  // `pending` until something else triggered a fetch.
+  void fetchAllSources(false).catch((error) => {
+    console.error("Source warm-up failed", error);
+  });
 
   try {
     startAgents();

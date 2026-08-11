@@ -22,6 +22,8 @@ export type SourceStatus =
   | "cached"
   /** Upstream reachable but the query returned nothing usable. */
   | "empty"
+  /** First fetch is in flight; nothing cached yet. */
+  | "pending"
   /** Upstream requires credentials this deployment does not have. */
   | "unauthorized"
   /** Upstream failed. */
@@ -33,6 +35,14 @@ export interface Provenance {
   publisher: string;
   /** The endpoint the data came from, without any credentials. */
   endpoint: string;
+  /**
+   * The publisher's human-facing page.
+   *
+   * Separate from `endpoint` on purpose: several endpoints carry path
+   * placeholders or return raw JSON, so linking them sends an operator
+   * somewhere useless. This is where a person should actually be sent.
+   */
+  documentation: string;
   status: SourceStatus;
   /** When this snapshot was fetched. */
   fetched_at: string;
@@ -99,6 +109,15 @@ export interface StormSignal {
   movement: string | null;
 }
 
+/** Where a person should be sent to read about each publisher. */
+const DOCUMENTATION: Record<SourceId, string> = {
+  "world-bank": "https://data.worldbank.org/indicator",
+  comtrade: "https://comtradeplus.un.org/",
+  climate: "https://open-meteo.com/en/docs",
+  soil: "https://soilgrids.org/",
+  agroclimate: "https://power.larc.nasa.gov/",
+};
+
 export function provenance(
   source: SourceId,
   publisher: string,
@@ -110,6 +129,7 @@ export function provenance(
     source,
     publisher,
     endpoint,
+    documentation: DOCUMENTATION[source],
     status,
     fetched_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
     ...extra,

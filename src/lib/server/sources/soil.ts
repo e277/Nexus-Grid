@@ -52,6 +52,7 @@ interface CachedProfile {
 
 const globalSoil = globalThis as typeof globalThis & {
   __nexusGridSoil?: Map<string, CachedProfile>;
+  __nexusGridSoilToppingUp?: boolean;
 };
 
 function store(): Map<string, CachedProfile> {
@@ -122,33 +123,53 @@ async function fetchState(state: CaricomState): Promise<SoilProfile> {
   };
 }
 
+function outstandingStates() {
+  const cache = store();
+  const now = Date.now();
+  return CARICOM_STATES.filter((state) => {
+    const entry = cache.get(state.iso3);
+    return !entry || entry.expiresAt <= now;
+  });
+}
+
+/**
+ * Sample a few more states, spaced under the rate limit.
+ *
+ * Never awaited by a request: three states at 13s apart is half a minute, and
+ * no page load should wait on that. Guarded so overlapping refreshes do not
+ * double up on a publisher that allows five calls a minute.
+ */
+async function topUp(): Promise<void> {
+  if (globalSoil.__nexusGridSoilToppingUp) return;
+  globalSoil.__nexusGridSoilToppingUp = true;
+
+  const cache = store();
+  try {
+    for (const [index, state] of outstandingStates().slice(0, BUDGET).entries()) {
+      if (index > 0) await sleep(GAP_MS);
+      try {
+        const profile = await fetchState(state);
+        cache.set(state.iso3, { profile, expiresAt: Date.now() + CACHE_TTL_MS });
+      } catch (error) {
+        // Record the failure with a short expiry and move on. Retrying the same
+        // state first on every pass would let one bad point block every state
+        // behind it indefinitely.
+        cache.set(state.iso3, { profile: null, expiresAt: Date.now() + RETRY_AFTER_MS });
+        console.warn(`SoilGrids failed for ${state.iso3}:`, error);
+      }
+    }
+  } finally {
+    globalSoil.__nexusGridSoilToppingUp = false;
+  }
+}
+
 export async function fetchSoil(force = false): Promise<Snapshot<SoilProfile>> {
   const cache = store();
   if (force) cache.clear();
 
-  const now = Date.now();
-  const missing = CARICOM_STATES.filter((state) => {
-    const entry = cache.get(state.iso3);
-    return !entry || entry.expiresAt <= now;
-  });
-
-  let failures = 0;
-  const attempts = missing.slice(0, BUDGET);
-
-  for (const [index, state] of attempts.entries()) {
-    if (index > 0) await sleep(GAP_MS);
-    try {
-      const profile = await fetchState(state);
-      cache.set(state.iso3, { profile, expiresAt: Date.now() + CACHE_TTL_MS });
-    } catch (error) {
-      // Record the failure with a short expiry and move on. Retrying the same
-      // state first on every pass would let one bad point block every state
-      // behind it indefinitely.
-      failures += 1;
-      cache.set(state.iso3, { profile: null, expiresAt: Date.now() + RETRY_AFTER_MS });
-      console.warn(`SoilGrids failed for ${state.iso3}:`, error);
-    }
-  }
+  // An explicit refresh waits for one batch; a normal read never does.
+  if (force) await topUp();
+  else if (outstandingStates().length > 0) void topUp();
 
   const records = CARICOM_STATES.map((state) => cache.get(state.iso3)?.profile).filter(
     (profile): profile is SoilProfile => profile !== null && profile !== undefined
@@ -169,7 +190,6 @@ export async function fetchSoil(force = false): Promise<Snapshot<SoilProfile>> {
         `remainder fill in over the next refreshes.`
     );
   }
-  if (failures > 0) notes.push(`${failures} request(s) failed this pass and will retry.`);
   if (uncovered.length > 0) {
     notes.push(`Grid has no data at the sampled point for ${uncovered.join(", ")}.`);
   }
@@ -180,7 +200,7 @@ export async function fetchSoil(force = false): Promise<Snapshot<SoilProfile>> {
       "soil",
       "ISRIC SoilGrids",
       ENDPOINT,
-      records.length === 0 ? "unavailable" : covered > 0 ? "live" : "empty",
+      records.length === 0 ? "pending" : covered > 0 ? "live" : "empty",
       {
         covers: `${DEPTH} depth · ${covered}/${CARICOM_STATES.length} states sampled with coverage`,
         note: notes.length > 0 ? notes.join(" ") : undefined,

@@ -35,12 +35,19 @@ export interface WorkflowResult {
 
 // ── Interpretation layer ──────────────────────────────────────────────────
 
-export type SourceStatus = "live" | "cached" | "empty" | "unauthorized" | "unavailable";
+export type SourceStatus =
+  | "live"
+  | "cached"
+  | "empty"
+  | "pending"
+  | "unauthorized"
+  | "unavailable";
 
 export interface SourceProvenance {
   source: string;
   publisher: string;
   endpoint: string;
+  documentation: string;
   status: SourceStatus;
   fetched_at: string;
   covers?: string;

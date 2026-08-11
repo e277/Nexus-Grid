@@ -1,5 +1,5 @@
 import { api, boolQuery } from "@/lib/server/http";
-import { interpret } from "@/lib/server/interpretation/signals";
+import { interpretCached } from "@/lib/server/interpretation/signals";
 import { buildRegionalPicture } from "@/lib/server/projection";
 import { bundleProvenance, fetchAllSources } from "@/lib/server/sources";
 
@@ -12,11 +12,12 @@ export const dynamic = "force-dynamic";
  * when no model is configured or the call fails.
  */
 export const GET = api(async ({ query }) => {
-  const bundle = await fetchAllSources(boolQuery(query, "refresh") ?? false);
+  const refresh = boolQuery(query, "refresh") ?? false;
+  const bundle = await fetchAllSources(refresh);
   const picture = buildRegionalPicture(bundle);
 
   return {
-    ...(await interpret(picture)),
+    ...(await interpretCached(picture, refresh)),
     sources: bundleProvenance(bundle),
     totals: picture.totals,
   };

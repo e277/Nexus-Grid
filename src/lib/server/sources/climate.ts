@@ -147,7 +147,10 @@ export function fetchClimate(force = false): Promise<Snapshot<ClimateSignal>> {
         ),
       };
     },
-    { force }
+    {
+      force,
+      pending: { source: "climate", publisher: "Open-Meteo", endpoint: FORECAST_URL },
+    }
   );
 }
 
@@ -187,6 +190,7 @@ export function fetchStorms(force = false): Promise<Snapshot<StormSignal>> {
             STORMS_URL,
             "live",
             {
+              documentation: "https://www.nhc.noaa.gov/",
               covers: "current",
               note: records.length === 0 ? "No active storms in the basin." : undefined,
             }
@@ -200,11 +204,21 @@ export function fetchStorms(force = false): Promise<Snapshot<StormSignal>> {
             "NOAA National Hurricane Center",
             STORMS_URL,
             "unavailable",
-            { note: error instanceof Error ? error.message : String(error) }
+            {
+              documentation: "https://www.nhc.noaa.gov/",
+              note: error instanceof Error ? error.message : String(error),
+            }
           ),
         };
       }
     },
-    { force }
+    {
+      force,
+      pending: {
+        source: "climate",
+        publisher: "NOAA National Hurricane Center",
+        endpoint: STORMS_URL,
+      },
+    }
   );
 }

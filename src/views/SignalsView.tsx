@@ -34,7 +34,7 @@ function usd(value: number): string {
 }
 
 export function SignalsView() {
-  const { data, error, refresh } = usePoll<SignalsResponse>(() => api.signals(), 300_000);
+  const { data, error, refresh } = usePoll<SignalsResponse>(() => api.signals(), 12_000);
   const [refreshing, setRefreshing] = useState(false);
 
   async function forceRefresh() {

@@ -140,6 +140,7 @@ const SOURCE_STATUS_DOT: Record<SourceProvenance["status"], string> = {
   live: "bg-ng-success",
   cached: "bg-ng-info-tx",
   empty: "bg-ng-muted-bd",
+  pending: "bg-ng-info-tx animate-pulse",
   unauthorized: "bg-ng-warning",
   unavailable: "bg-ng-danger",
 };

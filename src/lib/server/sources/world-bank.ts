@@ -133,7 +133,14 @@ export function fetchWorldBank(force = false): Promise<Snapshot<Observation>> {
         ),
       };
     },
-    { force }
+    {
+      force,
+      pending: {
+        source: "world-bank",
+        publisher: "World Bank Open Data",
+        endpoint: `${ENDPOINT}/{CARICOM}/indicator/{indicator}`,
+      },
+    }
   );
 }
 

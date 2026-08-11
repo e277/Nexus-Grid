@@ -122,7 +122,14 @@ export function fetchComtrade(force = false): Promise<Snapshot<TradeFlow>> {
         ),
       };
     },
-    { force }
+    {
+      force,
+      pending: {
+        source: "comtrade",
+        publisher: "UN Comtrade (public preview)",
+        endpoint: ENDPOINT,
+      },
+    }
   );
 }
 
