@@ -74,7 +74,7 @@ export interface TradeFlow {
   value_usd: number;
 }
 
-/** Current climate outlook for one island. */
+/** Current climate outlook and growing conditions for one island. */
 export interface ClimateSignal {
   island: string;
   country_iso3: string;
@@ -82,6 +82,12 @@ export interface ClimateSignal {
   summary: string;
   max_windspeed_kmh?: number;
   max_precipitation_probability_pct?: number;
+  /** Mean topsoil moisture over the next 24h, % by volume. */
+  soil_moisture_pct?: number | null;
+  /** Total forecast rainfall over the next 7 days, mm. */
+  weekly_rainfall_mm?: number | null;
+  /** What those two mean for getting a crop in the ground right now. */
+  growing_conditions?: string;
 }
 
 /** An active named storm in the region. */
