@@ -10,7 +10,7 @@
  * and the agent says so rather than inventing a vessel.
  */
 
-import { getRoutingProvider } from "../integrations";
+import { getRoutingProvider } from "../sources/routing";
 import { byIso3, byName } from "../sources";
 import { currentPicture } from "./context";
 import { BaseAgent, result, type AgentPayload, type AgentResult } from "./base";

@@ -1,4 +1,4 @@
-import { withSignalDefaults } from "../services/supply-rules";
+import { withSignalDefaults } from "./supply-rules";
 import { recommendSupplyResponse } from "./llm-recommend";
 import type { SupplyState } from "./supply-chain-graph";
 

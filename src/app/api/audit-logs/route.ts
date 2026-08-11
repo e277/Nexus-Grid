@@ -1,5 +1,5 @@
 import { api, pagination } from "@/lib/server/http";
-import { listAuditLogs } from "@/lib/server/services/activity";
+import { listAuditLogs } from "@/lib/server/observability/activity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

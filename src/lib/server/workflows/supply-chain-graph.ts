@@ -13,7 +13,7 @@
  * resumable by thread id.
  */
 
-import { classifyGap, withSignalDefaults } from "../services/supply-rules";
+import { classifyGap, withSignalDefaults } from "./supply-rules";
 import { utcnowIso } from "../time";
 import { CompiledGraph, MemoryCheckpointer, StateGraph } from "./graph";
 import { recommendAction } from "./language-step";

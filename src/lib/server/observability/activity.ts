@@ -1,7 +1,7 @@
 /** Recording and querying agent activity and the audit trail. */
 
-import type { AgentActivity, AuditLog } from "../models";
-import { agentActivities, auditLogs } from "../repositories";
+import type { AgentActivity, AuditLog } from "./models";
+import { agentActivities, auditLogs } from "./repositories";
 import { utcnowIso } from "../time";
 
 /** Persist one agent decision, serializing its context as JSON. */

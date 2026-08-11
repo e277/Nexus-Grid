@@ -10,7 +10,7 @@
 import { ensureBootstrapped } from "./bootstrap";
 import { recordRequest, routeTemplate } from "./metrics";
 import { allow, clientAddress } from "./rate-limit";
-import { recordAudit } from "./services/activity";
+import { recordAudit } from "./observability/activity";
 
 /** An error carrying the HTTP status the client should see. */
 export class HttpError extends Error {

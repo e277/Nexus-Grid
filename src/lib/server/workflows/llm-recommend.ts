@@ -10,7 +10,7 @@
  */
 
 import { getSettings, type Settings } from "../config";
-import { withSignalDefaults } from "../services/supply-rules";
+import { withSignalDefaults } from "./supply-rules";
 
 const PROMPT_TEXT = `
 You are an autonomous Caribbean supply-chain assistant.

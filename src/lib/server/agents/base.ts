@@ -13,7 +13,7 @@
  * each agent did and why.
  */
 
-import { recordAgentActivity } from "../services/activity";
+import { recordAgentActivity } from "../observability/activity";
 
 const MEMORY_SIZE = 50;
 

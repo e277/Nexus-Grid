@@ -30,6 +30,13 @@ Sources (lib/server/sources)                 ← six publishers, with provenance
            (lib/server/workflows) read the same projection
 ```
 
+Directories map onto that shape rather than onto a layering the code no longer
+has: `sources/` fetches (routing lives here too — it is another external
+estimate), `projection.ts` derives, `interpretation/` interprets, `agents/` and
+`workflows/` act, and `observability/` holds the only records this platform
+owns. Cross-cutting concerns — config, http, metrics, rate limiting, validation
+— sit at the top level.
+
 Everything below the console is server-only, imported exclusively by route
 handlers. Every handler declares `runtime = "nodejs"`: the source caches, agent
 memory, and the workflow checkpointer are process-local singletons on

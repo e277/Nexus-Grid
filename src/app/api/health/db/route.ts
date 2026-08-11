@@ -1,5 +1,5 @@
 import { api } from "@/lib/server/http";
-import { agentActivities, auditLogs } from "@/lib/server/repositories";
+import { agentActivities, auditLogs } from "@/lib/server/observability/repositories";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
