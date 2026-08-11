@@ -1,23 +1,26 @@
 import { api } from "@/lib/server/http";
-import { getDb } from "@/lib/server/store";
+import { agentActivities, auditLogs } from "@/lib/server/repositories";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Readiness probe: verifies the data store is initialized and usable. */
+/**
+ * Readiness probe.
+ *
+ * There is no domain database to check — records live in the systems this
+ * platform coordinates. What it reports is its own observability store.
+ */
 export const GET = api(() => {
   try {
-    const db = getDb();
     return {
       status: "ok",
-      database: "reachable",
-      backend: "in-memory",
-      seeded: db.seeded,
+      store: "in-memory (observability only)",
+      agent_activities: agentActivities.count(),
+      audit_logs: auditLogs.count(),
     };
   } catch (error) {
     return {
       status: "degraded",
-      database: "unreachable",
       detail: error instanceof Error ? error.message : String(error),
     };
   }
