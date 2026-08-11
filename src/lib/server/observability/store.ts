@@ -33,10 +33,21 @@ function createDatabase(): Database {
 
 const globalStore = globalThis as typeof globalThis & { __nexusGridDb?: Database };
 
-/** The single process-wide store instance. */
+/**
+ * The single process-wide store instance.
+ *
+ * Validates the shape rather than just checking existence: the global survives
+ * hot reloads, so it can hold a layout written by an older version of this
+ * module, and reading a missing table off it fails obscurely.
+ */
 export function getDb(): Database {
-  if (!globalStore.__nexusGridDb) globalStore.__nexusGridDb = createDatabase();
-  return globalStore.__nexusGridDb;
+  const existing = globalStore.__nexusGridDb;
+  if (!existing || !Array.isArray(existing.agent_activities?.rows)) {
+    const fresh = createDatabase();
+    globalStore.__nexusGridDb = fresh;
+    return fresh;
+  }
+  return existing;
 }
 
 /** Insert a row, assigning the next id for its table. Returns the stored row. */

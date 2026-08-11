@@ -290,18 +290,20 @@ function buildGraph(): StateGraph<SupplyState> {
 }
 
 const globalGraph = globalThis as typeof globalThis & {
-  __nexusGridGraph?: CompiledGraph<SupplyState>;
+  __nexusGridGraphV2?: CompiledGraph<SupplyState>;
 };
 
 /**
  * Compile the workflow once with the in-memory checkpointer.
  *
- * Held on `globalThis` so paused threads stay resumable across hot reloads.
+ * Held on `globalThis` so paused threads stay resumable across hot reloads. The
+ * key carries a version because the node set has been replaced once: a stale
+ * compiled graph would keep running the retired workflow after a reload.
  */
 export function getGraph(): CompiledGraph<SupplyState> {
-  if (!globalGraph.__nexusGridGraph) {
-    globalGraph.__nexusGridGraph = buildGraph().compile(new MemoryCheckpointer<SupplyState>());
+  if (!globalGraph.__nexusGridGraphV2) {
+    globalGraph.__nexusGridGraphV2 = buildGraph().compile(new MemoryCheckpointer<SupplyState>());
     console.info("Workflow checkpointer: in-memory");
   }
-  return globalGraph.__nexusGridGraph;
+  return globalGraph.__nexusGridGraphV2;
 }

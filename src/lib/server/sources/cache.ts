@@ -27,11 +27,27 @@ const globalCache = globalThis as typeof globalThis & {
   __nexusGridSourceCache?: CacheState;
 };
 
+/**
+ * The cache lives on `globalThis` so it survives hot reloads — which also
+ * means a reload can hand back a value written by an *older shape* of this
+ * module, and calling into it fails with something unhelpful like
+ * `cache.entries.get is not a function`.
+ *
+ * Validating the shape rather than just checking for existence makes that
+ * self-healing: a stale layout is discarded and rebuilt.
+ */
 function state(): CacheState {
-  if (!globalCache.__nexusGridSourceCache) {
-    globalCache.__nexusGridSourceCache = { entries: new Map(), inflight: new Map() };
+  const existing = globalCache.__nexusGridSourceCache;
+  if (
+    !existing ||
+    !(existing.entries instanceof Map) ||
+    !(existing.inflight instanceof Map)
+  ) {
+    const fresh: CacheState = { entries: new Map(), inflight: new Map() };
+    globalCache.__nexusGridSourceCache = fresh;
+    return fresh;
   }
-  return globalCache.__nexusGridSourceCache;
+  return existing;
 }
 
 export interface CacheOptions {

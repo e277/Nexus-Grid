@@ -58,8 +58,13 @@ const globalSoil = globalThis as typeof globalThis & {
 };
 
 function store(): Map<string, CachedProfile> {
-  if (!globalSoil.__nexusGridSoil) globalSoil.__nexusGridSoil = new Map();
-  return globalSoil.__nexusGridSoil;
+  const existing = globalSoil.__nexusGridSoil;
+  if (!(existing instanceof Map)) {
+    const fresh = new Map<string, CachedProfile>();
+    globalSoil.__nexusGridSoil = fresh;
+    return fresh;
+  }
+  return existing;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

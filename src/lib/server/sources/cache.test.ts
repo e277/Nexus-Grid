@@ -117,3 +117,16 @@ describe("withCache", () => {
     expect(forced.provenance.status).toBe("live");
   });
 });
+
+describe("hot-reload resilience", () => {
+  it("rebuilds when globalThis holds a shape from an older version", async () => {
+    // A dev server that started before this module was rewritten keeps the old
+    // value across the reload. Reading it blew up with
+    // "cache.entries.get is not a function"; the shape check makes it heal.
+    const g = globalThis as Record<string, unknown>;
+    g.__nexusGridSourceCache = new Map();
+
+    const served = await withCache("k", 60_000, async () => snap([7]), { force: true });
+    expect(served.records).toEqual([7]);
+  });
+});

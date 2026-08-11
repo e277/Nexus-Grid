@@ -55,13 +55,13 @@ export class EventBus {
 }
 
 const globalBus = globalThis as typeof globalThis & {
-  __nexusGridEventBus?: EventBus;
-  __nexusGridEventsRegistered?: boolean;
+  __nexusGridEventBusV2?: EventBus;
+  __nexusGridEventsRegisteredV2?: boolean;
 };
 
 export function getEventBus(): EventBus {
-  if (!globalBus.__nexusGridEventBus) globalBus.__nexusGridEventBus = new EventBus();
-  return globalBus.__nexusGridEventBus;
+  if (!globalBus.__nexusGridEventBusV2) globalBus.__nexusGridEventBusV2 = new EventBus();
+  return globalBus.__nexusGridEventBusV2;
 }
 
 /** Publish through the process-wide bus. */
@@ -71,8 +71,8 @@ export function publish(eventName: string, payload: EventPayload = {}): Promise<
 
 /** Subscribe the supervisor to all supervised events (idempotent). */
 export function registerEventHandlers(): void {
-  if (globalBus.__nexusGridEventsRegistered) return;
-  globalBus.__nexusGridEventsRegistered = true;
+  if (globalBus.__nexusGridEventsRegisteredV2) return;
+  globalBus.__nexusGridEventsRegisteredV2 = true;
 
   const bus = getEventBus();
   for (const eventName of SUPERVISED_EVENTS) {
