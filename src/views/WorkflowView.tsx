@@ -3,6 +3,7 @@ import { api } from "../api";
 import { CheckboxField, FormError, SelectField, SubmitButton } from "../components/Fields";
 import { AgentGraph } from "../components/AgentGraph";
 import { Panel } from "../components/Panel";
+import { Button } from "../components/ui/button";
 import { RecommendationCard } from "../components/RecommendationCard";
 import {
   buildInitialNodes,
@@ -246,6 +247,41 @@ export function WorkflowView() {
             hint="High/urgent plans genuinely pause here until approved or rejected"
           />
           <SubmitButton busy={running || awaitingApproval}>Run coordination cycle</SubmitButton>
+
+          {/* The gate lives beside the trigger and is always visible, disabled
+              until a run actually pauses. Buttons that appear and vanish make
+              the gate look incidental; it is the one point a run is not
+              autonomous, so it should be visibly part of the control. */}
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="success"
+              size="sm"
+              className="flex-1"
+              disabled={!awaitingApproval || resuming}
+              onClick={() => decide("approved")}
+            >
+              {resuming ? "Working…" : "Approve"}
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              className="flex-1"
+              disabled={!awaitingApproval || resuming}
+              onClick={() => decide("rejected")}
+            >
+              {resuming ? "Working…" : "Reject"}
+            </Button>
+          </div>
+          <p className="text-ng-2xs leading-snug text-ng-secondary">
+            {awaitingApproval
+              ? `Paused at the gate — ${heldTask?.task ?? "action"}, priority ${
+                  heldTask?.details?.priority ?? "—"
+                }, target ${heldTask?.details?.target ?? "—"}.`
+              : "Enabled only while a run is paused at the approval gate."}
+          </p>
+
           <FormError message={runError} />
         </form>
       </Panel>
@@ -280,24 +316,9 @@ export function WorkflowView() {
               {heldTask?.details?.strategy ? (
                 <p className="mt-1 text-xs text-ng-warning-tx">{heldTask.details.strategy}</p>
               ) : null}
-              <div className="mt-3 flex gap-2">
-                <button
-                  type="button"
-                  disabled={resuming}
-                  onClick={() => decide("approved")}
-                  className="rounded-md bg-ng-success px-3 py-1.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-                >
-                  {resuming ? "Working…" : "Approve"}
-                </button>
-                <button
-                  type="button"
-                  disabled={resuming}
-                  onClick={() => decide("rejected")}
-                  className="rounded-md border border-ng-danger-bd bg-ng-surface px-3 py-1.5 text-sm font-semibold text-ng-danger-tx transition-colors hover:bg-ng-danger-bg disabled:opacity-50"
-                >
-                  {resuming ? "Working…" : "Reject"}
-                </button>
-              </div>
+              <p className="mt-2 text-xs text-ng-warning-tx">
+                Approve or reject beside the run control to continue.
+              </p>
             </div>
           ) : null}
 
