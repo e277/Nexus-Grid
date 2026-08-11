@@ -50,7 +50,8 @@ export interface CacheOptions {
 function refresh<T>(
   key: string,
   ttlMs: number,
-  fetcher: () => Promise<Snapshot<T>>
+  fetcher: () => Promise<Snapshot<T>>,
+  descriptor?: CacheOptions["pending"]
 ): Promise<Snapshot<T>> {
   const cache = state();
   const existing = cache.inflight.get(key);
@@ -73,7 +74,19 @@ function refresh<T>(
         cache.entries.set(key, { snapshot: stale, expiresAt: Date.now() + ttlMs });
         return stale;
       }
-      throw error;
+      // Nothing to fall back on. A failed publisher is a reportable status,
+      // not an exception — rethrowing here took down every other source in
+      // the bundle and surfaced as a 500.
+      return {
+        records: [],
+        provenance: provenance(
+          descriptor?.source ?? "world-bank",
+          descriptor?.publisher ?? key,
+          descriptor?.endpoint ?? "",
+          "unavailable",
+          { note }
+        ),
+      } as Snapshot<T>;
     } finally {
       cache.inflight.delete(key);
     }
@@ -98,12 +111,12 @@ export async function withCache<T>(
   const cache = state();
   const entry = cache.entries.get(key);
 
-  if (options.force) return refresh(key, ttlMs, fetcher);
+  if (options.force) return refresh(key, ttlMs, fetcher, options.pending);
 
   if (entry) {
     // Expired: hand back what we have and revalidate behind the caller.
     if (entry.expiresAt <= Date.now()) {
-      void refresh(key, ttlMs, fetcher).catch(() => {
+      void refresh(key, ttlMs, fetcher, options.pending).catch(() => {
         /* reported through the snapshot's own status on the next read */
       });
     }
@@ -111,7 +124,7 @@ export async function withCache<T>(
   }
 
   // Nothing cached yet: start the fetch and answer `pending` this time round.
-  void refresh(key, ttlMs, fetcher).catch(() => {
+  void refresh(key, ttlMs, fetcher, options.pending).catch(() => {
     /* reported through the snapshot's own status on the next read */
   });
 

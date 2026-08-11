@@ -40,7 +40,9 @@ export function SignalsView() {
   async function forceRefresh() {
     setRefreshing(true);
     try {
-      await api.signals(true);
+      // Fire-and-forget: the sweep takes over a minute server-side, and the
+      // poll below picks the results up as each publisher answers.
+      await api.refreshSources();
       refresh();
     } finally {
       setRefreshing(false);

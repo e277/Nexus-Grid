@@ -233,6 +233,17 @@ export function ruleSignals(picture: RegionalPicture): CoordinationSignal[] {
 
 const INTERPRETATION_TTL_MS = 15 * 60 * 1000;
 
+/**
+ * Whether the picture carries enough for a reading to mean anything.
+ *
+ * Trade flows are the spine of every substitution finding; without them the
+ * model has nothing to reason over and will simply report that everything is
+ * missing.
+ */
+function hasEnoughToInterpret(picture: RegionalPicture): boolean {
+  return picture.totals.states_covered > 0 && picture.totals.food_imports_usd > 0;
+}
+
 const globalInterpretation = globalThis as typeof globalThis & {
   __nexusGridSignals?: { result: InterpretationResult; expiresAt: number };
   __nexusGridSignalsInflight?: Promise<InterpretationResult>;
@@ -272,6 +283,19 @@ export async function interpretCached(
   };
 
   if (force) return start();
+
+  // Interpreting a picture whose sources have not arrived yet produces a
+  // confident-sounding reading of nothing — and it would then be cached for
+  // fifteen minutes, long after the data landed. Wait for something to
+  // interpret.
+  if (!hasEnoughToInterpret(picture)) {
+    return {
+      source: "rules",
+      signals: ruleSignals(picture),
+      note: "Waiting for upstream sources — showing rule-derived signals until they arrive.",
+      generated_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+    };
+  }
 
   if (!cached) {
     // First read: start the model call but do not wait on it — a round-trip
