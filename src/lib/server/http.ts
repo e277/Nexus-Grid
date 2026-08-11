@@ -11,7 +11,6 @@ import { ensureBootstrapped } from "./bootstrap";
 import { recordRequest, routeTemplate } from "./metrics";
 import { allow, clientAddress } from "./rate-limit";
 import { recordAudit } from "./services/activity";
-import { ConflictError, NotFoundError } from "./services/errors";
 
 /** An error carrying the HTTP status the client should see. */
 export class HttpError extends Error {
@@ -129,12 +128,6 @@ export function api<P = Record<string, string>>(handler: Handler<P>, options: Op
       if (error instanceof HttpError) {
         return finish(jsonResponse({ detail: error.message }, error.status, error.headers));
       }
-      if (error instanceof NotFoundError) {
-        return finish(jsonResponse({ detail: error.message }, 404));
-      }
-      if (error instanceof ConflictError) {
-        return finish(jsonResponse({ detail: error.message }, 409));
-      }
       console.error("Unhandled error in route handler", error);
       return finish(jsonResponse({ detail: "Internal server error" }, 500));
     }
@@ -165,38 +158,9 @@ export function pagination(query: URLSearchParams): { skip: number; limit: numbe
   };
 }
 
-/** Parse a numeric path parameter, 422 if it is not an integer. */
-export function intParam(value: string | undefined, name: string): number {
-  const parsed = Number.parseInt(value ?? "", 10);
-  if (!Number.isFinite(parsed)) {
-    throw new HttpError(422, `${name} must be an integer`);
-  }
-  return parsed;
-}
-
-/** Read an optional enum-valued query parameter, 422 on an unknown value. */
-export function enumQuery<T extends string>(
-  query: URLSearchParams,
-  name: string,
-  allowed: readonly T[]
-): T | null {
-  const value = query.get(name);
-  if (value === null || value === "") return null;
-  if (!allowed.includes(value as T)) {
-    throw new HttpError(422, `${name} must be one of: ${allowed.join(", ")}`);
-  }
-  return value as T;
-}
-
 /** Read an optional boolean query parameter. */
 export function boolQuery(query: URLSearchParams, name: string): boolean | null {
   const value = query.get(name);
   if (value === null || value === "") return null;
   return ["1", "true", "yes"].includes(value.toLowerCase());
-}
-
-/** Throw a 404 when a lookup came back empty. */
-export function found<T>(value: T | null | undefined, message: string): T {
-  if (value === null || value === undefined) throw new HttpError(404, message);
-  return value;
 }

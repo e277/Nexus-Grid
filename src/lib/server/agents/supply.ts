@@ -9,6 +9,7 @@
  * regional gap rather than a number this system made up.
  */
 
+import { publish } from "../events";
 import { runOnce } from "../workflows/orchestrator";
 import { currentPicture } from "./context";
 import { BaseAgent, result, type AgentPayload, type AgentResult } from "./base";
@@ -73,6 +74,14 @@ export class SupplyAgent extends BaseAgent {
         external_usd: opportunity.external_usd,
       });
 
+      // Hand the gap to the specialists as well as the workflow: the demand
+      // agent scores it against regional supply, and its finding is recorded
+      // alongside the run rather than only inside it.
+      await publish("substitution.gap.detected", {
+        commodity: opportunity.commodity,
+        importer_iso3: opportunity.importer_iso3,
+      });
+
       try {
         await runOnce({
           event: "substitution_gap",
@@ -92,6 +101,21 @@ export class SupplyAgent extends BaseAgent {
           error
         );
       }
+    }
+
+    // The rest of the specialists key off region-wide conditions rather than a
+    // single lane, so they are raised once per scan instead of once per gap.
+    if (picture.climate.islands_at_risk.some((island) => island.risk === "high")) {
+      await publish("climate.risk.elevated", {});
+    }
+    if (picture.climate.active_storms.length > 0) {
+      await publish("storm.alert", {});
+    }
+    if (picture.planting_alignment.length > 0) {
+      await publish("planting.window.review", {});
+    }
+    if (picture.agronomy.states_with_soil_coverage > 0 && gaps.length > 0) {
+      await publish("soil.assessment.requested", { commodity: gaps[0].commodity });
     }
 
     // Confidence is the share of scanned lanes that cleared the threshold —

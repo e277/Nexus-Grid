@@ -17,30 +17,6 @@ export function Field({ label, children }: FieldProps) {
   );
 }
 
-interface TextFieldProps {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: "text" | "number" | "date" | "email";
-  required?: boolean;
-  placeholder?: string;
-}
-
-export function TextField({ label, value, onChange, type = "text", required, placeholder }: TextFieldProps) {
-  return (
-    <Field label={label}>
-      <input
-        type={type}
-        value={value}
-        required={required}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        className={inputCls}
-      />
-    </Field>
-  );
-}
-
 interface SelectFieldProps {
   label: string;
   value: string;

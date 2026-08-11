@@ -45,9 +45,3 @@ export function insert<T extends Row>(tbl: Table<T>, data: Omit<T, "id">): T {
   tbl.rows.push(row);
   return row;
 }
-
-/** Drop every record. Used by tests and the dev reset path. */
-export function resetDb(): Database {
-  globalStore.__nexusGridDb = createDatabase();
-  return globalStore.__nexusGridDb;
-}

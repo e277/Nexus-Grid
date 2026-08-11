@@ -87,6 +87,3 @@ export function byName(name: string | null | undefined): CaricomState | null {
 export function isCaricom(m49: number): boolean {
   return BY_M49.has(m49);
 }
-
-/** Semicolon-joined ISO-3 list, the form the World Bank API expects. */
-export const ISO3_LIST = CARICOM_STATES.map((s) => s.iso3).join(";");
