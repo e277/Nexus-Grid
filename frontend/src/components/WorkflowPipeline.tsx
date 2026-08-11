@@ -93,7 +93,7 @@ const STATUS_CARD: Record<NodeStatus, string> = {
 function NodeCard({ node, compact }: { node: NodeState; compact?: boolean }) {
   return (
     <div
-      className={`flex w-40 shrink-0 flex-col gap-1 rounded-lg border px-3 transition-colors duration-200 ${
+      className={`flex w-32 shrink-0 flex-col gap-1 rounded-lg border px-2.5 transition-colors duration-200 sm:w-36 ${
         compact ? "py-1.5" : "py-2.5"
       } ${STATUS_CARD[node.status]}`}
     >
@@ -139,23 +139,25 @@ export function WorkflowPipeline({ nodes }: { nodes: Record<string, NodeState> }
         ))}
       </div>
 
-      <div className="flex items-center gap-2 overflow-x-auto pb-2">
+      <div className="flex flex-wrap items-center gap-y-3 gap-x-1">
         {spine.map((id) => (
-          <div key={id} className="flex shrink-0 items-center gap-2">
+          <div key={id} className="flex shrink-0 items-center gap-1">
             <NodeCard node={nodes[id]} />
             <Arrow />
           </div>
         ))}
 
-        <div className="flex shrink-0 flex-col gap-1">
-          {branch.map((id) => (
-            <NodeCard key={id} node={nodes[id]} compact />
-          ))}
+        <div className="flex shrink-0 items-center gap-1">
+          <div className="flex shrink-0 flex-col gap-1">
+            {branch.map((id) => (
+              <NodeCard key={id} node={nodes[id]} compact />
+            ))}
+          </div>
+          <Arrow />
         </div>
-        <Arrow />
 
         {tail.map((id, i) => (
-          <div key={id} className="flex shrink-0 items-center gap-2">
+          <div key={id} className="flex shrink-0 items-center gap-1">
             <NodeCard node={nodes[id]} />
             {i < tail.length - 1 ? <Arrow /> : null}
           </div>

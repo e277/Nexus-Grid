@@ -11,10 +11,30 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.agents.base import AgentResult, BaseAgent
-from app.services.supply_rules import classify_quantity
+from app.services.supply_rules import SHORTAGE_THRESHOLD, SURPLUS_THRESHOLD, classify_quantity
 from app.workflows.orchestrator import run_once
 
 logger = logging.getLogger(__name__)
+
+
+def _margin_confidence(quantity: int) -> float:
+    """How clearly ``quantity`` sits inside its band, as a 0..1 margin.
+
+    Distance from the nearer threshold, normalized by that threshold's
+    scale — a quantity right at a boundary is ambiguous (near 0); one far
+    inside a band is unambiguous (near 1). Not a probability, just a
+    legible measure of how confidently the classification holds.
+    """
+    if quantity <= 0:
+        return 0.0
+    if quantity < SHORTAGE_THRESHOLD:
+        return min(1.0, (SHORTAGE_THRESHOLD - quantity) / SHORTAGE_THRESHOLD)
+    if quantity > SURPLUS_THRESHOLD:
+        return min(1.0, (quantity - SURPLUS_THRESHOLD) / SURPLUS_THRESHOLD)
+    # Inside the normal band: confidence peaks at the midpoint, tapers at either edge.
+    span = SURPLUS_THRESHOLD - SHORTAGE_THRESHOLD
+    midpoint = SHORTAGE_THRESHOLD + span / 2
+    return 1.0 - abs(quantity - midpoint) / (span / 2)
 
 
 class SupplyAgent(BaseAgent):
@@ -32,8 +52,8 @@ class SupplyAgent(BaseAgent):
         return {"status": status, "message": f"{crop.crop_name} {status} detected"}
 
     def handle(self, db: Session, payload: dict[str, Any]) -> AgentResult:
-        events = self._scan(db)
-        confidence = 0.9 if events else 0.7
+        events, margins = self._scan(db)
+        confidence = self._confidence(events, margins)
         return AgentResult(
             agent=self.name,
             action="inventory_scan",
@@ -42,14 +62,36 @@ class SupplyAgent(BaseAgent):
             outputs={"events": events},
         )
 
-    def _scan(self, db: Session) -> list[dict[str, Any]]:
-        """Analyze all crops and trigger the workflow for each anomaly."""
+    def _confidence(self, events: list[dict[str, Any]], margins: list[float]) -> float:
+        """Confidence from real scan signal, not a fixed constant.
+
+        No crops scanned: nothing to be confident about. Otherwise it's the
+        average classification margin across scanned crops (see
+        ``_margin_confidence``), nudged up slightly per corroborating event
+        (more anomalies agreeing on a shortage/surplus condition is itself
+        signal) — bounded to 1.0.
+        """
+        if not margins:
+            return 0.0
+        base = sum(margins) / len(margins)
+        return min(1.0, base + 0.05 * len(events))
+
+    def _scan(self, db: Session) -> tuple[list[dict[str, Any]], list[float]]:
+        """Analyze all crops and trigger the workflow for each anomaly.
+
+        Returns the detected events plus the per-crop classification margin
+        used to compute scan confidence.
+        """
         events: list[dict[str, Any]] = []
+        margins: list[float] = []
         crops = db.query(models.Crop).all()
         for crop in crops:
             try:
                 result = self.analyze_inventory(crop)
                 status = result.get("status")
+                if status == "unknown":
+                    continue
+                margins.append(_margin_confidence(crop.quantity))
                 if status not in {"surplus", "shortage"}:
                     continue
 
@@ -79,7 +121,7 @@ class SupplyAgent(BaseAgent):
                     self.logger.exception("Orchestrator failed for crop %s", crop.id)
             except Exception:
                 self.logger.exception("Failed to analyze crop %s", getattr(crop, "id", None))
-        return events
+        return events, margins
 
     def run_check(self, db: Session) -> int:
         """Run one scan cycle; returns the number of events detected.

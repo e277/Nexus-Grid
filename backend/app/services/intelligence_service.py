@@ -121,6 +121,9 @@ def forecast_demand(db: Session, crop_name: str) -> dict[str, Any]:
             "average_demand": round(base, 1),
             "price_trend": price["trend"],
             "trend_factor": factor,
+            "unit_price_usd": price.get("unit_price_usd"),
+            "price_source": price.get("source"),
+            "price_as_of": price.get("price_as_of"),
         },
         "explanation": (
             f"Average of {len(quantities)} recorded demand(s) is {base:.0f} units; "

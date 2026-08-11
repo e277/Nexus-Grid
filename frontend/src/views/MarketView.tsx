@@ -5,6 +5,7 @@ import { DataTable } from "../components/DataTable";
 import { FormError, SelectField, SubmitButton, TextField } from "../components/Fields";
 import { Modal } from "../components/Modal";
 import { Panel } from "../components/Panel";
+import { SourceBadges } from "../components/SourceBadges";
 import { StatTile } from "../components/StatTile";
 import { StatusActions } from "../components/StatusActions";
 import { StatusPill } from "../components/StatusPill";
@@ -149,9 +150,12 @@ export function MarketView() {
           </button>
         </form>
         {insight ? (
-          <p className="mt-4 rounded-md border border-ng-border bg-ng-well px-3 py-2 text-sm text-ng-secondary">
-            {String(insight.explanation)}
-          </p>
+          <div className="mt-4 rounded-md border border-ng-border bg-ng-well px-3 py-2 text-sm text-ng-secondary">
+            <p>{String(insight.explanation)}</p>
+            <SourceBadges
+              sources={[(insight.inputs as { price_source?: string } | undefined)?.price_source]}
+            />
+          </div>
         ) : null}
       </Panel>
 

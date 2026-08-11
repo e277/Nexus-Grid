@@ -1,6 +1,6 @@
 """Workflow control-flow tests: approval gate and disruption re-plan loop."""
 
-from app.workflows.orchestrator import run_once
+from app.workflows.orchestrator import resume_run, run_once
 
 
 def _final_state(result: dict) -> dict:
@@ -8,7 +8,7 @@ def _final_state(result: dict) -> dict:
     return result["values"][-1]
 
 
-def test_approval_gate_holds_urgent_plans():
+def test_approval_gate_pauses_and_resumes_on_decision():
     result = run_once(
         {
             "crop_name": "Mango",
@@ -17,10 +17,34 @@ def test_approval_gate_holds_urgent_plans():
             "require_approval": True,
         }
     )
-    assert result["status"] == "completed"
-    state = _final_state(result)
-    assert state["execution"]["status"] == "awaiting_approval"
-    assert state["recovery"]["recovery_action"] == "await_human_approval"
+    # A real interrupt() pause: the run stops before `hold` returns, so no
+    # execution/recovery state exists yet — just the interrupt payload.
+    assert result["status"] == "awaiting_approval"
+    assert result["interrupt"]["execution"]["status"] == "awaiting_approval"
+
+    resumed = resume_run(result["thread_id"], "approved")
+    assert resumed["status"] == "completed"
+    state = _final_state(resumed)
+    assert state["execution"]["status"] == "approved"
+    assert state["recovery"]["recovery_action"] == "activate_followup"
+
+
+def test_approval_gate_rejection_short_circuits_recovery():
+    result = run_once(
+        {
+            "crop_name": "Mango",
+            "quantity": 20,
+            "event": "shortage",
+            "require_approval": True,
+        }
+    )
+    assert result["status"] == "awaiting_approval"
+
+    resumed = resume_run(result["thread_id"], "rejected")
+    assert resumed["status"] == "completed"
+    state = _final_state(resumed)
+    assert state["execution"]["status"] == "rejected"
+    assert state["recovery"]["recovery_action"] == "plan_rejected"
 
 
 def test_disruption_triggers_single_replan():

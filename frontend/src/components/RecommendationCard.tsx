@@ -32,13 +32,11 @@ export function RecommendationCard({ recommendation }: { recommendation: unknown
 
   let source = "rule";
   let text = "";
-  let openclawRuntime: string | undefined;
 
   if (recommendation && typeof recommendation === "object") {
     const r = recommendation as Record<string, unknown>;
     source = typeof r.source === "string" ? r.source : "rule";
     text = typeof r.recommendation === "string" ? r.recommendation : "";
-    openclawRuntime = typeof r.openclaw_runtime === "string" ? r.openclaw_runtime : undefined;
   } else if (typeof recommendation === "string") {
     text = recommendation;
   }
@@ -81,10 +79,6 @@ export function RecommendationCard({ recommendation }: { recommendation: unknown
       ) : null}
 
       <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-ng-primary">{renderBold(answer)}</p>
-
-      {openclawRuntime ? (
-        <p className="mt-3 text-ng-2xs text-ng-secondary">OpenClaw runtime: {openclawRuntime}</p>
-      ) : null}
     </div>
   );
 }

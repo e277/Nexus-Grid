@@ -5,6 +5,7 @@ import { DataTable } from "../components/DataTable";
 import { FormError, SelectField, SubmitButton, TextField } from "../components/Fields";
 import { Modal } from "../components/Modal";
 import { Panel } from "../components/Panel";
+import { SourceBadges } from "../components/SourceBadges";
 import { StatTile } from "../components/StatTile";
 import { StatusActions } from "../components/StatusActions";
 import { StatusPill } from "../components/StatusPill";
@@ -226,9 +227,15 @@ export function LogisticsView() {
           <SubmitButton>Predict</SubmitButton>
         </form>
         {delay ? (
-          <p className="mt-4 rounded-md border border-ng-border bg-ng-well px-3 py-2 text-sm text-ng-secondary">
-            {String(delay.explanation)}
-          </p>
+          <div className="mt-4 rounded-md border border-ng-border bg-ng-well px-3 py-2 text-sm text-ng-secondary">
+            <p>{String(delay.explanation)}</p>
+            <SourceBadges
+              sources={[
+                (delay.inputs as { routing?: { source?: string } } | undefined)?.routing?.source,
+                (delay.inputs as { weather?: { source?: string } } | undefined)?.weather?.source,
+              ]}
+            />
+          </div>
         ) : null}
       </Panel>
 

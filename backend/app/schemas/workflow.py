@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Literal, Optional
 
 
 class WorkflowRequest(BaseModel):
@@ -21,3 +21,7 @@ class WorkflowRequest(BaseModel):
 class WorkflowResponse(BaseModel):
     status: str
     result: dict
+
+
+class ResumeRequest(BaseModel):
+    decision: Literal["approved", "rejected"]

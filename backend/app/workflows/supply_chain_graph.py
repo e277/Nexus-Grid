@@ -20,6 +20,9 @@ from typing import Any, Optional, TypedDict
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, StateGraph
+from langgraph.types import interrupt
+
+from app.workflows.minimax_recommend import openclaw_runtime_status
 
 from app.config import get_settings
 from app.services.supply_rules import classify_quantity, with_signal_defaults
@@ -154,6 +157,15 @@ def needs_approval(state: SupplyState) -> str:
 
 
 def hold_for_approval(state: SupplyState) -> SupplyState:
+    """Pause the graph for a real human decision.
+
+    ``interrupt()`` raises on first entry, checkpointing state and halting
+    the run — the caller sees ``status: awaiting_approval`` with this task
+    as the payload. A client resumes via ``Command(resume=decision)``
+    against the same thread id (see ``orchestrator.resume_run``), at which
+    point this node re-runs from the top and ``interrupt()`` returns the
+    supplied decision instead of raising again.
+    """
     plan_data = state.get("plan", {})
     task = {
         "task": plan_data.get("action", "monitor"),
@@ -164,6 +176,10 @@ def hold_for_approval(state: SupplyState) -> SupplyState:
             "reason": f"priority={plan_data.get('priority')}",
         },
     }
+    decision = interrupt({"phase": "hold", "execution": task})
+    approved = decision == "approved" if isinstance(decision, str) else bool(decision)
+    task["status"] = "approved" if approved else "rejected"
+    task["approval"]["decision"] = decision
     return {"phase": "hold", "execution": task}
 
 
@@ -173,6 +189,9 @@ def execute(state: SupplyState) -> SupplyState:
         "task": plan_data.get("action", "monitor"),
         "status": "scheduled",
         "details": plan_data,
+        # Honest, not decorative: reflects whether a real OpenClaw runtime is
+        # configured (CMDOP_API_KEY set) or this dispatch is only simulated.
+        "dispatch_mode": "openclaw" if openclaw_runtime_status() == "ready" else "simulated",
     }
     if task["task"] == "dispatch_surplus":
         task["eta"] = "24h"
@@ -215,9 +234,12 @@ def recover(state: SupplyState) -> SupplyState:
         "next_step": "observe_new_signals",
         "replans_used": state.get("replan_count", 0),
     }
-    if execution_status == "awaiting_approval":
-        recovery["recovery_action"] = "await_human_approval"
-        recovery["next_step"] = "resume_on_approval"
+    if execution_status == "rejected":
+        recovery["recovery_action"] = "plan_rejected"
+        recovery["next_step"] = "await_revised_plan"
+    elif execution_status == "approved":
+        recovery["recovery_action"] = "activate_followup"
+        recovery["next_step"] = "notify_supply_chain_ops"
     elif decision == "trigger_shortage_response":
         recovery["next_step"] = "notify_supply_chain_ops"
         recovery["feedback"] = "re-plan once updated demand and logistics signals arrive"

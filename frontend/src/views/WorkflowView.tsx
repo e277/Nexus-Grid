@@ -12,9 +12,11 @@ import {
 } from "../components/WorkflowPipeline";
 import type { Crop, Farmer, WorkflowResult } from "../types";
 
-// Half the per-node reveal time: each node pulses "running" for this long,
-// then flips to "done" and holds before the next node starts.
-const STEP_MS = 260;
+// How long a node pulses "running" before flipping to "done".
+const RUN_MS = 550;
+// Pause after a node completes, before the next one starts running —
+// the visible gap between steps.
+const GAP_MS = 700;
 
 interface Scenario {
   key: string;
@@ -112,8 +114,8 @@ export function WorkflowView() {
           [step.id]: { ...prev[step.id], status: "done", summary: summarizeUpdate(step.id, step.data) },
         }));
         if (step.id === "recommend") setRecommendation(step.data.recommendation);
-        timerRef.current = window.setTimeout(() => revealStep(index + 1), STEP_MS);
-      }, STEP_MS);
+        timerRef.current = window.setTimeout(() => revealStep(index + 1), GAP_MS);
+      }, RUN_MS);
     }
 
     revealStep(0);
