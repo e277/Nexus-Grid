@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import { CheckboxField, FormError, SelectField, SubmitButton, TextField } from "../components/Fields";
+import { CheckboxField, FormError, SelectField, SubmitButton } from "../components/Fields";
 import { Panel } from "../components/Panel";
 import { RecommendationCard } from "../components/RecommendationCard";
 import {
@@ -10,7 +10,7 @@ import {
   WorkflowPipeline,
   type NodeState,
 } from "../components/WorkflowPipeline";
-import type { Crop, Farmer, WorkflowResult } from "../types";
+import type { SubstitutionOpportunity, WorkflowResult } from "../types";
 
 // How long a node pulses "running" before flipping to "done".
 const RUN_MS = 550;
@@ -18,61 +18,42 @@ const RUN_MS = 550;
 // the visible gap between steps.
 const GAP_MS = 700;
 
-interface Scenario {
-  key: string;
-  label: string;
-  crop_id: number;
-  crop_name: string;
-  quantity: number;
-  farmer_id: number;
-  farmer_name: string;
-  island: string;
+function usd(value: number): string {
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(0)}M`;
+  return `$${value.toLocaleString()}`;
 }
 
 export function WorkflowView() {
-  const [crops, setCrops] = useState<Crop[]>([]);
-  const [farmers, setFarmers] = useState<Farmer[]>([]);
+  const [gaps, setGaps] = useState<SubstitutionOpportunity[]>([]);
+  const [climateByIso3, setClimateByIso3] = useState<Record<string, string>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([api.crops({ limit: 50 }), api.farmers({ limit: 50 })])
-      .then(([c, f]) => {
-        setCrops(c);
-        setFarmers(f);
+    api
+      .picture()
+      .then((data) => {
+        setGaps(data.picture.substitution_opportunities);
+        setClimateByIso3(
+          Object.fromEntries(
+            data.picture.states.map((s) => [s.iso3, s.climate_risk ?? "low"])
+          )
+        );
       })
-      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load seed data"));
+      .catch((err) =>
+        setLoadError(err instanceof Error ? err.message : "Failed to load the regional picture")
+      );
   }, []);
 
-  const scenarios: Scenario[] = crops.map((c) => {
-    const farmer = farmers.find((f) => f.id === c.farmer_id);
-    return {
-      key: String(c.id),
-      label: `${c.crop_name} — ${farmer?.name ?? "unknown farmer"} · ${farmer?.island ?? "—"} · ${c.quantity} units`,
-      crop_id: c.id,
-      crop_name: c.crop_name,
-      quantity: c.quantity,
-      farmer_id: c.farmer_id,
-      farmer_name: farmer?.name ?? "unknown farmer",
-      island: farmer?.island ?? "unknown island",
-    };
-  });
-
-  const [scenarioKey, setScenarioKey] = useState("");
-  const [quantity, setQuantity] = useState("");
-  const [event, setEvent] = useState("shortage");
-  const [weatherRisk, setWeatherRisk] = useState("low");
-  const [logisticsStatus, setLogisticsStatus] = useState("available");
-  const [requireApproval, setRequireApproval] = useState(false);
+  const [gapKey, setGapKey] = useState("");
+  const [requireApproval, setRequireApproval] = useState(true);
 
   useEffect(() => {
-    if (scenarios.length && !scenarioKey) {
-      setScenarioKey(scenarios[0].key);
-      setQuantity(String(scenarios[0].quantity));
-    }
+    if (gaps.length && !gapKey) setGapKey(`${gaps[0].importer_iso3}-${gaps[0].commodity_code}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [crops, farmers]);
+  }, [gaps]);
 
-  const selected = scenarios.find((s) => s.key === scenarioKey) ?? null;
+  const selected =
+    gaps.find((g) => `${g.importer_iso3}-${g.commodity_code}` === gapKey) ?? null;
 
   const [nodes, setNodes] = useState<Record<string, NodeState>>(buildInitialNodes());
   const [running, setRunning] = useState(false);
@@ -127,7 +108,7 @@ export function WorkflowView() {
       | {
           decision?: string;
           execution?: { status?: string };
-          recovery?: { recovery_action?: string; next_step?: string };
+          recovery?: { recovery_action?: string };
         }
       | undefined;
     setSummary(
@@ -174,15 +155,14 @@ export function WorkflowView() {
 
     try {
       const result = await api.triggerWorkflow({
-        crop_id: selected.crop_id,
-        crop_name: selected.crop_name,
-        farmer_id: selected.farmer_id,
-        farmer_name: selected.farmer_name,
-        island: selected.island,
-        quantity: Number(quantity) || selected.quantity,
-        event,
-        weather_risk: weatherRisk,
-        logistics_status: logisticsStatus,
+        event: "substitution_gap",
+        commodity: selected.commodity,
+        importer: selected.importer,
+        importer_iso3: selected.importer_iso3,
+        external_usd: selected.external_usd,
+        external_share_pct: Math.round(selected.external_share_pct),
+        regional_suppliers: selected.regional_suppliers,
+        climate_risk: climateByIso3[selected.importer_iso3] ?? "low",
         require_approval: requireApproval,
       });
       handleResult(result);
@@ -192,8 +172,8 @@ export function WorkflowView() {
     }
   }
 
-  /** A human decides at the approval gate — this is the only point a run
-   * doesn't proceed autonomously; everything else runs end to end on its own. */
+  /** A human decides at the approval gate — the only point a run doesn't
+   * proceed autonomously; everything else runs end to end on its own. */
   async function decide(decision: "approved" | "rejected") {
     if (!threadId) return;
     setResuming(true);
@@ -216,8 +196,11 @@ export function WorkflowView() {
     | undefined;
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
-      <Panel title="Run a scenario" subtitle="Crop lots from the seeded dataset">
+    <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
+      <Panel
+        title="Run a coordination cycle"
+        subtitle="Sourcing gaps observed in live trade data"
+      >
         {loadError ? <FormError message={loadError} /> : null}
         <form
           className="space-y-4"
@@ -227,41 +210,36 @@ export function WorkflowView() {
           }}
         >
           <SelectField
-            label="Crop lot"
-            value={scenarioKey}
-            onChange={(v) => {
-              setScenarioKey(v);
-              const s = scenarios.find((sc) => sc.key === v);
-              if (s) setQuantity(String(s.quantity));
-            }}
-            options={scenarios.map((s) => ({ value: s.key, label: s.label }))}
+            label="Sourcing gap"
+            value={gapKey}
+            onChange={setGapKey}
+            options={gaps.map((g) => ({
+              value: `${g.importer_iso3}-${g.commodity_code}`,
+              label: `${g.importer} · ${g.commodity} · ${usd(g.external_usd)} external (${g.external_share_pct}%)`,
+            }))}
           />
-          <TextField label="Quantity" value={quantity} onChange={setQuantity} type="number" required />
-          <SelectField
-            label="Event"
-            value={event}
-            onChange={setEvent}
-            options={["surplus", "shortage", "inventory_checked"].map((v) => ({ value: v, label: v }))}
-          />
-          <SelectField
-            label="Weather risk"
-            value={weatherRisk}
-            onChange={setWeatherRisk}
-            options={["low", "medium", "high", "severe"].map((v) => ({ value: v, label: v }))}
-          />
-          <SelectField
-            label="Logistics status"
-            value={logisticsStatus}
-            onChange={setLogisticsStatus}
-            options={["available", "constrained"].map((v) => ({ value: v, label: v }))}
-          />
+
+          {selected ? (
+            <div className="rounded-md border border-ng-border bg-ng-well px-3 py-2.5 text-[12px] leading-relaxed text-ng-secondary">
+              <p>
+                <span className="font-semibold text-ng-primary">{selected.importer}</span> buys{" "}
+                {usd(selected.external_usd)} of {selected.commodity.toLowerCase()} outside CARICOM (
+                {selected.external_share_pct}% of its imports of that commodity).
+              </p>
+              <p className="mt-1">
+                Already supplied into the region by{" "}
+                {selected.regional_suppliers.slice(0, 3).join(", ") || "no member state"}.
+              </p>
+            </div>
+          ) : null}
+
           <CheckboxField
             label="Require approval for urgent plans"
             checked={requireApproval}
             onChange={setRequireApproval}
             hint="High/urgent plans genuinely pause here until approved or rejected"
           />
-          <SubmitButton busy={running || awaitingApproval}>Run workflow</SubmitButton>
+          <SubmitButton busy={running || awaitingApproval}>Run coordination cycle</SubmitButton>
           <FormError message={runError} />
         </form>
       </Panel>

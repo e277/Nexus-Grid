@@ -1,22 +1,13 @@
+import { Activity, Bell, Database, Radio, Workflow } from "lucide-react";
 import { useState } from "react";
 import { api } from "./api";
 import { usePoll } from "./hooks";
-import { FarmView } from "./views/FarmView";
-import { GovernmentView } from "./views/GovernmentView";
-import { LogisticsView } from "./views/LogisticsView";
-import { MarketView } from "./views/MarketView";
-import { OverviewView } from "./views/OverviewView";
+import { ObservabilityView } from "./views/ObservabilityView";
 import { SignalsView } from "./views/SignalsView";
 import { SourcesView } from "./views/SourcesView";
+import { WorkflowView } from "./views/WorkflowView";
 
-export type TabId =
-  | "signals"
-  | "sources"
-  | "overview"
-  | "farm"
-  | "market"
-  | "logistics"
-  | "government";
+export type TabId = "signals" | "sources" | "coordination" | "observability";
 
 interface Tab {
   id: TabId;
@@ -24,64 +15,6 @@ interface Tab {
   icon: React.ReactNode;
   badge?: string;
 }
-
-const OverviewIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden>
-    <rect x="1" y="1" width="5.5" height="5.5" rx="1" fill="currentColor" />
-    <rect x="8.5" y="1" width="5.5" height="5.5" rx="1" fill="currentColor" />
-    <rect x="1" y="8.5" width="5.5" height="5.5" rx="1" fill="currentColor" />
-    <rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1" fill="currentColor" />
-  </svg>
-);
-
-const FarmIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden>
-    <path d="M7.5 1.5C5.015 1.5 3 4.5 3 7.5C3 10.538 5.015 13 7.5 13C9.985 13 12 10.538 12 7.5C12 4.5 9.985 1.5 7.5 1.5Z" stroke="currentColor" strokeWidth="1.2" />
-    <path d="M7.5 5V9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-  </svg>
-);
-
-const MarketIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden>
-    <path d="M1 11L5 7L8 10L11 5L14 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
-const LogisticsIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden>
-    <path d="M1 7.5H14M4 7.5L5 3H10L11 7.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    <rect x="2" y="7.5" width="11" height="4" rx="1" stroke="currentColor" strokeWidth="1.2" />
-  </svg>
-);
-
-const GovIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden>
-    <path d="M7.5 2L9 5.5L13 5.8L10.5 8L11.2 12L7.5 10L3.8 12L4.5 8L2 5.8L6 5.5L7.5 2Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-  </svg>
-);
-
-const SignalIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden>
-    <path d="M2 12C2 7.582 5.582 4 10 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    <path d="M2 12C2 9.79 3.79 8 6 8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    <circle cx="2.4" cy="12" r="1.1" fill="currentColor" />
-  </svg>
-);
-
-const SourceIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden>
-    <ellipse cx="7.5" cy="3.5" rx="5" ry="2" stroke="currentColor" strokeWidth="1.2" />
-    <path d="M2.5 3.5V11.5C2.5 12.605 4.739 13.5 7.5 13.5C10.261 13.5 12.5 12.605 12.5 11.5V3.5" stroke="currentColor" strokeWidth="1.2" />
-    <path d="M2.5 7.5C2.5 8.605 4.739 9.5 7.5 9.5C10.261 9.5 12.5 8.605 12.5 7.5" stroke="currentColor" strokeWidth="1.2" />
-  </svg>
-);
-
-const BellIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden>
-    <path d="M7.5 1.5C5.567 1.5 4 3.067 4 5V8.5L2.5 10H12.5L11 8.5V5C11 3.067 9.433 1.5 7.5 1.5Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-    <path d="M6 10.5C6 11.328 6.672 12 7.5 12C8.328 12 9 11.328 9 10.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-  </svg>
-);
 
 function timeAgo(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -95,23 +28,17 @@ function timeAgo(iso: string | null | undefined): string {
 }
 
 const TABS: Tab[] = [
-  { id: "signals",     label: "Signals",     icon: <SignalIcon /> },
-  { id: "sources",     label: "Sources",     icon: <SourceIcon /> },
-  { id: "overview",    label: "Overview",    icon: <OverviewIcon /> },
-  { id: "farm",        label: "Farm",        icon: <FarmIcon /> },
-  { id: "market",      label: "Market",      icon: <MarketIcon /> },
-  { id: "logistics",   label: "Logistics",   icon: <LogisticsIcon /> },
-  { id: "government",  label: "Government",  icon: <GovIcon /> },
+  { id: "signals",       label: "Signals",       icon: <Radio size={15} /> },
+  { id: "sources",       label: "Sources",       icon: <Database size={15} /> },
+  { id: "coordination",  label: "Coordination",  icon: <Workflow size={15} /> },
+  { id: "observability", label: "Observability", icon: <Activity size={15} /> },
 ];
 
 const TAB_LABELS: Record<TabId, string> = {
-  signals:    "Coordination Signals",
-  sources:    "Upstream Sources",
-  overview:   "Operator Dashboard",
-  farm:       "Farm Intelligence",
-  market:     "Market Demand",
-  logistics:  "Logistics",
-  government: "Government",
+  signals:       "Coordination Signals",
+  sources:       "Upstream Sources",
+  coordination:  "Coordination Cycle",
+  observability: "Agent Activity & Audit",
 };
 
 export default function App() {
@@ -223,7 +150,7 @@ export default function App() {
                 onClick={toggleNotifications}
                 className="relative flex h-8 w-8 items-center justify-center rounded-md border border-ng-border bg-ng-surface text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent focus-visible:ring-offset-1"
               >
-                <BellIcon />
+                <Bell size={15} />
                 {unreadCount > 0 ? (
                   <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-ng-danger px-1 text-[9px] font-bold text-white">
                     {unreadCount}
@@ -265,13 +192,10 @@ export default function App() {
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-6">
-          {tab === "signals"    && <SignalsView />}
-          {tab === "sources"    && <SourcesView />}
-          {tab === "overview"   && <OverviewView onNavigate={setTab} />}
-          {tab === "farm"       && <FarmView />}
-          {tab === "market"     && <MarketView />}
-          {tab === "logistics"  && <LogisticsView />}
-          {tab === "government" && <GovernmentView />}
+          {tab === "signals"       && <SignalsView />}
+          {tab === "sources"       && <SourcesView />}
+          {tab === "coordination"  && <WorkflowView />}
+          {tab === "observability" && <ObservabilityView />}
         </main>
       </div>
     </div>

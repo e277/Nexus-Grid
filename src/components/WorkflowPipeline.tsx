@@ -13,9 +13,9 @@ export interface NodeState {
 }
 
 export const PIPELINE_NODES: { id: string; label: string; desc: string }[] = [
-  { id: "perceive", label: "Perceive", desc: "Normalize the signal, classify supply risk" },
-  { id: "assess", label: "Assess", desc: "Decide monitor / allocate surplus / shortage response" },
-  { id: "recommend", label: "Recommend", desc: "MiniMax LLM proposes an action" },
+  { id: "perceive", label: "Perceive", desc: "Normalize the signal, classify gap severity" },
+  { id: "assess", label: "Assess", desc: "Decide substitution / staggered planting / monitor" },
+  { id: "recommend", label: "Recommend", desc: "LLM proposes a coordination action" },
   { id: "plan", label: "Plan", desc: "Turn the decision into a concrete plan" },
   { id: "execute", label: "Execute", desc: "Schedule the plan" },
   { id: "hold", label: "Hold", desc: "Urgent plan awaits human approval" },
@@ -41,7 +41,7 @@ function truncate(text: string, max: number): string {
 export function summarizeUpdate(id: string, data: Record<string, unknown>): string {
   switch (id) {
     case "perceive":
-      return `Supply risk: ${data.supply_risk ?? "—"}`;
+      return `Gap severity: ${data.gap_severity ?? "—"}`;
     case "assess":
       return `Decision: ${data.decision ?? "—"}`;
     case "recommend": {

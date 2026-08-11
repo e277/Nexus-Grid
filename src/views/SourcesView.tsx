@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "../api";
+import { SourcingChart } from "../components/charts/SourcingChart";
 import { Panel } from "../components/Panel";
 import { usePoll } from "../hooks";
 import type { PictureResponse, SourceProvenance } from "../types";
@@ -94,6 +95,13 @@ export function SourcesView() {
             </div>
           ))}
         </div>
+      </Panel>
+
+      <Panel
+        title="Where each state buys its food"
+        subtitle="Observed food trade flows, split by whether the supplier sits inside CARICOM"
+      >
+        <SourcingChart states={data.picture.states} />
       </Panel>
 
       <Panel
