@@ -53,6 +53,8 @@ interface CachedProfile {
 const globalSoil = globalThis as typeof globalThis & {
   __nexusGridSoil?: Map<string, CachedProfile>;
   __nexusGridSoilToppingUp?: boolean;
+  /** Why the most recent attempt failed, if it did. */
+  __nexusGridSoilLastError?: string;
 };
 
 function store(): Map<string, CachedProfile> {
@@ -150,11 +152,14 @@ async function topUp(): Promise<void> {
       try {
         const profile = await fetchState(state);
         cache.set(state.iso3, { profile, expiresAt: Date.now() + CACHE_TTL_MS });
+        globalSoil.__nexusGridSoilLastError = undefined;
       } catch (error) {
         // Record the failure with a short expiry and move on. Retrying the same
         // state first on every pass would let one bad point block every state
         // behind it indefinitely.
         cache.set(state.iso3, { profile: null, expiresAt: Date.now() + RETRY_AFTER_MS });
+        globalSoil.__nexusGridSoilLastError =
+          error instanceof Error ? error.message : String(error);
         console.warn(`SoilGrids failed for ${state.iso3}:`, error);
       }
     }
@@ -183,7 +188,12 @@ export async function fetchSoil(force = false): Promise<Snapshot<SoilProfile>> {
   const outstanding = CARICOM_STATES.length - sampled;
   const uncovered = records.filter((r) => !r.has_coverage).map((r) => r.country_iso3);
 
+  const lastError = globalSoil.__nexusGridSoilLastError;
+
   const notes: string[] = [];
+  if (lastError) {
+    notes.push(`Last attempt failed: ${lastError}.`);
+  }
   if (outstanding > 0) {
     notes.push(
       `${outstanding} state(s) not yet sampled — SoilGrids allows ~5 calls/minute, so the ` +
@@ -194,17 +204,22 @@ export async function fetchSoil(force = false): Promise<Snapshot<SoilProfile>> {
     notes.push(`Grid has no data at the sampled point for ${uncovered.join(", ")}.`);
   }
 
+  // With nothing sampled and a failure on record, the publisher is down —
+  // saying "pending" would imply progress that is not happening.
+  const status =
+    records.length > 0
+      ? covered > 0
+        ? "live"
+        : "empty"
+      : lastError
+        ? "unavailable"
+        : "pending";
+
   return {
     records,
-    provenance: provenance(
-      "soil",
-      "ISRIC SoilGrids",
-      ENDPOINT,
-      records.length === 0 ? "pending" : covered > 0 ? "live" : "empty",
-      {
-        covers: `${DEPTH} depth · ${covered}/${CARICOM_STATES.length} states sampled with coverage`,
-        note: notes.length > 0 ? notes.join(" ") : undefined,
-      }
-    ),
+    provenance: provenance("soil", "ISRIC SoilGrids", ENDPOINT, status, {
+      covers: `${DEPTH} depth · ${covered}/${CARICOM_STATES.length} states sampled with coverage`,
+      note: notes.length > 0 ? notes.join(" ") : undefined,
+    }),
   };
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../api";
 import { Panel } from "../components/Panel";
+import { Badge } from "../components/ui/badge";
 import { StatTile } from "../components/StatTile";
 import { usePoll } from "../hooks";
 import type { CoordinationSignal, SignalsResponse } from "../types";
@@ -13,12 +14,15 @@ const KIND_LABEL: Record<CoordinationSignal["kind"], string> = {
   data_gap: "Data gap",
 };
 
-const KIND_CLASS: Record<CoordinationSignal["kind"], string> = {
-  import_substitution: "bg-ng-accent-lit text-ng-accent",
-  production_alignment: "bg-ng-success-bg text-ng-success-tx",
-  climate_exposure: "bg-ng-warning-bg text-ng-warning-tx",
-  logistics: "bg-ng-info-bg text-ng-info-tx",
-  data_gap: "bg-ng-muted text-ng-muted-tx",
+const KIND_VARIANT: Record<
+  CoordinationSignal["kind"],
+  "default" | "success" | "warning" | "info" | "muted"
+> = {
+  import_substitution: "default",
+  production_alignment: "success",
+  climate_exposure: "warning",
+  logistics: "info",
+  data_gap: "muted",
 };
 
 const CONFIDENCE_CLASS: Record<CoordinationSignal["confidence"], string> = {
@@ -121,9 +125,7 @@ export function SignalsView() {
           {data.signals.map((signal, index) => (
             <article key={`${signal.title}-${index}`} className="px-5 py-4">
               <div className="flex flex-wrap items-center gap-2">
-                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${KIND_CLASS[signal.kind]}`}>
-                  {KIND_LABEL[signal.kind]}
-                </span>
+                <Badge variant={KIND_VARIANT[signal.kind]}>{KIND_LABEL[signal.kind]}</Badge>
                 <h3 className="text-sm font-semibold text-ng-primary">{signal.title}</h3>
                 <span className={`ml-auto text-[11px] font-semibold ${CONFIDENCE_CLASS[signal.confidence]}`}>
                   {signal.confidence} confidence

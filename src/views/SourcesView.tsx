@@ -3,16 +3,20 @@ import { useState } from "react";
 import { api } from "../api";
 import { SourcingChart } from "../components/charts/SourcingChart";
 import { Panel } from "../components/Panel";
+import { Badge } from "../components/ui/badge";
 import { usePoll } from "../hooks";
 import type { PictureResponse, SourceProvenance } from "../types";
 
-const STATUS_CLASS: Record<SourceProvenance["status"], string> = {
-  live: "bg-ng-success-bg text-ng-success-tx border-ng-success-bd",
-  cached: "bg-ng-info-bg text-ng-info-tx border-ng-muted-bd",
-  empty: "bg-ng-muted text-ng-muted-tx border-ng-muted-bd",
-  pending: "bg-ng-info-bg text-ng-info-tx border-ng-muted-bd animate-pulse",
-  unauthorized: "bg-ng-warning-bg text-ng-warning-tx border-ng-warning-bd",
-  unavailable: "bg-ng-danger-bg text-ng-danger-tx border-ng-danger-bd",
+const STATUS_VARIANT: Record<
+  SourceProvenance["status"],
+  "success" | "info" | "muted" | "warning" | "danger"
+> = {
+  live: "success",
+  cached: "info",
+  empty: "muted",
+  pending: "info",
+  unauthorized: "warning",
+  unavailable: "danger",
 };
 
 const STATUS_MEANING: Record<SourceProvenance["status"], string> = {
@@ -76,11 +80,12 @@ export function SourcesView() {
           {data.sources.map((source) => (
             <div key={`${source.publisher}-${source.endpoint}`} className="px-5 py-3.5">
               <div className="flex flex-wrap items-center gap-2">
-                <span
-                  className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${STATUS_CLASS[source.status]}`}
+                <Badge
+                  variant={STATUS_VARIANT[source.status]}
+                  className={source.status === "pending" ? "animate-pulse" : undefined}
                 >
                   {source.status}
-                </span>
+                </Badge>
                 <span className="text-sm font-semibold text-ng-primary">{source.publisher}</span>
                 <span className="ml-auto text-[11px] text-ng-secondary">
                   {source.records.toLocaleString()} records
