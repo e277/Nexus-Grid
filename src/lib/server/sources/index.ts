@@ -9,7 +9,6 @@
 import { fetchAgroclimate } from "./agroclimate";
 import { fetchClimate, fetchStorms } from "./climate";
 import { fetchComtrade } from "./comtrade";
-import { fetchFaostat } from "./faostat";
 import { fetchSoil } from "./soil";
 import { fetchWorldBank } from "./world-bank";
 import type {
@@ -26,7 +25,6 @@ import type {
 export interface SourceBundle {
   indicators: Snapshot<Observation>;
   trade: Snapshot<TradeFlow>;
-  production: Snapshot<Observation>;
   climate: Snapshot<ClimateSignal>;
   storms: Snapshot<StormSignal>;
   soil: Snapshot<SoilProfile>;
@@ -35,17 +33,15 @@ export interface SourceBundle {
 
 /** Fetch every source. `force` bypasses the cache and refetches. */
 export async function fetchAllSources(force = false): Promise<SourceBundle> {
-  const [indicators, trade, production, climate, storms, soil, agroclimate] =
-    await Promise.all([
-      fetchWorldBank(force),
-      fetchComtrade(force),
-      fetchFaostat(force),
-      fetchClimate(force),
-      fetchStorms(force),
-      fetchSoil(force),
-      fetchAgroclimate(force),
-    ]);
-  return { indicators, trade, production, climate, storms, soil, agroclimate };
+  const [indicators, trade, climate, storms, soil, agroclimate] = await Promise.all([
+    fetchWorldBank(force),
+    fetchComtrade(force),
+    fetchClimate(force),
+    fetchStorms(force),
+    fetchSoil(force),
+    fetchAgroclimate(force),
+  ]);
+  return { indicators, trade, climate, storms, soil, agroclimate };
 }
 
 /** Provenance for every source, for the freshness panel. */
@@ -56,15 +52,7 @@ export function bundleProvenance(bundle: SourceBundle): (Provenance & { records:
   }));
 }
 
-export {
-  fetchAgroclimate,
-  fetchClimate,
-  fetchComtrade,
-  fetchFaostat,
-  fetchSoil,
-  fetchStorms,
-  fetchWorldBank,
-};
+export { fetchAgroclimate, fetchClimate, fetchComtrade, fetchSoil, fetchStorms, fetchWorldBank };
 export * from "./types";
 export { CARICOM_STATES, byIso3, byName } from "./caricom";
 export { clearCache } from "./cache";

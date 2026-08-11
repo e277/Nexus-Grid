@@ -16,7 +16,6 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "esModuleInterop": true,
-    "allowJs": true,
     "resolveJsonModule": true,
     "incremental": true,
     "noEmit": true,
@@ -32,13 +31,12 @@
       "@/*": [
         "./src/*"
       ]
-    }
+    },
+    "allowJs": true
   },
   "include": [
     "next-env.d.ts",
     "src",
-    "**/*.ts",
-    "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],

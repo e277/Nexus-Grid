@@ -11,7 +11,6 @@
 export type SourceId =
   | "world-bank"
   | "comtrade"
-  | "faostat"
   | "climate"
   | "soil"
   | "agroclimate";

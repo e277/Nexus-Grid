@@ -8,11 +8,8 @@
 
 export interface Settings {
   appName: string;
-  appDescription: string;
   appVersion: string;
   environment: string;
-
-  cmdopApiKey: string;
 
   /**
    * LLM provider for the workflow's recommendation step. MiniMax exposes an
@@ -32,7 +29,6 @@ export interface Settings {
   agentPollIntervalSeconds: number;
 
   rateLimitPerMinute: number;
-  logLevel: string;
 }
 
 function str(name: string, fallback: string): string {
@@ -58,11 +54,8 @@ export function getSettings(): Settings {
   if (cached) return cached;
   cached = {
     appName: str("APP_NAME", "Nexus-Grid"),
-    appDescription: str("APP_DESCRIPTION", "Autonomous Caribbean Food Supply Chain AI"),
     appVersion: str("APP_VERSION", "1.0"),
     environment: str("ENVIRONMENT", "development"),
-
-    cmdopApiKey: str("CMDOP_API_KEY", ""),
 
     minimaxApiKey: str("MINIMAX_API_KEY", ""),
     minimaxBaseUrl: str("MINIMAX_BASE_URL", "https://api.minimax.io/v1"),
@@ -76,7 +69,6 @@ export function getSettings(): Settings {
     agentPollIntervalSeconds: int("AGENT_POLL_INTERVAL_SECONDS", 10),
 
     rateLimitPerMinute: int("RATE_LIMIT_PER_MINUTE", 120),
-    logLevel: str("LOG_LEVEL", "INFO"),
   };
   return cached;
 }
