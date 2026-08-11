@@ -1,3 +1,4 @@
+import { Globe, Radio, TrendingDown } from "lucide-react";
 import { useState } from "react";
 import { api } from "../api";
 import { Panel } from "../components/Panel";
@@ -84,11 +85,14 @@ export function SignalsView() {
         <StatTile
           label="Food imports observed"
           value={usd(data.totals.food_imports_usd)}
+          icon={<Globe size={13} />}
           hint={`Across ${data.totals.states_covered} member states · UN Comtrade ${data.totals.trade_year ?? ""}`}
         />
         <StatTile
           label="Sourced within CARICOM"
           value={`${data.totals.intra_caricom_share_pct ?? "—"}%`}
+          icon={<TrendingDown size={13} />}
+          tone={(data.totals.intra_caricom_share_pct ?? 0) < 20 ? "warning" : "success"}
           hint={`${usd(data.totals.intra_caricom_usd)} of regional food imports`}
           delta={{
             label:
@@ -101,10 +105,12 @@ export function SignalsView() {
         <StatTile
           label="Coordination signals"
           value={data.signals.length}
+          icon={<Radio size={13} />}
+          tone={interpreted ? "accent" : "neutral"}
           hint={
             interpreted
               ? `Interpreted by ${data.source}`
-              : "Rule-derived — no model configured"
+              : "Rule-derived — waiting on the model"
           }
         />
       </div>
