@@ -162,3 +162,89 @@ export interface WorkflowResult {
     interrupt?: Record<string, unknown>;
   };
 }
+
+// ── Interpretation layer ──────────────────────────────────────────────────
+
+export type SourceStatus = "live" | "cached" | "empty" | "unauthorized" | "unavailable";
+
+export interface SourceProvenance {
+  source: string;
+  publisher: string;
+  endpoint: string;
+  status: SourceStatus;
+  fetched_at: string;
+  covers?: string;
+  note?: string;
+  records: number;
+}
+
+export interface CoordinationSignal {
+  kind:
+    | "import_substitution"
+    | "climate_exposure"
+    | "production_alignment"
+    | "logistics"
+    | "data_gap";
+  title: string;
+  finding: string;
+  recommendation: string;
+  evidence: string[];
+  confidence: "low" | "medium" | "high";
+  states: string[];
+}
+
+export interface RegionalTotals {
+  food_imports_usd: number;
+  intra_caricom_usd: number;
+  intra_caricom_share_pct: number | null;
+  states_covered: number;
+  trade_year: number | null;
+}
+
+export interface SignalsResponse {
+  source: string;
+  signals: CoordinationSignal[];
+  note?: string;
+  generated_at: string;
+  sources: SourceProvenance[];
+  totals: RegionalTotals;
+}
+
+export interface StateProfile {
+  iso3: string;
+  name: string;
+  food_import_share_pct: number | null;
+  arable_land_pct: number | null;
+  agriculture_value_added_pct: number | null;
+  population: number | null;
+  food_imports_usd: number;
+  intra_caricom_share_pct: number | null;
+  climate_risk: "low" | "medium" | "high" | null;
+  year: number | null;
+}
+
+export interface SubstitutionOpportunity {
+  commodity: string;
+  commodity_code: string;
+  importer: string;
+  importer_iso3: string;
+  external_usd: number;
+  intra_usd: number;
+  external_share_pct: number;
+  regional_suppliers: string[];
+  top_external_partners: string[];
+}
+
+export interface PictureResponse {
+  picture: {
+    states: StateProfile[];
+    totals: RegionalTotals;
+    substitution_opportunities: SubstitutionOpportunity[];
+    climate: {
+      islands_at_risk: { island: string; country_iso3: string; risk: string; summary: string }[];
+      active_storms: { name: string; classification: string; intensity_kt: number | null }[];
+    };
+    gaps: string[];
+  };
+  sources: SourceProvenance[];
+}

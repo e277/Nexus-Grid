@@ -19,6 +19,9 @@ import type {
   Warehouse,
   WeatherEvent,
   WorkflowResult,
+  PictureResponse,
+  SignalsResponse,
+  SourceProvenance,
 } from "./types";
 
 const BASE = "/api";
@@ -70,6 +73,14 @@ function buildPath(path: string, params?: Record<string, string | number | boole
 
 export const api = {
   health: () => get<Health>("/health"),
+
+  // Interpretation layer — upstream sources, the derived picture, and signals
+  sources: () => get<{ sources: SourceProvenance[] }>("/sources"),
+  refreshSources: () => post<{ status: string }>("/sources/refresh", {}),
+  picture: (refresh = false) =>
+    get<PictureResponse>(`/picture${refresh ? "?refresh=true" : ""}`),
+  signals: (refresh = false) =>
+    get<SignalsResponse>(`/signals${refresh ? "?refresh=true" : ""}`),
 
   // Core domain
   farmers: (params?: { skip?: number; limit?: number }) =>

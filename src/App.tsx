@@ -6,8 +6,17 @@ import { GovernmentView } from "./views/GovernmentView";
 import { LogisticsView } from "./views/LogisticsView";
 import { MarketView } from "./views/MarketView";
 import { OverviewView } from "./views/OverviewView";
+import { SignalsView } from "./views/SignalsView";
+import { SourcesView } from "./views/SourcesView";
 
-export type TabId = "overview" | "farm" | "market" | "logistics" | "government";
+export type TabId =
+  | "signals"
+  | "sources"
+  | "overview"
+  | "farm"
+  | "market"
+  | "logistics"
+  | "government";
 
 interface Tab {
   id: TabId;
@@ -51,6 +60,22 @@ const GovIcon = () => (
   </svg>
 );
 
+const SignalIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden>
+    <path d="M2 12C2 7.582 5.582 4 10 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    <path d="M2 12C2 9.79 3.79 8 6 8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    <circle cx="2.4" cy="12" r="1.1" fill="currentColor" />
+  </svg>
+);
+
+const SourceIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden>
+    <ellipse cx="7.5" cy="3.5" rx="5" ry="2" stroke="currentColor" strokeWidth="1.2" />
+    <path d="M2.5 3.5V11.5C2.5 12.605 4.739 13.5 7.5 13.5C10.261 13.5 12.5 12.605 12.5 11.5V3.5" stroke="currentColor" strokeWidth="1.2" />
+    <path d="M2.5 7.5C2.5 8.605 4.739 9.5 7.5 9.5C10.261 9.5 12.5 8.605 12.5 7.5" stroke="currentColor" strokeWidth="1.2" />
+  </svg>
+);
+
 const BellIcon = () => (
   <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden>
     <path d="M7.5 1.5C5.567 1.5 4 3.067 4 5V8.5L2.5 10H12.5L11 8.5V5C11 3.067 9.433 1.5 7.5 1.5Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
@@ -70,6 +95,8 @@ function timeAgo(iso: string | null | undefined): string {
 }
 
 const TABS: Tab[] = [
+  { id: "signals",     label: "Signals",     icon: <SignalIcon /> },
+  { id: "sources",     label: "Sources",     icon: <SourceIcon /> },
   { id: "overview",    label: "Overview",    icon: <OverviewIcon /> },
   { id: "farm",        label: "Farm",        icon: <FarmIcon /> },
   { id: "market",      label: "Market",      icon: <MarketIcon /> },
@@ -78,6 +105,8 @@ const TABS: Tab[] = [
 ];
 
 const TAB_LABELS: Record<TabId, string> = {
+  signals:    "Coordination Signals",
+  sources:    "Upstream Sources",
   overview:   "Operator Dashboard",
   farm:       "Farm Intelligence",
   market:     "Market Demand",
@@ -86,7 +115,7 @@ const TAB_LABELS: Record<TabId, string> = {
 };
 
 export default function App() {
-  const [tab, setTab] = useState<TabId>("overview");
+  const [tab, setTab] = useState<TabId>("signals");
   const [notifOpen, setNotifOpen] = useState(false);
   const [lastSeenId, setLastSeenId] = useState<number | null>(null);
 
@@ -236,6 +265,8 @@ export default function App() {
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-6">
+          {tab === "signals"    && <SignalsView />}
+          {tab === "sources"    && <SourcesView />}
           {tab === "overview"   && <OverviewView onNavigate={setTab} />}
           {tab === "farm"       && <FarmView />}
           {tab === "market"     && <MarketView />}
