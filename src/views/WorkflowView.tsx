@@ -10,7 +10,7 @@ import {
   WorkflowPipeline,
   type NodeState,
 } from "../components/WorkflowPipeline";
-import type { SubstitutionOpportunity, WorkflowResult } from "../types";
+import type { SourceProvenance, SubstitutionOpportunity, WorkflowResult } from "../types";
 
 // How long a node pulses "running" before flipping to "done".
 const RUN_MS = 550;
@@ -26,6 +26,7 @@ function usd(value: number): string {
 export function WorkflowView() {
   const [gaps, setGaps] = useState<SubstitutionOpportunity[]>([]);
   const [climateByIso3, setClimateByIso3] = useState<Record<string, string>>({});
+  const [sources, setSources] = useState<SourceProvenance[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export function WorkflowView() {
             data.picture.states.map((s) => [s.iso3, s.climate_risk ?? "low"])
           )
         );
+        setSources(data.sources);
       })
       .catch((err) =>
         setLoadError(err instanceof Error ? err.message : "Failed to load the regional picture")
@@ -250,7 +252,7 @@ export function WorkflowView() {
         noPad
       >
         <div className="p-5">
-          <WorkflowPipeline nodes={nodes} />
+          <WorkflowPipeline nodes={nodes} sources={sources} />
 
           {recommendation ? (
             <div className="mt-4">
