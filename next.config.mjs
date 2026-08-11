@@ -5,6 +5,8 @@ const nextConfig = {
   // (never the Edge runtime, which would give each request its own module
   // instance). Route handlers declare `export const runtime = "nodejs"`.
   reactStrictMode: true,
+  // Next generates AGENTS.md/CLAUDE.md at the repo root otherwise.
+  agentRules: false,
 };
 
 export default nextConfig;
