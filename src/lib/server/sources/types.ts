@@ -8,7 +8,13 @@
  * coordinating systems that were never designed to work together.
  */
 
-export type SourceId = "world-bank" | "comtrade" | "faostat" | "climate";
+export type SourceId =
+  | "world-bank"
+  | "comtrade"
+  | "faostat"
+  | "climate"
+  | "soil"
+  | "agroclimate";
 
 export type SourceStatus =
   /** Fetched successfully from the upstream API. */
@@ -103,4 +109,40 @@ export function provenance(
     fetched_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
     ...extra,
   };
+}
+
+/** Soil properties under a member state's main growing area. */
+export interface SoilProfile {
+  country_iso3: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+  /** Soil pH in water. Null where the grid has no coverage. */
+  ph: number | null;
+  organic_carbon_g_per_kg: number | null;
+  clay_pct: number | null;
+  sand_pct: number | null;
+  has_coverage: boolean;
+  suitability: string;
+}
+
+/** One month of the long-run climate normal at a growing area. */
+export interface PlantingWindow {
+  month: number;
+  month_name: string;
+  mean_temp_c: number;
+  mean_rain_mm_day: number;
+  solar_kwh_m2_day: number;
+  /** Whether a season can be started on rainfall alone that month. */
+  suitability: "rain_fed" | "irrigation_required" | "too_wet";
+}
+
+/** The planting calendar for one member state. */
+export interface MonthlyClimate {
+  country_iso3: string;
+  country: string;
+  months: PlantingWindow[];
+  rain_fed_months: string[];
+  wettest_month: string;
+  driest_month: string;
 }

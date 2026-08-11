@@ -13,7 +13,9 @@
 import { CARICOM_STATES } from "./sources/caricom";
 import type {
   ClimateSignal,
+  MonthlyClimate,
   Observation,
+  SoilProfile,
   SourceBundle,
   StormSignal,
   TradeFlow,
@@ -33,6 +35,31 @@ export interface StateProfile {
   intra_caricom_share_pct: number | null;
   climate_risk: ClimateSignal["risk"] | null;
   year: number | null;
+  /** What the state can grow, not just what it buys. */
+  cereal_yield_kg_ha: number | null;
+  cereal_land_ha: number | null;
+  agricultural_land_pct: number | null;
+  /** Soil under the main growing area, when the grid covers it. */
+  soil: SoilProfile | null;
+  /** Months a season can be started on rainfall alone. */
+  rain_fed_months: string[];
+}
+
+/**
+ * Where two states' rain-fed windows do not overlap for a commodity one
+ * imports and the other supplies — the opening for staggered planting so the
+ * region covers more of the calendar instead of gluting the same weeks.
+ */
+export interface PlantingAlignment {
+  commodity: string;
+  importer: string;
+  importer_iso3: string;
+  supplier: string;
+  supplier_iso3: string;
+  /** Months the supplier can plant rain-fed that the importer cannot. */
+  complementary_months: string[];
+  external_usd: number;
+  note: string;
 }
 
 export interface SubstitutionOpportunity {
@@ -62,9 +89,14 @@ export interface RegionalPicture {
     trade_year: number | null;
   };
   substitution_opportunities: SubstitutionOpportunity[];
+  planting_alignment: PlantingAlignment[];
   climate: {
     islands_at_risk: ClimateSignal[];
     active_storms: StormSignal[];
+  };
+  agronomy: {
+    states_with_soil_coverage: number;
+    states_with_planting_calendar: number;
   };
   /** Sources that did not return data, so gaps are visible not implied. */
   gaps: string[];
@@ -89,7 +121,12 @@ export function buildRegionalPicture(bundle: SourceBundle): RegionalPicture {
   const flows = bundle.trade.records;
   const climate = bundle.climate.records;
 
+  const soilRecords = bundle.soil.records;
+  const agroclimate = bundle.agroclimate.records;
+
   const climateByIso3 = new Map(climate.map((c) => [c.country_iso3, c]));
+  const soilByIso3 = new Map(soilRecords.map((s) => [s.country_iso3, s]));
+  const calendarByIso3 = new Map(agroclimate.map((a) => [a.country_iso3, a]));
 
   const states: StateProfile[] = CARICOM_STATES.map((state) => {
     const stateFlows = flows.filter((f) => f.reporter_iso3 === state.iso3);
@@ -102,6 +139,10 @@ export function buildRegionalPicture(bundle: SourceBundle): RegionalPicture {
     const arable = latest(observations, state.iso3, "AG.LND.ARBL.ZS");
     const agriculture = latest(observations, state.iso3, "NV.AGR.TOTL.ZS");
     const population = latest(observations, state.iso3, "SP.POP.TOTL");
+    const cerealYield = latest(observations, state.iso3, "AG.YLD.CREL.KG");
+    const cerealLand = latest(observations, state.iso3, "AG.LND.CREL.HA");
+    const agriLand = latest(observations, state.iso3, "AG.LND.AGRI.ZS");
+    const calendar = calendarByIso3.get(state.iso3) ?? null;
 
     return {
       iso3: state.iso3,
@@ -114,9 +155,15 @@ export function buildRegionalPicture(bundle: SourceBundle): RegionalPicture {
       intra_caricom_share_pct: total > 0 ? round((intra / total) * 100) : null,
       climate_risk: climateByIso3.get(state.iso3)?.risk ?? null,
       year: foodImports?.year ?? null,
+      cereal_yield_kg_ha: cerealYield ? Math.round(cerealYield.value) : null,
+      cereal_land_ha: cerealLand ? Math.round(cerealLand.value) : null,
+      agricultural_land_pct: agriLand ? round(agriLand.value) : null,
+      soil: soilByIso3.get(state.iso3) ?? null,
+      rain_fed_months: calendar?.rain_fed_months ?? [],
     };
   });
 
+  const opportunities = findSubstitutionOpportunities(flows);
   const totalImports = flows.reduce((sum, f) => sum + f.value_usd, 0);
   const totalIntra = flows
     .filter((f) => f.partner_is_caricom)
@@ -131,13 +178,66 @@ export function buildRegionalPicture(bundle: SourceBundle): RegionalPicture {
       states_covered: new Set(flows.map((f) => f.reporter_iso3)).size,
       trade_year: flows[0]?.year ?? null,
     },
-    substitution_opportunities: findSubstitutionOpportunities(flows),
+    substitution_opportunities: opportunities,
+    planting_alignment: findPlantingAlignment(opportunities, calendarByIso3),
     climate: {
       islands_at_risk: climate.filter((c) => c.risk === "high" || c.risk === "medium"),
       active_storms: bundle.storms.records,
     },
+    agronomy: {
+      states_with_soil_coverage: soilRecords.filter((s) => s.has_coverage).length,
+      states_with_planting_calendar: agroclimate.length,
+    },
     gaps: collectGaps(bundle),
   };
+}
+
+/**
+ * Pair each substitution opportunity with a regional supplier whose rain-fed
+ * planting window differs from the importer's.
+ *
+ * Two islands that can only plant the same three months compete; two whose
+ * windows differ can cover more of the year between them. That is the
+ * difference between a shared calendar and fifteen separate ones, and it is
+ * only visible once every state's calendar comes from the same model.
+ */
+function findPlantingAlignment(
+  opportunities: SubstitutionOpportunity[],
+  calendars: Map<string, MonthlyClimate>
+): PlantingAlignment[] {
+  const byName = new Map([...calendars.values()].map((c) => [c.country, c]));
+  const alignment: PlantingAlignment[] = [];
+
+  for (const opportunity of opportunities) {
+    const importer = calendars.get(opportunity.importer_iso3);
+    if (!importer) continue;
+
+    for (const supplierName of opportunity.regional_suppliers) {
+      const supplier = byName.get(supplierName);
+      if (!supplier) continue;
+
+      const importerMonths = new Set(importer.rain_fed_months);
+      const complementary = supplier.rain_fed_months.filter((m) => !importerMonths.has(m));
+      if (complementary.length === 0) continue;
+
+      alignment.push({
+        commodity: opportunity.commodity,
+        importer: opportunity.importer,
+        importer_iso3: opportunity.importer_iso3,
+        supplier: supplier.country,
+        supplier_iso3: supplier.country_iso3,
+        complementary_months: complementary,
+        external_usd: opportunity.external_usd,
+        note:
+          `${supplier.country} can plant rain-fed in ${complementary.length} month(s) ` +
+          `${opportunity.importer} cannot, so staggering ${opportunity.commodity.toLowerCase()} ` +
+          `between them widens regional coverage instead of doubling up.`,
+      });
+      break;
+    }
+  }
+
+  return alignment.sort((a, b) => b.external_usd - a.external_usd).slice(0, 8);
 }
 
 /**

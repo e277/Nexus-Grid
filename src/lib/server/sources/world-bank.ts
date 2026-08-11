@@ -29,6 +29,10 @@ const INDICATORS: { id: string; label: string; unit: string }[] = [
   { id: "NV.AGR.TOTL.ZS", label: "Agriculture value added", unit: "% of GDP" },
   { id: "SP.POP.TOTL", label: "Population", unit: "people" },
   { id: "AG.PRD.FOOD.XD", label: "Food production index", unit: "2014-2016 = 100" },
+  // Production capacity — what a state can actually grow, not just what it buys
+  { id: "AG.YLD.CREL.KG", label: "Cereal yield", unit: "kg per hectare" },
+  { id: "AG.LND.CREL.HA", label: "Land under cereal production", unit: "hectares" },
+  { id: "AG.LND.AGRI.ZS", label: "Agricultural land", unit: "% of land area" },
 ];
 
 const FROM_YEAR = 2015;
