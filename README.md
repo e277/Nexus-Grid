@@ -107,3 +107,9 @@ matches how the service behaved before — it seeded the same dataset whenever t
 database was empty — and keeps the app dependency-free. Swapping
 `src/lib/server/store.ts` for a real database is the one change needed to
 persist.
+
+## Architecture
+
+Full reference — the thesis, sources, projection, interpretation, agents, the
+coordination graph, and what is and is not implemented against the buildathon
+brief — is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

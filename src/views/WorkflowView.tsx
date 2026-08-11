@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { CheckboxField, FormError, SelectField, SubmitButton } from "../components/Fields";
+import { AgentGraph } from "../components/AgentGraph";
 import { Panel } from "../components/Panel";
 import { RecommendationCard } from "../components/RecommendationCard";
 import {
@@ -66,6 +67,7 @@ export function WorkflowView() {
   const [awaitingApproval, setAwaitingApproval] = useState(false);
   const [interruptPayload, setInterruptPayload] = useState<Record<string, unknown> | null>(null);
   const [recommendation, setRecommendation] = useState<unknown>(null);
+  const [trace, setTrace] = useState<string[]>([]);
   const timerRef = useRef<number | null>(null);
 
   useEffect(
@@ -90,6 +92,7 @@ export function WorkflowView() {
         return;
       }
       const step = steps[index];
+      setTrace((prev) => [...prev, step.id]);
       setNodes((prev) => ({ ...prev, [step.id]: { ...prev[step.id], status: "running" } }));
       timerRef.current = window.setTimeout(() => {
         setNodes((prev) => ({
@@ -154,6 +157,7 @@ export function WorkflowView() {
     setThreadId(null);
     setRecommendation(null);
     setNodes(buildInitialNodes());
+    setTrace([]);
 
     try {
       const result = await api.triggerWorkflow({
@@ -252,7 +256,11 @@ export function WorkflowView() {
         noPad
       >
         <div className="p-5">
-          <WorkflowPipeline nodes={nodes} sources={sources} />
+          <AgentGraph nodes={nodes} trace={trace} />
+
+          <div className="mt-4 border-t border-ng-border pt-4">
+            <WorkflowPipeline nodes={nodes} sources={sources} />
+          </div>
 
           {recommendation ? (
             <div className="mt-4">
