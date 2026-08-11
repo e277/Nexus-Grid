@@ -1,60 +1,66 @@
 /**
  * Climate Risk Agent.
  *
- * Evaluates weather alerts, identifies shipments at risk in affected islands,
- * and recommends rerouting or holds.
+ * Reads the live per-island outlook and active storms, and names which
+ * regional supply lanes that exposure actually threatens — a high-risk island
+ * matters more when it is the one already supplying the region.
  */
 
-import { shipments } from "../repositories";
+import { currentPicture } from "./context";
 import { BaseAgent, result, type AgentPayload, type AgentResult } from "./base";
-
-const SEVERITY_RISK: Record<string, number> = { low: 0.2, medium: 0.5, high: 0.8, severe: 0.95 };
 
 export class ClimateRiskAgent extends BaseAgent {
   readonly name = "climate_risk";
 
-  protected async handle(payload: AgentPayload): Promise<AgentResult> {
-    const severity = (payload.severity as string | undefined) ?? "low";
-    const risk = SEVERITY_RISK[severity] ?? 0.2;
-    const islands = ((payload.affected_islands as string | undefined) ?? "")
-      .split(",")
-      .map((island) => island.trim())
-      .filter(Boolean);
+  protected async handle(_payload: AgentPayload): Promise<AgentResult> {
+    const picture = await currentPicture();
+    const atRisk = picture.climate.islands_at_risk;
+    const storms = picture.climate.active_storms;
+    const high = atRisk.filter((c) => c.risk === "high");
 
-    let atRisk: { shipment_id: number; origin: string; destination: string }[] = [];
-    if (islands.length > 0) {
-      atRisk = shipments
-        .all()
-        .filter((s) => s.status === "planned" || s.status === "in_transit")
-        .filter(
-          (s) => islands.includes(s.origin_island) || islands.includes(s.destination_island)
-        )
-        .map((s) => ({
-          shipment_id: s.id,
-          origin: s.origin_island,
-          destination: s.destination_island,
-        }));
+    if (atRisk.length === 0 && storms.length === 0) {
+      return result(
+        this.name,
+        "no_action",
+        0.9,
+        "No island at elevated risk and no active storms in the basin",
+        { islands_at_risk: 0, active_storms: 0 }
+      );
     }
 
-    let action: string;
-    let rationale: string;
-    if (risk >= 0.8 && atRisk.length > 0) {
-      action = "recommend_reroute";
-      rationale =
-        `${severity} ${payload.event_type ?? "event"} threatens ` +
-        `${atRisk.length} active shipment(s) in ${islands.join(", ")}`;
-    } else if (risk >= 0.5) {
-      action = "monitor_disruption";
-      rationale = `${severity} event: tracking ${atRisk.length} potentially exposed shipment(s)`;
-    } else {
-      action = "no_action";
-      rationale = `${severity} event poses minimal supply chain risk`;
-    }
+    // Which at-risk states are also acting as regional suppliers — that is
+    // what turns a weather forecast into a supply-chain exposure.
+    const supplierNames = new Set(
+      picture.substitution_opportunities.flatMap((o) => o.regional_suppliers)
+    );
+    const exposedSuppliers = atRisk
+      .filter((island) => supplierNames.has(island.island))
+      .map((island) => island.island);
 
-    return result(this.name, action, action !== "no_action" ? risk : 1 - risk, rationale, {
-      risk,
-      affected_islands: islands,
-      shipments_at_risk: atRisk,
-    });
+    const action =
+      storms.length > 0 || (high.length > 0 && exposedSuppliers.length > 0)
+        ? "recommend_hold"
+        : high.length > 0
+          ? "monitor_disruption"
+          : "watch";
+
+    return result(
+      this.name,
+      action,
+      storms.length > 0 ? 0.95 : high.length > 0 ? 0.8 : 0.5,
+      `${high.length} island(s) at high risk, ${storms.length} active storm(s)` +
+        (exposedSuppliers.length > 0
+          ? `; regional suppliers exposed: ${exposedSuppliers.join(", ")}`
+          : "; no regional supplier currently exposed"),
+      {
+        islands_at_risk: atRisk.map((i) => ({
+          island: i.island,
+          risk: i.risk,
+          summary: i.summary,
+        })),
+        active_storms: storms,
+        exposed_suppliers: exposedSuppliers,
+      }
+    );
   }
 }

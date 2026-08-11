@@ -1,76 +1,73 @@
 /**
  * Logistics Agent.
  *
- * Plans transportation for a shipment request: selects an active carrier with
- * sufficient capacity and prefers an active trade route between the origin
- * and destination islands.
+ * Assesses the lane between a regional supplier and an importer: real
+ * great-circle distance between their ports, a transit estimate from a
+ * documented average speed, and the live climate risk at each end.
+ *
+ * Honest about what it is — a geography-and-weather estimate, not a carrier
+ * booking. No free inter-island freight API exists to check capacity against,
+ * and the agent says so rather than inventing a vessel.
  */
 
-import type { TradeRoute } from "../models";
-import { carriers, ports, tradeRoutes } from "../repositories";
+import { getRoutingProvider } from "../integrations";
+import { byIso3, byName } from "../sources";
+import { currentPicture } from "./context";
 import { BaseAgent, result, type AgentPayload, type AgentResult } from "./base";
 
 export class LogisticsAgent extends BaseAgent {
   readonly name = "logistics";
 
-  private findRoute(
-    origin: string | undefined,
-    destination: string | undefined
-  ): TradeRoute | null {
-    if (!origin || !destination) return null;
-
-    const portsById = new Map(ports.all().map((port) => [port.id, port]));
-    for (const route of tradeRoutes.all().filter((r) => r.active)) {
-      const originPort = portsById.get(route.origin_port_id);
-      const destinationPort = portsById.get(route.destination_port_id);
-      if (
-        originPort &&
-        destinationPort &&
-        originPort.island === origin &&
-        destinationPort.island === destination &&
-        originPort.status !== "closed" &&
-        destinationPort.status !== "closed"
-      ) {
-        return route;
-      }
-    }
-    return null;
-  }
-
   protected async handle(payload: AgentPayload): Promise<AgentResult> {
-    const quantity = (payload.quantity as number | undefined) || 0;
-    const origin = payload.origin_island as string | undefined;
-    const destination = payload.destination_island as string | undefined;
+    const picture = await currentPicture();
+    const originName = payload.origin as string | undefined;
+    const destinationName = payload.destination as string | undefined;
 
-    const active = carriers
-      .all()
-      .filter((carrier) => carrier.active)
-      .sort((a, b) => (b.capacity || 0) - (a.capacity || 0));
-    const carrier = active.find((c) => (c.capacity || 0) >= quantity) ?? null;
-    const route = this.findRoute(origin, destination);
+    const origin =
+      byName(originName ?? "") ?? (originName ? byIso3(originName) : null);
+    const destination =
+      byName(destinationName ?? "") ?? (destinationName ? byIso3(destinationName) : null);
 
-    if (carrier === null) {
+    if (!origin || !destination) {
       return result(
         this.name,
-        "no_capacity",
-        0.7,
-        `No active carrier can move ${quantity} units`,
-        { quantity, carriers_considered: active.length }
+        "lane_unresolved",
+        0.9,
+        `Could not resolve ${originName ?? "?"} → ${destinationName ?? "?"} to member states`,
+        { origin: originName, destination: destinationName }
       );
     }
 
+    const transit = getRoutingProvider().estimateTransit(origin.name, destination.name);
+
+    const riskAt = (iso3: string) =>
+      picture.states.find((s) => s.iso3 === iso3)?.climate_risk ?? null;
+    const originRisk = riskAt(origin.iso3);
+    const destinationRisk = riskAt(destination.iso3);
+    const elevated = [originRisk, destinationRisk].filter(
+      (r) => r === "high" || r === "medium"
+    ).length;
+
+    // Weather at either end is the one part of this the platform observes
+    // live, so it carries the confidence; the transit figure is an estimate.
+    const confidence = elevated > 0 ? 0.85 : 0.6;
+
     return result(
       this.name,
-      "plan_transport",
-      route ? 0.9 : 0.6,
-      `Selected carrier '${carrier.name}'` +
-        (route ? ` on route '${route.name}'` : " (no registered route; direct booking)"),
+      elevated > 0 ? "lane_at_risk" : "lane_viable",
+      confidence,
+      `${origin.name} → ${destination.name}: ~${transit.transit_hours}h by ${transit.mode}` +
+        (transit.distance_km ? ` over ${transit.distance_km}km` : "") +
+        (elevated > 0
+          ? `; elevated climate risk at ${elevated === 2 ? "both ends" : "one end"}`
+          : ""),
       {
-        carrier_id: carrier.id,
-        carrier: carrier.name,
-        mode: carrier.mode,
-        route_id: route ? route.id : null,
-        transit_hours: route ? route.transit_hours : null,
+        origin: origin.name,
+        destination: destination.name,
+        transit,
+        origin_climate_risk: originRisk,
+        destination_climate_risk: destinationRisk,
+        capacity_source: "none — no free inter-island freight capacity API is available",
       }
     );
   }

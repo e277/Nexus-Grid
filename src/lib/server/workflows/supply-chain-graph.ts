@@ -13,7 +13,7 @@
  * resumable by thread id.
  */
 
-import { classifyQuantity, withSignalDefaults } from "../services/supply-rules";
+import { classifyGap, withSignalDefaults } from "../services/supply-rules";
 import { utcnowIso } from "../time";
 import { CompiledGraph, MemoryCheckpointer, StateGraph } from "./graph";
 import { recommendAction } from "./language-step";
@@ -23,24 +23,20 @@ const MAX_REPLANS = 1;
 const RECOMMEND_ATTEMPTS = 3;
 
 export interface SupplyState {
-  // Incoming signal context
+  // Incoming signal context — a sourcing gap observed in the trade data
   event?: string;
-  crop_id?: number | null;
-  crop_name?: string | null;
-  quantity?: number;
-  farmer_id?: number | null;
-  farmer_name?: string | null;
-  island?: string | null;
-  harvest_date?: string | null;
-  message?: string | null;
+  commodity?: string | null;
+  importer?: string | null;
+  importer_iso3?: string | null;
+  external_usd?: number;
+  external_share_pct?: number;
+  regional_suppliers?: string[] | string;
+  climate_risk?: string;
   market_context?: string;
-  weather_risk?: string;
-  logistics_status?: string;
-  demand_signal?: string;
   require_approval?: boolean;
   // Derived along the workflow
   phase?: string;
-  supply_risk?: string;
+  gap_severity?: string;
   observed_at?: string;
   decision?: string;
   decision_rationale?: string;
@@ -59,25 +55,33 @@ export function perceive(state: SupplyState): Partial<SupplyState> {
   return {
     phase: "perceive",
     ...normalized,
-    supply_risk: classifyQuantity(normalized.quantity),
+    regional_suppliers: state.regional_suppliers,
+    gap_severity: classifyGap(normalized.external_share_pct, normalized.external_usd),
     observed_at: utcnowIso(),
     replan_count: state.replan_count ?? 0,
   };
 }
 
 export function assess(state: SupplyState): Partial<SupplyState> {
-  const event = state.event ?? "inventory_checked";
-  const supplyRisk = state.supply_risk ?? "normal";
-  const quantity = state.quantity ?? 0;
+  const severity = state.gap_severity ?? "minor";
+  const suppliers = Array.isArray(state.regional_suppliers)
+    ? state.regional_suppliers
+    : [];
 
   let decision = "monitor";
-  if (event === "surplus" || supplyRisk === "surplus") {
-    decision = "allocate_surplus";
-  } else if (event === "shortage" || supplyRisk === "shortage") {
-    decision = "trigger_shortage_response";
+  if (severity === "critical" && suppliers.length > 0) {
+    decision = "coordinate_substitution";
+  } else if (severity === "material" && suppliers.length > 0) {
+    decision = "stagger_planting";
+  } else if (severity !== "minor") {
+    decision = "seek_regional_supply";
   }
 
-  const rationale = `event=${event}, quantity=${quantity}, supply_risk=${supplyRisk}`;
+  const rationale =
+    `commodity=${state.commodity}, importer=${state.importer}, ` +
+    `external=${state.external_share_pct}% ($${(state.external_usd ?? 0).toLocaleString()}), ` +
+    `severity=${severity}, regional suppliers=${suppliers.length}`;
+
   return {
     phase: "assess",
     decision,
@@ -109,36 +113,39 @@ export async function recommend(state: SupplyState): Promise<Partial<SupplyState
 
 export function plan(state: SupplyState): Partial<SupplyState> {
   const decision = state.decision ?? "monitor";
+  const suppliers = Array.isArray(state.regional_suppliers) ? state.regional_suppliers : [];
   let planData: Record<string, unknown>;
 
-  if (decision === "allocate_surplus") {
+  if (decision === "coordinate_substitution") {
     planData = {
-      action: "dispatch_surplus",
-      priority: "high",
-      target: "demand hub",
-      route: "cold-chain express",
-      logistics: {
-        mode: "truck",
-        temperature: "2-4°C",
-      },
-    };
-  } else if (decision === "trigger_shortage_response") {
-    planData = {
-      action: "escalate_shortage",
+      action: "open_regional_supply_line",
       priority: "urgent",
-      target: "operations team",
-      strategy: "reallocate stock and request emergency import",
-      notification: {
-        channel: "operations-alert",
-        severity: "high",
-      },
+      target: "CARICOM trade coordination",
+      strategy: `Route ${state.commodity} demand from ${state.importer} to ${suppliers.slice(0, 3).join(", ")}`,
+      volume_at_stake_usd: state.external_usd,
+      notification: { channel: "trade-coordination", severity: "high" },
+    };
+  } else if (decision === "stagger_planting") {
+    planData = {
+      action: "align_planting_windows",
+      priority: "high",
+      target: "ministries of agriculture",
+      strategy: `Stagger ${state.commodity} planting between ${state.importer} and ${suppliers.slice(0, 3).join(", ")} so windows complement rather than overlap`,
+      volume_at_stake_usd: state.external_usd,
+    };
+  } else if (decision === "seek_regional_supply") {
+    planData = {
+      action: "identify_regional_capacity",
+      priority: "high",
+      target: "agricultural research and extension",
+      strategy: `No member state currently supplies ${state.commodity} into the region at volume — assess soil and climate suitability before committing`,
     };
   } else {
     planData = {
       action: "monitor",
       priority: "normal",
-      target: "supply dashboard",
-      instruction: "continue ingesting demand, weather, and logistics signals",
+      target: "regional dashboard",
+      instruction: "continue tracking trade, climate, and production signals",
     };
   }
 
@@ -208,10 +215,9 @@ export function execute(state: SupplyState): Partial<SupplyState> {
 
 /** Watch execution for disruption signals that force a re-plan. */
 export function monitor(state: SupplyState): Partial<SupplyState> {
-  const disruption =
-    state.weather_risk === "high" ||
-    state.weather_risk === "severe" ||
-    state.logistics_status === "constrained";
+  // Live climate risk at the importing state is the disruption signal here:
+  // a coordination plan agreed into a storm window is worth re-planning.
+  const disruption = state.climate_risk === "high" || state.climate_risk === "severe";
   const canReplan = (state.replan_count ?? 0) < MAX_REPLANS;
 
   const result = {
@@ -224,7 +230,7 @@ export function monitor(state: SupplyState): Partial<SupplyState> {
   if (result.will_replan) {
     updates.replan_count = (state.replan_count ?? 0) + 1;
     // Downgrade the signal so the re-plan converges instead of looping
-    updates.logistics_status = "replanned";
+    updates.climate_risk = "replanned";
   }
   return updates;
 }
@@ -240,6 +246,7 @@ export function recover(state: SupplyState): Partial<SupplyState> {
   const recovery: Record<string, unknown> = {
     recovery_action: decision === "monitor" ? "continue_monitoring" : "activate_followup",
     next_step: "observe_new_signals",
+    decision,
     replans_used: state.replan_count ?? 0,
   };
 
@@ -249,9 +256,9 @@ export function recover(state: SupplyState): Partial<SupplyState> {
   } else if (executionStatus === "approved") {
     recovery.recovery_action = "activate_followup";
     recovery.next_step = "notify_supply_chain_ops";
-  } else if (decision === "trigger_shortage_response") {
-    recovery.next_step = "notify_supply_chain_ops";
-    recovery.feedback = "re-plan once updated demand and logistics signals arrive";
+  } else if (decision !== "monitor") {
+    recovery.next_step = "notify_regional_coordination";
+    recovery.feedback = "re-plan once updated trade and production signals arrive";
   }
   return { phase: "recover", recovery };
 }

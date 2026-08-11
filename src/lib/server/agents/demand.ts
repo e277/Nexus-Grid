@@ -1,53 +1,65 @@
 /**
  * Demand Intelligence Agent.
  *
- * Matches open demands to available crop supply, scores the opportunities,
- * and flags predicted shortages when open demand exceeds supply.
+ * Answers the farm-to-market question for one commodity and one importing
+ * state: how much of what it currently buys outside the region is already
+ * being supplied inside it, and by whom.
  */
 
-import { crops } from "../repositories";
+import { currentPicture } from "./context";
 import { BaseAgent, result, type AgentPayload, type AgentResult } from "./base";
 
 export class DemandIntelligenceAgent extends BaseAgent {
   readonly name = "demand_intelligence";
 
   protected async handle(payload: AgentPayload): Promise<AgentResult> {
-    const cropName = payload.crop_name as string | undefined;
-    const requested = (payload.quantity as number | undefined) || 0;
+    const picture = await currentPicture();
+    const commodity = payload.commodity as string | undefined;
+    const importerIso3 = payload.importer_iso3 as string | undefined;
 
-    const matching = cropName
-      ? crops.all().filter((c) => (c.crop_name ?? "").toLowerCase() === cropName.toLowerCase())
-      : crops.all();
-    const available = matching.reduce((total, c) => total + (c.quantity || 0), 0);
+    const matches = picture.substitution_opportunities.filter(
+      (o) =>
+        (!commodity || o.commodity.toLowerCase() === commodity.toLowerCase()) &&
+        (!importerIso3 || o.importer_iso3 === importerIso3)
+    );
 
-    const matches = [...matching]
-      .sort((a, b) => (b.quantity || 0) - (a.quantity || 0))
-      .filter((c) => (c.quantity || 0) > 0)
-      .slice(0, 5)
-      .map((c) => ({
-        crop_id: c.id,
-        farmer_id: c.farmer_id,
-        quantity: c.quantity,
-        // Simple opportunity score: how much of the request one lot covers
-        score: requested ? Math.round(Math.min((c.quantity || 0) / requested, 1.0) * 100) / 100 : 0.0,
-      }));
-
-    if (requested && available < requested) {
+    if (matches.length === 0) {
       return result(
         this.name,
-        "predict_shortage",
-        0.8,
-        `Open demand for ${requested} of '${cropName}' exceeds available supply ${available}`,
-        { available, requested, matches }
+        "no_gap_found",
+        0.6,
+        `No external sourcing gap in the trade data for ${commodity ?? "any commodity"}` +
+          `${importerIso3 ? ` in ${importerIso3}` : ""}`,
+        { commodity, importer_iso3: importerIso3 }
       );
     }
 
+    const external = matches.reduce((sum, o) => sum + o.external_usd, 0);
+    const suppliers = [...new Set(matches.flatMap((o) => o.regional_suppliers))];
+
+    // Confidence tracks how lopsided the sourcing is: a state buying nearly all
+    // of a commodity outside the region is an unambiguous gap; one already
+    // buying half regionally is a marginal call.
+    const averageExternalShare =
+      matches.reduce((sum, o) => sum + o.external_share_pct, 0) / matches.length;
+
     return result(
       this.name,
-      matches.length ? "match_buyers" : "no_supply_found",
-      matches.length ? 0.9 : 0.5,
-      `Found ${matches.length} candidate lots for '${cropName}'`,
-      { available, requested, matches }
+      suppliers.length > 0 ? "match_regional_supply" : "no_regional_supplier",
+      Math.min(0.95, averageExternalShare / 100),
+      `$${external.toLocaleString()} sourced outside CARICOM across ${matches.length} lane(s); ` +
+        `${suppliers.length} member state(s) already supply it regionally`,
+      {
+        external_usd: external,
+        average_external_share_pct: Math.round(averageExternalShare * 10) / 10,
+        regional_suppliers: suppliers,
+        lanes: matches.map((o) => ({
+          importer: o.importer,
+          commodity: o.commodity,
+          external_usd: o.external_usd,
+          external_share_pct: o.external_share_pct,
+        })),
+      }
     );
   }
 }

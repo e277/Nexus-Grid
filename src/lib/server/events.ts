@@ -1,11 +1,9 @@
 /**
- * In-process event bus, and the subscriptions that route every domain event
- * to the supervisor agent.
+ * In-process event bus, and the subscriptions that route every coordination
+ * event to the supervisor agent.
  *
- * Event names follow the dotted convention from the roadmap, e.g.
- * `crop.harvest.ready`, `shipment.delayed`, `weather.alert`. Handlers run to
- * completion before the publishing request returns, so an agent's reaction is
- * visible in the same round trip that caused it.
+ * Handlers run to completion before the publishing request returns, so an
+ * agent's reaction is visible in the same round trip that caused it.
  */
 
 export type EventPayload = Record<string, unknown>;
@@ -13,13 +11,13 @@ export type Handler = (eventName: string, payload: EventPayload) => Promise<void
 
 /** Events the supervisor knows how to route (see SupervisorAgent.routes). */
 export const SUPERVISED_EVENTS = [
-  "crop.harvest.ready",
-  "buyer.request.created",
-  "shipment.departed",
-  "shipment.delayed",
-  "weather.alert",
-  "customs.approved",
-  "shipment.arrived",
+  "substitution.gap.detected",
+  "demand.review.requested",
+  "climate.risk.elevated",
+  "storm.alert",
+  "lane.assessment.requested",
+  "planting.window.review",
+  "soil.assessment.requested",
 ] as const;
 
 /** Synchronous-in-order publish/subscribe dispatcher. */

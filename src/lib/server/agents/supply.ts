@@ -1,144 +1,109 @@
 /**
  * Supply Intelligence Agent.
  *
- * Scans crop inventory, classifies surplus/shortage conditions, and triggers
- * the orchestration workflow for each detected event.
+ * The scanning agent: sweeps the regional picture for import-substitution gaps
+ * material enough to act on, and opens a workflow run for each one.
+ *
+ * Where this used to scan a local inventory table it wrote to itself, it now
+ * scans published trade data across fifteen states, so what it flags is a real
+ * regional gap rather than a number this system made up.
  */
 
-import type { Crop } from "../models";
-import { crops, farmers } from "../repositories";
-import {
-  SHORTAGE_THRESHOLD,
-  SURPLUS_THRESHOLD,
-  classifyQuantity,
-} from "../services/supply-rules";
 import { runOnce } from "../workflows/orchestrator";
+import { currentPicture } from "./context";
 import { BaseAgent, result, type AgentPayload, type AgentResult } from "./base";
 
 /**
- * How clearly `quantity` sits inside its band, as a 0..1 margin.
+ * Only open a run for a gap worth a coordination conversation.
  *
- * Distance from the nearer threshold, normalized by that threshold's scale —
- * a quantity right at a boundary is ambiguous (near 0); one far inside a band
- * is unambiguous (near 1). Not a probability, just a legible measure of how
- * confidently the classification holds.
+ * Both thresholds must hold: enough money to matter, and a lopsided enough
+ * split that regional supply is plausibly displacing something.
  */
-function marginConfidence(quantity: number): number {
-  if (quantity <= 0) return 0.0;
-  if (quantity < SHORTAGE_THRESHOLD) {
-    return Math.min(1.0, (SHORTAGE_THRESHOLD - quantity) / SHORTAGE_THRESHOLD);
-  }
-  if (quantity > SURPLUS_THRESHOLD) {
-    return Math.min(1.0, (quantity - SURPLUS_THRESHOLD) / SURPLUS_THRESHOLD);
-  }
-  // Inside the normal band: confidence peaks at the midpoint, tapers at either edge.
-  const span = SURPLUS_THRESHOLD - SHORTAGE_THRESHOLD;
-  const midpoint = SHORTAGE_THRESHOLD + span / 2;
-  return 1.0 - Math.abs(quantity - midpoint) / (span / 2);
+const MIN_EXTERNAL_USD = 5_000_000;
+const MIN_EXTERNAL_SHARE_PCT = 60;
+
+interface DetectedGap {
+  importer_iso3: string;
+  commodity: string;
+  external_usd: number;
 }
 
-interface InventoryEvent {
-  crop_id: number;
-  status: string;
-}
-
-/** Agent that inspects crops and triggers the workflow on conditions. */
 export class SupplyAgent extends BaseAgent {
   readonly name = "supply_intelligence";
 
-  analyzeInventory(crop: Crop): { status: string; message: string } {
-    if (crop.quantity === null || crop.quantity === undefined) {
-      return { status: "unknown", message: "quantity missing" };
-    }
-
-    const status = classifyQuantity(crop.quantity);
-    if (status === "normal") {
-      return { status, message: "inventory within expected range" };
-    }
-    return { status, message: `${crop.crop_name} ${status} detected` };
-  }
-
   protected async handle(_payload: AgentPayload): Promise<AgentResult> {
-    const { events, margins } = await this.scan();
+    const { gaps, scanned, confidence } = await this.scan();
     return result(
       this.name,
-      "inventory_scan",
-      this.confidence(events, margins),
-      `Detected ${events.length} inventory event(s)`,
-      { events }
+      gaps.length > 0 ? "substitution_scan" : "no_material_gap",
+      confidence,
+      `Scanned ${scanned} sourcing lane(s); ${gaps.length} exceed the coordination threshold`,
+      { gaps, scanned }
     );
   }
 
-  /**
-   * Confidence from real scan signal, not a fixed constant.
-   *
-   * No crops scanned: nothing to be confident about. Otherwise it's the
-   * average classification margin across scanned crops (see
-   * `marginConfidence`), nudged up slightly per corroborating event (more
-   * anomalies agreeing on a shortage/surplus condition is itself signal) —
-   * bounded to 1.0.
-   */
-  private confidence(events: InventoryEvent[], margins: number[]): number {
-    if (margins.length === 0) return 0.0;
-    const base = margins.reduce((a, b) => a + b, 0) / margins.length;
-    return Math.min(1.0, base + 0.05 * events.length);
-  }
+  private async scan(): Promise<{
+    gaps: DetectedGap[];
+    scanned: number;
+    confidence: number;
+  }> {
+    const picture = await currentPicture();
+    const opportunities = picture.substitution_opportunities;
 
-  /**
-   * Analyze all crops and trigger the workflow for each anomaly.
-   *
-   * Returns the detected events plus the per-crop classification margin used
-   * to compute scan confidence.
-   */
-  private async scan(): Promise<{ events: InventoryEvent[]; margins: number[] }> {
-    const events: InventoryEvent[] = [];
-    const margins: number[] = [];
+    if (opportunities.length === 0) {
+      // Nothing observed is not the same as nothing happening — if the trade
+      // source is degraded there is genuinely nothing to be confident about.
+      return { gaps: [], scanned: 0, confidence: 0 };
+    }
 
-    for (const crop of crops.all()) {
+    const gaps: DetectedGap[] = [];
+
+    for (const opportunity of opportunities) {
+      if (
+        opportunity.external_usd < MIN_EXTERNAL_USD ||
+        opportunity.external_share_pct < MIN_EXTERNAL_SHARE_PCT ||
+        opportunity.regional_suppliers.length === 0
+      ) {
+        continue;
+      }
+
+      gaps.push({
+        importer_iso3: opportunity.importer_iso3,
+        commodity: opportunity.commodity,
+        external_usd: opportunity.external_usd,
+      });
+
       try {
-        const analysis = this.analyzeInventory(crop);
-        const status = analysis.status;
-        if (status === "unknown") continue;
-
-        margins.push(marginConfidence(crop.quantity));
-        if (status !== "surplus" && status !== "shortage") continue;
-
-        console.info(`Inventory event detected: ${analysis.message}`);
-        const farmer = crop.farmer_id !== null ? farmers.get(crop.farmer_id) : null;
-
-        const context = {
-          crop_id: crop.id,
-          crop_name: crop.crop_name,
-          quantity: crop.quantity,
-          farmer_id: crop.farmer_id,
-          farmer_name: farmer?.name ?? null,
-          island: farmer?.island ?? null,
-          event: status,
-          message: analysis.message,
-          logistics_status: (farmer?.capacity || 0) > 0 ? "available" : "constrained",
-          harvest_date: crop.harvest_date,
-        };
-        events.push({ crop_id: crop.id, status });
-
-        try {
-          await runOnce(context);
-        } catch (error) {
-          console.error(`Orchestrator failed for crop ${crop.id}`, error);
-        }
+        await runOnce({
+          event: "substitution_gap",
+          commodity: opportunity.commodity,
+          importer: opportunity.importer,
+          importer_iso3: opportunity.importer_iso3,
+          external_usd: opportunity.external_usd,
+          external_share_pct: opportunity.external_share_pct,
+          regional_suppliers: opportunity.regional_suppliers,
+          climate_risk:
+            picture.states.find((s) => s.iso3 === opportunity.importer_iso3)?.climate_risk ??
+            "low",
+        });
       } catch (error) {
-        console.error(`Failed to analyze crop ${crop?.id}`, error);
+        console.error(
+          `Orchestrator failed for ${opportunity.importer} / ${opportunity.commodity}`,
+          error
+        );
       }
     }
-    return { events, margins };
+
+    // Confidence is the share of scanned lanes that cleared the threshold —
+    // a scan that flags most of what it saw is a clearer signal than one that
+    // scraped a single borderline case out of many.
+    const confidence = Math.min(1, gaps.length / opportunities.length + 0.2);
+    return { gaps, scanned: opportunities.length, confidence: gaps.length > 0 ? confidence : 0.3 };
   }
 
-  /**
-   * Run one scan cycle; returns the number of events detected.
-   *
-   * Kept as the entry point for the periodic runner loop.
-   */
+  /** Run one scan cycle; returns the number of gaps detected. */
   async runCheck(): Promise<number> {
     const scan = await this.run({ trigger: "periodic_scan" });
-    return (scan.outputs.events as InventoryEvent[]).length;
+    return (scan.outputs.gaps as DetectedGap[]).length;
   }
 }

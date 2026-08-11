@@ -1,53 +1,59 @@
 /**
- * Shared supply-domain rules and signal-context defaults.
+ * Shared coordination rules and signal-context defaults.
  *
- * Single source of truth for the surplus/shortage thresholds and for the
+ * Single source of truth for how a sourcing gap is classified, and for the
  * default values of the signal context that flows from agents into the
  * workflow graph and the LLM recommendation step.
  */
 
-export const SURPLUS_THRESHOLD = 1000;
-export const SHORTAGE_THRESHOLD = 100;
+/** A gap this lopsided is a standing dependency, not a procurement quirk. */
+export const CRITICAL_EXTERNAL_SHARE_PCT = 90;
+export const MATERIAL_EXTERNAL_SHARE_PCT = 60;
+/** Below this the coordination cost outweighs the volume at stake. */
+export const MATERIAL_EXTERNAL_USD = 5_000_000;
 
-export type SupplyClassification = "surplus" | "shortage" | "normal";
+export type GapSeverity = "critical" | "material" | "minor";
 
 export interface SignalContext {
   event: string;
-  quantity: number;
-  crop_name: string;
-  farmer_name: string;
-  island: string;
+  commodity: string;
+  importer: string;
+  external_usd: number;
+  external_share_pct: number;
+  regional_suppliers: string;
+  climate_risk: string;
   market_context: string;
-  weather_risk: string;
-  logistics_status: string;
-  demand_signal: string;
 }
 
 /** Defaults for every field the workflow and LLM prompt consume. */
 export const SIGNAL_DEFAULTS: SignalContext = {
-  event: "inventory_checked",
-  quantity: 0,
-  crop_name: "unknown crop",
-  farmer_name: "unknown farmer",
-  island: "unknown island",
-  market_context: "regional demand stable",
-  weather_risk: "low",
-  logistics_status: "available",
-  demand_signal: "balanced",
+  event: "substitution_gap",
+  commodity: "unspecified commodity",
+  importer: "unspecified state",
+  external_usd: 0,
+  external_share_pct: 0,
+  regional_suppliers: "none identified",
+  climate_risk: "low",
+  market_context: "regional sourcing stable",
 };
 
-/** Classify an inventory quantity as surplus, shortage, or normal. */
-export function classifyQuantity(quantity: number): SupplyClassification {
-  if (quantity > SURPLUS_THRESHOLD) return "surplus";
-  if (quantity < SHORTAGE_THRESHOLD) return "shortage";
-  return "normal";
+/**
+ * How severe a sourcing gap is, from how lopsided it is and how much is at
+ * stake. Both matter: a 100% external share on $50k is noise, and a 30% share
+ * on $200M is normal trade.
+ */
+export function classifyGap(externalSharePct: number, externalUsd: number): GapSeverity {
+  if (externalUsd < MATERIAL_EXTERNAL_USD) return "minor";
+  if (externalSharePct >= CRITICAL_EXTERNAL_SHARE_PCT) return "critical";
+  if (externalSharePct >= MATERIAL_EXTERNAL_SHARE_PCT) return "material";
+  return "minor";
 }
 
 /**
  * Return the signal fields from `context` with defaults filled in.
  *
- * Only keys in `SIGNAL_DEFAULTS` are returned; null/undefined values fall
- * back to their default so downstream consumers never see missing fields.
+ * Only keys in `SIGNAL_DEFAULTS` are returned; null/undefined values fall back
+ * to their default so downstream consumers never see missing fields.
  */
 export function withSignalDefaults(context: object): SignalContext {
   const source = context as Record<string, unknown>;
@@ -55,6 +61,13 @@ export function withSignalDefaults(context: object): SignalContext {
   for (const [key, fallback] of Object.entries(SIGNAL_DEFAULTS)) {
     const value = source[key];
     result[key] = value === undefined || value === null ? fallback : value;
+  }
+  // Suppliers arrive as an array from the projection; the prompt wants prose.
+  if (Array.isArray(source.regional_suppliers)) {
+    result.regional_suppliers =
+      source.regional_suppliers.length > 0
+        ? source.regional_suppliers.join(", ")
+        : SIGNAL_DEFAULTS.regional_suppliers;
   }
   return result as unknown as SignalContext;
 }

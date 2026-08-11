@@ -1,16 +1,16 @@
 /**
  * Supervisor Agent.
  *
- * Routes incoming events to the specialist agent responsible for them and
- * returns that specialist's result. This is the single dispatch point used by
- * the event system.
+ * Routes each coordination event to the specialist responsible for it and
+ * returns that specialist's result. Single dispatch point for the event system.
  */
 
+import { AgronomyAgent } from "./agronomy";
 import { BaseAgent, result, type AgentPayload, type AgentResult } from "./base";
 import { ClimateRiskAgent } from "./climate";
-import { CustomsAgent } from "./customs";
 import { DemandIntelligenceAgent } from "./demand";
 import { LogisticsAgent } from "./logistics";
+import { PlantingCoordinationAgent } from "./planting";
 
 export class SupervisorAgent extends BaseAgent {
   readonly name = "supervisor";
@@ -18,16 +18,18 @@ export class SupervisorAgent extends BaseAgent {
   readonly demand = new DemandIntelligenceAgent();
   readonly logistics = new LogisticsAgent();
   readonly climate = new ClimateRiskAgent();
-  readonly customs = new CustomsAgent();
+  readonly planting = new PlantingCoordinationAgent();
+  readonly agronomy = new AgronomyAgent();
 
   /** Event → specialist routing table */
   private readonly routes: Record<string, BaseAgent> = {
-    "buyer.request.created": this.demand,
-    "crop.harvest.ready": this.demand,
-    "weather.alert": this.climate,
-    "shipment.delayed": this.logistics,
-    "shipment.departed": this.customs,
-    "customs.approved": this.logistics,
+    "substitution.gap.detected": this.demand,
+    "demand.review.requested": this.demand,
+    "climate.risk.elevated": this.climate,
+    "storm.alert": this.climate,
+    "lane.assessment.requested": this.logistics,
+    "planting.window.review": this.planting,
+    "soil.assessment.requested": this.agronomy,
   };
 
   protected async handle(payload: AgentPayload): Promise<AgentResult> {
