@@ -1,3 +1,4 @@
+import { ExternalLink } from "lucide-react";
 import { useState } from "react";
 import { api } from "../api";
 import { SourcingChart } from "../components/charts/SourcingChart";
@@ -84,7 +85,15 @@ export function SourcesView() {
                   {source.covers ? ` · covers ${source.covers}` : ""}
                 </span>
               </div>
-              <p className="mt-1 font-mono text-ng-2xs text-ng-secondary">{source.endpoint}</p>
+              <a
+                href={source.endpoint}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="mt-1 inline-flex items-center gap-1 font-mono text-ng-2xs text-ng-accent underline decoration-dotted underline-offset-2 hover:decoration-solid focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent focus-visible:ring-offset-1"
+              >
+                {source.endpoint}
+                <ExternalLink size={10} aria-hidden />
+              </a>
               <p className="mt-1 text-[11px] text-ng-secondary">
                 {STATUS_MEANING[source.status]} · fetched{" "}
                 {new Date(source.fetched_at).toLocaleString()}

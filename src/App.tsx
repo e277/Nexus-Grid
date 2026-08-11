@@ -1,6 +1,7 @@
 import { Activity, Bell, Database, Radio, Workflow } from "lucide-react";
 import { useState } from "react";
 import { api } from "./api";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { usePoll } from "./hooks";
 import { ObservabilityView } from "./views/ObservabilityView";
 import { SignalsView } from "./views/SignalsView";
@@ -125,7 +126,7 @@ export default function App() {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
 
         {/* Top bar */}
-        <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-ng-border bg-white/85 px-5 backdrop-blur-md">
+        <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-ng-border bg-ng-surface/85 px-5 backdrop-blur-md">
           {/* Breadcrumb */}
           <div className="flex min-w-0 flex-1 items-center gap-1.5 text-sm text-ng-secondary">
             <span>Nexus-Grid</span>
@@ -143,6 +144,8 @@ export default function App() {
             ) : (
               <span className="text-xs text-ng-secondary">Connecting…</span>
             )}
+
+            <ThemeToggle />
 
             <div className="relative z-30">
               <button
