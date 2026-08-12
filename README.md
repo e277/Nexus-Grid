@@ -8,7 +8,7 @@ live in the same codebase and run as one service.
 
 ```bash
 npm install
-npm run dev     # http://localhost:5173
+npm run dev     # http://localhost:5180
 ```
 
 No database, broker, or API key is required, and there is no sign-in — identity

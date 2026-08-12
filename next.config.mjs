@@ -7,6 +7,21 @@ const nextConfig = {
   reactStrictMode: true,
   // Next writes AGENTS.md/CLAUDE.md to the repo root otherwise.
   agentRules: false,
+  /**
+   * Hosts the dev server will serve `/_next/*` to.
+   *
+   * Next blocks cross-site requests to those assets in development. It decides
+   * "cross-site" by comparing the request's origin against the host the dev
+   * server was loaded from, and `localhost` and `127.0.0.1` are different
+   * hosts to that check even though they are the same machine. Opening the app
+   * on one while the server considers itself the other 403s every chunk, so
+   * the HTML renders, React never hydrates, and the page looks like a dead
+   * screenshot: nothing clickable, the health poll stuck on "Connecting…".
+   *
+   * Listing both makes either address work. A LAN address needs adding here
+   * too if you open the dev server from another device.
+   */
+  allowedDevOrigins: ["localhost", "127.0.0.1"],
   // better-sqlite3 is a native addon: bundling it breaks the binding lookup,
   // so the checkpointer's driver has to stay an external require at runtime.
   serverExternalPackages: ["better-sqlite3", "@langchain/langgraph-checkpoint-sqlite"],

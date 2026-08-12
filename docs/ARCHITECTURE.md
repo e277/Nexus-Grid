@@ -422,7 +422,7 @@ interpretation falls back to labelled rule-derived signals.
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173
+npm run dev        # http://localhost:5180
 npm test           # 19 tests
 npm run typecheck
 npm run build

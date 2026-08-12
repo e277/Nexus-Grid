@@ -7,9 +7,9 @@
     "node": ">=20.9.0"
   },
   "scripts": {
-    "dev": "next dev -p 5173",
+    "dev": "next dev -p 5180",
     "build": "next build",
-    "start": "next start -p 5173",
+    "start": "next start -p 5180",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
