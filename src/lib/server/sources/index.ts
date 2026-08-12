@@ -69,12 +69,26 @@ export async function fetchAllSources(force = false): Promise<SourceBundle> {
   return { indicators, trade, climate, storms, soil, agroclimate };
 }
 
-/** Provenance for every source, for the freshness panel. */
-export function bundleProvenance(bundle: SourceBundle): (Provenance & { records: number })[] {
-  return Object.values(bundle).map((snapshot) => ({
-    ...snapshot.provenance,
-    records: snapshot.records.length,
-  }));
+/**
+ * Provenance for every source, carrying the bundle key that produced it.
+ *
+ * The `slot` is what the console attributes against. `Provenance.source` will
+ * not do: Open-Meteo and the NOAA hurricane feed share the `climate` SourceId,
+ * so it cannot tell six publishers apart, and matching on the display name
+ * would break the moment one is reworded.
+ */
+export type SourceSlot = keyof SourceBundle;
+
+export function bundleProvenance(
+  bundle: SourceBundle
+): (Provenance & { records: number; slot: SourceSlot })[] {
+  return (Object.entries(bundle) as [SourceSlot, SourceBundle[SourceSlot]][]).map(
+    ([slot, snapshot]) => ({
+      ...snapshot.provenance,
+      records: snapshot.records.length,
+      slot,
+    })
+  );
 }
 
 export { fetchAgroclimate, fetchClimate, fetchComtrade, fetchSoil, fetchStorms, fetchWorldBank };
