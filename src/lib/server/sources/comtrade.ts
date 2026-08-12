@@ -11,6 +11,7 @@
  */
 
 import { byM49, isCaricom, CARICOM_STATES } from "./caricom";
+import { partnerNameFor } from "./partners";
 import { fetchJson, withCache } from "./cache";
 import { provenance, type Snapshot, type TradeFlow } from "./types";
 
@@ -48,8 +49,10 @@ interface ComtradeRow {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function partnerName(code: number): string {
-  if (code === 0) return "World";
-  return byM49(code)?.name ?? `Partner ${code}`;
+  // Member states first — that table is the one the rest of the platform
+  // joins on — then the external partners, then a labelled fallback so an
+  // unmapped code is visibly a code and not mistaken for a country.
+  return byM49(code)?.name ?? partnerNameFor(code) ?? `Unmapped partner ${code}`;
 }
 
 async function fetchReporter(m49: number): Promise<TradeFlow[]> {
