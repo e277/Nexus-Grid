@@ -1,0 +1,576 @@
+/**
+ * Per-page analysis: the agent's reading of one domain, not a data dump.
+ *
+ * Each intelligence page is an agent's answer to one question, and the numbers
+ * appear only as the evidence it cites. That inverts what the console used to
+ * do — render the projection as tables and charts and leave the reader to draw
+ * the conclusion — and it is the point of the platform: a member state can
+ * already see its own trade table, and what it cannot see is what the region's
+ * figures mean together.
+ *
+ * The constraint that makes this safe is unchanged: every finding must cite
+ * figures present in the input, and the model is told to raise a gap rather
+ * than reason around missing data. A finding an operator cannot check is not
+ * actionable, and this layer coordinates systems it does not control.
+ *
+ * Without an API key each domain degrades to deterministic rule-derived
+ * findings, labelled `rules` so they are never mistaken for a reading.
+ */
+
+import { byIso3, byName } from "../sources/caricom";
+import type { RegionalPicture } from "../projection";
+import type { Lane, PortExposure } from "../lanes";
+import { callModelJson, resolveProvider } from "./provider";
+
+export type AnalysisDomain = "market" | "soil" | "planting" | "logistics" | "impact";
+
+export const ANALYSIS_DOMAINS: AnalysisDomain[] = [
+  "market",
+  "soil",
+  "planting",
+  "logistics",
+  "impact",
+];
+
+export type FindingSeverity = "critical" | "opportunity" | "watch" | "gap";
+
+export interface Finding {
+  /** Short headline — what the agent concluded. */
+  title: string;
+  /** What it observed, in one or two sentences. */
+  finding: string;
+  /** What should change and who would act. */
+  recommendation: string;
+  /** The figures this rests on, so an operator can check it. */
+  evidence: string[];
+  severity: FindingSeverity;
+  confidence: "low" | "medium" | "high";
+  /** Full names of the member states involved — never codes. */
+  states: string[];
+}
+
+export interface AnalysisResult {
+  domain: AnalysisDomain;
+  /** Model that produced this, or `rules` for the deterministic fallback. */
+  source: string;
+  /** One paragraph the page leads with. */
+  summary: string;
+  findings: Finding[];
+  note?: string;
+  generated_at: string;
+}
+
+/** Extra inputs a domain needs beyond the regional picture. */
+export interface AnalysisInputs {
+  picture: RegionalPicture;
+  lanes?: Lane[];
+  ports?: PortExposure[];
+  /** Agent decisions, for the outcomes domain. */
+  decisions?: { agent: string; action: string; confidence: number | null }[];
+  gateOutcomes?: Record<string, number>;
+}
+
+// ── Prompts ───────────────────────────────────────────────────────────────
+
+const BASE_RULES = `Rules:
+- Ground every finding in figures present in the input. Never invent a number.
+- Every evidence entry must carry a figure with its unit and the publisher it came from.
+- Say what should change and who would act, not just what is true.
+- If the input is too thin to support a claim, return a "gap" finding saying exactly what is missing instead of guessing.
+- Prefer findings that span two or more member states.
+
+- Write names out in full everywhere — "Trinidad and Tobago", not "TTO"; "United States", not a country code. Never abbreviate a member state, a partner or a commodity.
+
+Return ONLY a JSON object of this exact shape, no markdown fence and no prose:
+{"summary":"one paragraph an operator reads first","findings":[{"title":"short headline","finding":"what was observed","recommendation":"what should change and who acts","evidence":["figure with unit and source"],"severity":"critical|opportunity|watch|gap","confidence":"low|medium|high","states":["full member state name"]}]}
+
+Return between 3 and 5 findings, most consequential first.`;
+
+const DOMAIN_BRIEF: Record<AnalysisDomain, string> = {
+  market: `You analyse where the Caribbean's food money leaves the region.
+Focus on: which member states buy outside CARICOM what another member already supplies into it, how large each of those gaps is, and which are worth acting on first.`,
+
+  soil: `You analyse the region's growing conditions and production capability.
+Focus on: what the soil and climate at each state's main growing area actually permit, which states are physically able to supply what the region imports, and where conditions constrain that.`,
+
+  planting: `You analyse how the region's planting calendars line up.
+Focus on: where rain-fed windows overlap so states compete in the same weeks, where they differ so states could stagger and widen regional coverage, and which months the region has almost no one planting.`,
+
+  logistics: `You analyse the routes a coordination plan would actually move over.
+Focus on: which supplier-to-importer lanes are viable, what the transit and weather exposure at each end imply, and which lanes are worth opening first. Transit figures are geometry estimates, not carrier quotes — say so if you rely on one.`,
+
+  impact: `You analyse what the coordination layer is achieving.
+Focus on: the size of the addressable gap against the region's import bill, what the agents have actually decided so far and how confident they were, and whether the decisions taken are moving the region toward regional sourcing.`,
+};
+
+function systemPrompt(domain: AnalysisDomain): string {
+  return `You are the ${domain} analyst of a Caribbean food-system coordination platform.
+
+You receive a regional picture assembled from public data: World Bank indicators, UN Comtrade trade flows, ISRIC soil readings, NASA POWER planting calendars, and live Open-Meteo and NOAA climate data across CARICOM member states. You do not collect this data and cannot query anything else.
+
+${DOMAIN_BRIEF[domain]}
+
+${BASE_RULES}`;
+}
+
+function usd(value: number): string {
+  return `$${Math.round(value).toLocaleString()}`;
+}
+
+function buildUserPrompt(domain: AnalysisDomain, inputs: AnalysisInputs): string {
+  const { picture } = inputs;
+  const totals = `REGIONAL TOTALS (trade year ${picture.totals.trade_year ?? "unknown"})
+Observed food imports across ${picture.totals.states_covered} member states: ${usd(picture.totals.food_imports_usd)}
+Sourced from inside CARICOM: ${usd(picture.totals.intra_caricom_usd)} (${picture.totals.intra_caricom_share_pct ?? "?"}%)`;
+
+  const gaps = `DATA GAPS\n${picture.gaps.join("\n") || "None — every publisher answered."}`;
+
+  if (domain === "market") {
+    const opportunities = picture.substitution_opportunities
+      .map(
+        (o) =>
+          `${o.importer} imports ${usd(o.external_usd)} of ${o.commodity} from outside CARICOM ` +
+          `(${o.external_share_pct}% of its imports of that commodity; top external partners: ${o.top_external_partners.join(", ")}). ` +
+          `Members already shipping ${o.commodity} into the region: ${o.regional_suppliers.join(", ")}.`
+      )
+      .join("\n");
+    return `${totals}
+
+IMPORT SUBSTITUTION CANDIDATES
+${opportunities || "No substitution candidates in the trade data."}
+
+${gaps}`;
+  }
+
+  if (domain === "soil") {
+    const states = picture.states
+      .filter((s) => s.soil?.has_coverage || s.arable_land_pct !== null)
+      .map((s) =>
+        [
+          s.name,
+          s.soil?.ph !== null && s.soil?.ph !== undefined ? `soil pH ${s.soil.ph}` : "soil pH unknown",
+          s.soil?.organic_carbon_g_per_kg
+            ? `organic carbon ${s.soil.organic_carbon_g_per_kg} g/kg`
+            : "organic carbon unknown",
+          s.soil?.clay_pct ? `clay ${s.soil.clay_pct}%` : "clay unknown",
+          `arable land ${s.arable_land_pct ?? "?"}%`,
+          `agricultural land ${s.agricultural_land_pct ?? "?"}%`,
+          `cereal yield ${s.cereal_yield_kg_ha ?? "?"} kg/ha`,
+          `agriculture ${s.agriculture_value_added_pct ?? "?"}% of GDP`,
+          `rain-fed months ${s.rain_fed_months.length}`,
+          `climate risk ${s.climate_risk ?? "unknown"}`,
+          s.soil?.suitability ? `soil note: ${s.soil.suitability}` : "",
+        ]
+          .filter(Boolean)
+          .join("; ")
+      )
+      .join("\n");
+    const climate = picture.climate.islands_at_risk
+      .map((c) => `${c.island}: ${c.risk} — ${c.summary}`)
+      .join("\n");
+    return `${totals}
+
+GROWING CONDITIONS BY MEMBER STATE
+${states || "No state has soil or indicator coverage yet."}
+
+CLIMATE EXPOSURE (next 3 days)
+${climate || "No islands at elevated risk."}
+
+WHAT THE REGION IMPORTS (so capability can be judged against demand)
+${picture.substitution_opportunities.map((o) => `${o.commodity}: ${o.importer} buys ${usd(o.external_usd)} externally`).join("\n") || "No trade data."}
+
+${gaps}`;
+  }
+
+  if (domain === "planting") {
+    const calendars = picture.states
+      .filter((s) => s.rain_fed_months.length > 0)
+      .map((s) => `${s.name}: rain-fed in ${s.rain_fed_months.join(", ")}`)
+      .join("\n");
+    const alignment = picture.planting_alignment
+      .map(
+        (a) =>
+          `${a.supplier} can plant ${a.commodity} rain-fed in ${a.complementary_months.join(", ")} when ${a.importer} cannot; ` +
+          `${a.importer} buys ${usd(a.external_usd)} of it externally.`
+      )
+      .join("\n");
+    return `${totals}
+
+RAIN-FED PLANTING WINDOWS
+${calendars || "No planting calendars available."}
+
+COMPLEMENTARY PAIRS ALREADY IDENTIFIED
+${alignment || "No complementary pairs found."}
+
+${gaps}`;
+  }
+
+  if (domain === "logistics") {
+    const lanes = (inputs.lanes ?? [])
+      .slice(0, 25)
+      .map(
+        (l) =>
+          `${l.supplier} to ${l.importer} (${l.commodity}): ${l.distance_km ? `${Math.round(l.distance_km)} km` : "distance unknown"}, ` +
+          `~${l.transit_hours}h by ${l.mode} (${l.estimate_source}); climate risk ${l.supplier_climate_risk ?? "?"} at origin, ` +
+          `${l.importer_climate_risk ?? "?"} at destination; status ${l.status}; could displace ${usd(l.external_usd)}.`
+      )
+      .join("\n");
+    const ports = (inputs.ports ?? [])
+      .map((p) => `${p.name}: ${p.lanes} lanes, climate risk ${p.climate_risk ?? "?"}, ${usd(p.food_imports_usd)} of food imports observed`)
+      .join("\n");
+    const storms = picture.climate.active_storms
+      .map((s) => `${s.name} (${s.classification}), ${s.intensity_kt ?? "?"}kt`)
+      .join("\n");
+    return `${totals}
+
+LANES DERIVED FROM SOURCING GAPS
+${lanes || "No lanes derived."}
+
+PORT EXPOSURE
+${ports || "No ports on any lane."}
+
+ACTIVE STORMS
+${storms || "None in the basin."}
+
+NOT OBSERVED: berth congestion, queue length, vessel capacity and sailing schedules are not published by any CARICOM port authority or free freight API. Transit figures are great-circle distance at a documented average sea speed plus fixed port handling.
+
+${gaps}`;
+  }
+
+  // impact
+  const addressable = picture.substitution_opportunities.reduce((sum, o) => sum + o.external_usd, 0);
+  const decisions = (inputs.decisions ?? [])
+    .slice(0, 40)
+    .map((d) => `${d.agent}: ${d.action} (confidence ${d.confidence ?? "unscored"})`)
+    .join("\n");
+  const outcomes = Object.entries(inputs.gateOutcomes ?? {})
+    .map(([k, v]) => `${k}: ${v}`)
+    .join(", ");
+  return `${totals}
+
+ADDRESSABLE BY SUBSTITUTION
+${usd(addressable)} across ${picture.substitution_opportunities.length} commodity-importer pairs where a member state already supplies that commodity into the region.
+If every one were met, intra-CARICOM sourcing would rise from ${picture.totals.intra_caricom_share_pct ?? "?"}% to ${
+    picture.totals.food_imports_usd > 0
+      ? Math.round(((picture.totals.intra_caricom_usd + addressable) / picture.totals.food_imports_usd) * 1000) / 10
+      : "?"
+  }%. That is arithmetic on this snapshot, a ceiling and not a forecast.
+
+PLANTING COORDINATION AVAILABLE
+${picture.planting_alignment.length} staggerable supplier-importer pairs.
+
+AGENT DECISIONS RECORDED
+${decisions || "No agent decisions recorded yet."}
+
+HUMAN DECISIONS AT THE APPROVAL GATE
+${outcomes || "None recorded yet."}
+
+${gaps}`;
+}
+
+// ── Coercion ──────────────────────────────────────────────────────────────
+
+const SEVERITIES: FindingSeverity[] = ["critical", "opportunity", "watch", "gap"];
+
+/**
+ * Resolve whatever the model named a state as to its full name.
+ *
+ * The prompt asks for full names, but models reach for the ISO3 code anyway —
+ * and a row of `GUY JAM TTO` badges is unreadable to anyone who does not
+ * already know the region. Codes are mapped back; anything unrecognised is
+ * passed through so a real name is never dropped for failing to match.
+ */
+function fullStateName(value: string): string {
+  const raw = value.trim();
+  if (!raw) return raw;
+  const byCode = byIso3(raw.toUpperCase());
+  if (byCode) return byCode.name;
+  return byName(raw)?.name ?? raw;
+}
+
+function coerce(parsed: unknown): { summary: string; findings: Finding[] } {
+  const root = (parsed ?? {}) as { summary?: unknown; findings?: unknown };
+  const raw = Array.isArray(root.findings) ? root.findings : [];
+
+  const findings = raw
+    .map((entry) => entry as Record<string, unknown>)
+    .filter((entry) => typeof entry.title === "string" && typeof entry.finding === "string")
+    .map((entry) => ({
+      title: String(entry.title),
+      finding: String(entry.finding),
+      recommendation: String(entry.recommendation ?? ""),
+      evidence: Array.isArray(entry.evidence) ? entry.evidence.map(String) : [],
+      severity: SEVERITIES.includes(entry.severity as FindingSeverity)
+        ? (entry.severity as FindingSeverity)
+        : "watch",
+      confidence: ["low", "medium", "high"].includes(entry.confidence as string)
+        ? (entry.confidence as Finding["confidence"])
+        : "medium",
+      states: Array.isArray(entry.states)
+        ? [...new Set(entry.states.map(String).map(fullStateName).filter(Boolean))]
+        : [],
+    }));
+
+  return { summary: typeof root.summary === "string" ? root.summary : "", findings };
+}
+
+// ── Deterministic fallback ────────────────────────────────────────────────
+
+function ruleFindings(domain: AnalysisDomain, inputs: AnalysisInputs): { summary: string; findings: Finding[] } {
+  const { picture } = inputs;
+  const findings: Finding[] = [];
+
+  if (domain === "market") {
+    for (const o of picture.substitution_opportunities.slice(0, 3)) {
+      findings.push({
+        title: `${o.importer} sources ${o.commodity.toLowerCase()} outside the region`,
+        finding: `${o.external_share_pct}% of ${o.importer}'s ${o.commodity.toLowerCase()} imports come from outside CARICOM, worth ${usd(o.external_usd)}.`,
+        recommendation: `Check whether ${o.regional_suppliers.slice(0, 2).join(" or ")} can cover part of this volume before the next planting cycle is committed.`,
+        evidence: [
+          `${usd(o.external_usd)} external, ${usd(o.intra_usd)} intra-regional (UN Comtrade)`,
+          `Top external partners: ${o.top_external_partners.join(", ")}`,
+        ],
+        severity: o.external_share_pct > 90 ? "critical" : "opportunity",
+        confidence: "medium",
+        states: [fullStateName(o.importer_iso3)],
+      });
+    }
+  }
+
+  if (domain === "soil") {
+    for (const s of picture.states.filter((x) => x.soil?.has_coverage).slice(0, 3)) {
+      findings.push({
+        title: `${s.name} growing conditions`,
+        finding: s.soil?.suitability ?? "Soil readings available.",
+        recommendation: "Weigh this against the commodities the region currently imports before committing land.",
+        evidence: [
+          `pH ${s.soil?.ph ?? "?"}, organic carbon ${s.soil?.organic_carbon_g_per_kg ?? "?"} g/kg, clay ${s.soil?.clay_pct ?? "?"}% (ISRIC SoilGrids)`,
+          `Arable land ${s.arable_land_pct ?? "?"}% (World Bank)`,
+        ],
+        severity: "watch",
+        confidence: "medium",
+        states: [fullStateName(s.iso3)],
+      });
+    }
+  }
+
+  if (domain === "planting") {
+    for (const a of picture.planting_alignment.slice(0, 3)) {
+      findings.push({
+        title: `${a.supplier} and ${a.importer} could stagger ${a.commodity.toLowerCase()}`,
+        finding: a.note,
+        recommendation: `Align the two ministries' ${a.commodity.toLowerCase()} calendars so the region covers more of the year instead of doubling up.`,
+        evidence: [
+          `Complementary months: ${a.complementary_months.join(", ")} (NASA POWER)`,
+          `${usd(a.external_usd)} bought externally on this commodity (UN Comtrade)`,
+        ],
+        severity: "opportunity",
+        confidence: "medium",
+        states: [a.supplier, a.importer],
+      });
+    }
+  }
+
+  if (domain === "logistics") {
+    for (const l of (inputs.lanes ?? []).slice(0, 3)) {
+      findings.push({
+        title: `${l.supplier} to ${l.importer}`,
+        finding: `A ${l.mode} lane of about ${l.transit_hours}h${l.distance_km ? ` over ${Math.round(l.distance_km)} km` : ""}, currently ${l.status.replace("_", " ")}.`,
+        recommendation:
+          l.status === "clear"
+            ? "Weather is clear at both ends — this lane can carry a coordination plan now."
+            : "Confirm the weather window at both ends before committing a shipment.",
+        evidence: [
+          `${Math.round(l.distance_km ?? 0)} km great-circle between main ports (geometry estimate, not a carrier quote)`,
+          `Climate risk ${l.supplier_climate_risk ?? "?"} at origin, ${l.importer_climate_risk ?? "?"} at destination (Open-Meteo)`,
+        ],
+        severity: l.status === "at_risk" ? "watch" : "opportunity",
+        confidence: "medium",
+        states: [l.supplier, l.importer],
+      });
+    }
+  }
+
+  if (domain === "impact") {
+    const addressable = picture.substitution_opportunities.reduce((s, o) => s + o.external_usd, 0);
+    findings.push({
+      title: "Substitution ceiling against the regional import bill",
+      finding: `${usd(addressable)} of the region's ${usd(picture.totals.food_imports_usd)} food import bill is bought outside CARICOM on commodities a member state already supplies into it.`,
+      recommendation:
+        "Treat this as the ceiling on what coordination alone could move, and prioritise the largest pairs first.",
+      evidence: [
+        `${usd(addressable)} across ${picture.substitution_opportunities.length} pairs (UN Comtrade)`,
+        `Currently ${picture.totals.intra_caricom_share_pct ?? "?"}% sourced regionally`,
+      ],
+      severity: "opportunity",
+      confidence: "high",
+      states: [],
+    });
+  }
+
+  for (const gap of picture.gaps.slice(0, 2)) {
+    findings.push({
+      title: "Source unavailable",
+      finding: gap,
+      recommendation: "Treat conclusions that depend on this source as provisional.",
+      evidence: [gap],
+      severity: "gap",
+      confidence: "high",
+      states: [],
+    });
+  }
+
+  return {
+    // Deliberately says only what these *are*. Why the agent has not answered
+    // differs by case — no key, still reading, or a failed call — and that
+    // belongs in `note`, which the caller sets; baking one reason in here made
+    // the page claim "no model was available" while a model was mid-read.
+    summary:
+      "Deterministic findings over the same figures, in place of an agent reading.",
+    findings,
+  };
+}
+
+// ── Cache ─────────────────────────────────────────────────────────────────
+
+const ANALYSIS_TTL_MS = 15 * 60 * 1000;
+
+const globalAnalysis = globalThis as typeof globalThis & {
+  __nexusGridAnalysis?: Partial<Record<AnalysisDomain, { result: AnalysisResult; expiresAt: number }>>;
+  __nexusGridAnalysisInflight?: Partial<Record<AnalysisDomain, Promise<AnalysisResult>>>;
+};
+
+function nowIso(): string {
+  return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+/** Whether the picture carries enough for a reading to mean anything. */
+function hasEnough(domain: AnalysisDomain, inputs: AnalysisInputs): boolean {
+  const { picture } = inputs;
+  if (domain === "soil") return picture.states.some((s) => s.soil?.has_coverage || s.arable_land_pct !== null);
+  if (domain === "planting") return picture.states.some((s) => s.rain_fed_months.length > 0);
+  if (domain === "logistics") return (inputs.lanes?.length ?? 0) > 0;
+  return picture.totals.states_covered > 0 && picture.totals.food_imports_usd > 0;
+}
+
+/** Run the model for one domain, falling back to rules on any failure. */
+export async function analyse(
+  domain: AnalysisDomain,
+  inputs: AnalysisInputs
+): Promise<AnalysisResult> {
+  const generated_at = nowIso();
+  const provider = resolveProvider();
+
+  if (provider === null) {
+    const { summary, findings } = ruleFindings(domain, inputs);
+    return {
+      domain,
+      source: "rules",
+      summary,
+      findings,
+      note: "No LLM API key configured — set MINIMAX_API_KEY or SHO_API_KEY to have an agent read this page.",
+      generated_at,
+    };
+  }
+
+  try {
+    const parsed = await callModelJson(
+      provider,
+      systemPrompt(domain),
+      buildUserPrompt(domain, inputs)
+    );
+    const { summary, findings } = coerce(parsed);
+    if (findings.length === 0) throw new Error("model returned no usable findings");
+    return { domain, source: provider.name, summary, findings, generated_at };
+  } catch (error) {
+    console.error(`Analysis failed for ${domain}`, error);
+    const { summary, findings } = ruleFindings(domain, inputs);
+    return {
+      domain,
+      source: "rules",
+      summary,
+      findings,
+      note: `Analysis unavailable (${error instanceof Error ? error.message : String(error)}) — showing rule-derived findings.`,
+      generated_at,
+    };
+  }
+}
+
+/**
+ * Analysis, cached per domain and revalidated behind the request.
+ *
+ * A model round-trip over a domain's slice is far too slow to sit in a polling
+ * loop and is billed per call, so readers get the last reading immediately
+ * while a stale one refreshes, and concurrent readers share one in-flight call.
+ */
+export async function analyseCached(
+  domain: AnalysisDomain,
+  inputs: AnalysisInputs,
+  force = false
+): Promise<AnalysisResult> {
+  globalAnalysis.__nexusGridAnalysis ??= {};
+  globalAnalysis.__nexusGridAnalysisInflight ??= {};
+
+  const cached = globalAnalysis.__nexusGridAnalysis[domain];
+
+  const start = (): Promise<AnalysisResult> => {
+    const existing = globalAnalysis.__nexusGridAnalysisInflight![domain];
+    if (existing) return existing;
+
+    const run = analyse(domain, inputs)
+      .then((result) => {
+        globalAnalysis.__nexusGridAnalysis![domain] = {
+          result,
+          expiresAt: Date.now() + ANALYSIS_TTL_MS,
+        };
+        return result;
+      })
+      .finally(() => {
+        globalAnalysis.__nexusGridAnalysisInflight![domain] = undefined;
+      });
+
+    globalAnalysis.__nexusGridAnalysisInflight![domain] = run;
+    return run;
+  };
+
+  if (force) return start();
+
+  // Reading a domain whose sources have not arrived produces a confident
+  // account of nothing — and would then be cached for fifteen minutes, long
+  // after the data landed.
+  if (!hasEnough(domain, inputs)) {
+    const { summary, findings } = ruleFindings(domain, inputs);
+    return {
+      domain,
+      source: "rules",
+      summary,
+      findings,
+      note: "Waiting for upstream sources — showing rule-derived findings until they arrive.",
+      generated_at: nowIso(),
+    };
+  }
+
+  if (!cached) {
+    // First read: start the call but do not block on it. A round-trip takes
+    // ten seconds or more; the console's next poll picks the reading up.
+    void start().catch(() => {
+      /* falls back to rules until a call succeeds */
+    });
+    const { summary, findings } = ruleFindings(domain, inputs);
+    return {
+      domain,
+      source: "rules",
+      summary,
+      findings,
+      note: "The agent is reading this page — showing rule-derived findings until it returns.",
+      generated_at: nowIso(),
+    };
+  }
+
+  if (cached.expiresAt <= Date.now()) {
+    void start().catch(() => {
+      /* the previous reading stays served until a refresh succeeds */
+    });
+  }
+  return cached.result;
+}

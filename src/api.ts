@@ -1,5 +1,7 @@
 import type {
   AgentActivity,
+  AnalysisDomain,
+  AnalysisResponse,
   AuditLog,
   GateDecision,
   Health,
@@ -135,6 +137,10 @@ export const api = {
   signals: (refresh = false) =>
     get<SignalsResponse>(`/signals${refresh ? "?refresh=true" : ""}`),
   lanes: () => get<LanesResponse>("/lanes"),
+
+  /** One agent's reading of one domain — what every intelligence page renders. */
+  analysis: (domain: AnalysisDomain, refresh = false) =>
+    get<AnalysisResponse>(`/analysis/${domain}${refresh ? "?refresh=true" : ""}`),
 
   // Orchestration & observability
   workflowStatus: () => get<{ workflow: string; status: string }>("/workflow/status"),

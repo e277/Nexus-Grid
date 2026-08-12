@@ -27,6 +27,38 @@ export interface Health {
 /** What a human may answer at the approval gate. */
 export type GateDecision = "approved" | "modified" | "rejected" | "escalated";
 
+// ── Agent analysis ────────────────────────────────────────────────────────
+
+export type AnalysisDomain = "market" | "soil" | "planting" | "logistics" | "impact";
+
+export type FindingSeverity = "critical" | "opportunity" | "watch" | "gap";
+
+/** One conclusion an agent reached, with the figures it rests on. */
+export interface Finding {
+  title: string;
+  finding: string;
+  recommendation: string;
+  evidence: string[];
+  severity: FindingSeverity;
+  confidence: "low" | "medium" | "high";
+  states: string[];
+}
+
+export interface AnalysisResult {
+  domain: AnalysisDomain;
+  /** Model that produced this, or `rules` for the deterministic fallback. */
+  source: string;
+  summary: string;
+  findings: Finding[];
+  note?: string;
+  generated_at: string;
+}
+
+export interface AnalysisResponse {
+  analysis: AnalysisResult;
+  sources: SourceProvenance[];
+}
+
 export interface WorkflowResult {
   status: string;
   result: {
