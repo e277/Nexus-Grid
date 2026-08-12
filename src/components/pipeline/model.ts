@@ -35,10 +35,6 @@ export function buildInitialNodes(): Record<string, NodeState> {
   );
 }
 
-function stripThink(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>\s*/i, "").trim();
-}
-
 function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
@@ -54,13 +50,15 @@ export function summarizeUpdate(id: string, data: Record<string, unknown>): stri
       const rec = data.recommendation;
       if (rec && typeof rec === "object") {
         const r = rec as Record<string, unknown>;
-        const text = typeof r.recommendation === "string" ? stripThink(r.recommendation) : "";
-        return truncate(text, 120) || `[${r.source ?? "?"}] no text returned`;
+        // The model answers against a schema now, so the one-line action is a
+        // field rather than the first sentence of a paragraph.
+        const action = typeof r.action === "string" ? r.action : "";
+        return truncate(action, 120) || `[${r.source ?? "?"}] no action returned`;
       }
       return typeof rec === "string" ? rec : "—";
     }
     case "plan": {
-      const plan = data.plan as Record<string, unknown> | undefined;
+      const plan = data.plan_data as Record<string, unknown> | undefined;
       return plan
         ? `${String(plan.action).replace(/_/g, " ")} · priority ${plan.priority}`
         : "—";
@@ -71,7 +69,7 @@ export function summarizeUpdate(id: string, data: Record<string, unknown>): stri
       return ex ? `${String(ex.task).replace(/_/g, " ")} → ${ex.status}` : "—";
     }
     case "monitor": {
-      const m = data.monitor as Record<string, unknown> | undefined;
+      const m = data.monitor_result as Record<string, unknown> | undefined;
       if (!m) return "—";
       return `Disruption: ${m.disruption_detected ? "yes" : "no"}${m.will_replan ? " · re-planning" : ""}`;
     }

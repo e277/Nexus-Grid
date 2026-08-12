@@ -20,6 +20,8 @@ export interface HeldRecommendation {
   confidence: number | null;
   /** The model's own words, kept separate from the derived plan. */
   reasoning: string | null;
+  /** Risks the model named, which are the point of reading before approving. */
+  risks: string[];
   modelSource: string | null;
   valueAtStakeUsd: number | null;
 }
@@ -113,6 +115,25 @@ export function ApprovalPanel({
           <p className="border-l-2 border-ng-accent pl-3 text-ng-base leading-relaxed text-ng-primary">
             {recommendation.strategy}
           </p>
+        ) : null}
+
+        {/* Risks sit above the buttons, unfolded. A named risk is the whole
+            reason a human is standing here, so it must not be behind a
+            disclosure the approver can skip. */}
+        {recommendation.risks.length > 0 ? (
+          <div className="rounded-md border border-ng-warning-bd bg-ng-warning-bg px-3 py-2">
+            <p className="text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-warning-tx">
+              Risks the model flagged
+            </p>
+            <ul className="mt-1 space-y-1">
+              {recommendation.risks.map((risk) => (
+                <li key={risk} className="flex gap-2 text-ng-sm leading-relaxed text-ng-warning-tx">
+                  <ShieldAlert size={12} className="mt-1 shrink-0" aria-hidden />
+                  {risk}
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : null}
 
         {recommendation.reasoning ? (

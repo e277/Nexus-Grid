@@ -1,84 +1,119 @@
-import { useState } from "react";
+"use client";
+
+import { AlertTriangle, Sparkles } from "lucide-react";
+
+import { Badge } from "./ui/badge";
 
 const SOURCE_LABEL: Record<string, string> = {
   minimax: "MiniMax",
-  stub: "Stub (no key configured)",
+  shogo: "Shogo",
+  stub: "No key configured",
   error: "Error",
-  rule: "Rule-based (no LLM call)",
+  rule: "Rule-based (no model call)",
 };
 
-function renderBold(text: string) {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-    part.startsWith("**") && part.endsWith("**") ? (
-      <strong key={i} className="font-semibold text-ng-primary">
-        {part.slice(2, -2)}
-      </strong>
-    ) : (
-      <span key={i}>{part}</span>
-    )
-  );
+/**
+ * A model recommendation, rendered from named fields.
+ *
+ * This used to take one prose blob and pull it apart with regexes — split the
+ * `<think>` block off the answer, guess where the reasoning ended, truncate
+ * the rest to fit. The model now answers against a JSON schema, so each field
+ * has somewhere to go and nothing has to be inferred from punctuation.
+ *
+ * `structured: false` means the provider ignored the schema and returned
+ * prose anyway. That is shown as a caveat rather than hidden: the content is
+ * still worth reading, but the fields below it were not authored as fields.
+ */
+export interface ModelRecommendation {
+  source?: string;
+  action?: string;
+  rationale?: string;
+  confidence?: number | null;
+  risks?: string[];
+  structured?: boolean;
+  notes?: string;
+  error?: string;
 }
 
-function splitThink(text: string): { think: string | null; answer: string } {
-  const match = text.match(/<think>([\s\S]*?)<\/think>\s*([\s\S]*)/i);
-  if (match) return { think: match[1].trim(), answer: match[2].trim() };
-  return { think: null, answer: text.trim() };
+function asRecommendation(value: unknown): ModelRecommendation | null {
+  if (!value || typeof value !== "object") return null;
+  const r = value as ModelRecommendation;
+  return r.action || r.rationale ? r : null;
 }
 
-/** Readable display for a `recommend` node's raw LLM output — separates
- * reasoning from the answer, renders light markdown, labels the source. */
+function confidenceBadge(confidence: number) {
+  const pct = Math.round(confidence * 100);
+  if (confidence >= 0.8) return { variant: "success" as const, label: `${pct}% confidence` };
+  if (confidence >= 0.5) return { variant: "warning" as const, label: `${pct}% confidence` };
+  return { variant: "danger" as const, label: `${pct}% confidence` };
+}
+
 export function RecommendationCard({ recommendation }: { recommendation: unknown }) {
-  const [showReasoning, setShowReasoning] = useState(false);
+  const rec = asRecommendation(recommendation);
+  if (!rec) return null;
 
-  let source = "rule";
-  let text = "";
-
-  if (recommendation && typeof recommendation === "object") {
-    const r = recommendation as Record<string, unknown>;
-    source = typeof r.source === "string" ? r.source : "rule";
-    text = typeof r.recommendation === "string" ? r.recommendation : "";
-  } else if (typeof recommendation === "string") {
-    text = recommendation;
-  }
-
-  if (!text) return null;
-
-  const { think, answer } = splitThink(text);
+  const source = rec.source ?? "rule";
+  const band = typeof rec.confidence === "number" ? confidenceBadge(rec.confidence) : null;
 
   return (
-    <div className="rounded-[10px] border border-ng-border bg-ng-surface p-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ng-accent text-white">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
-              <path d="M6 1L7.2 4.3L10.5 5.5L7.2 6.7L6 10L4.8 6.7L1.5 5.5L4.8 4.3L6 1Z" fill="currentColor" />
-            </svg>
-          </span>
-          <span className="text-sm font-semibold text-ng-primary">AI Recommendation</span>
-        </div>
-        <span className="rounded-full border border-ng-border bg-ng-well px-2 py-0.5 text-ng-2xs font-semibold text-ng-secondary">
-          {SOURCE_LABEL[source] ?? source}
+    <div className="rounded-[10px] border border-ng-ai-bd bg-ng-surface">
+      <div className="flex flex-wrap items-center gap-2 border-b border-ng-border px-4 py-2.5">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ng-ai text-white">
+          <Sparkles size={13} aria-hidden />
         </span>
+        <span className="text-ng-base font-semibold text-ng-primary">Model recommendation</span>
+        <Badge variant="ai" size="sm">
+          {SOURCE_LABEL[source] ?? source}
+        </Badge>
+        {band ? (
+          <Badge variant={band.variant} size="sm">
+            {band.label}
+          </Badge>
+        ) : null}
+        {rec.structured === false ? (
+          <Badge variant="muted" size="sm" title="The provider ignored the JSON schema.">
+            unstructured
+          </Badge>
+        ) : null}
       </div>
 
-      {think ? (
-        <div className="mt-3">
-          <button
-            type="button"
-            onClick={() => setShowReasoning((v) => !v)}
-            className="text-ng-xs font-medium text-ng-accent hover:underline"
-          >
-            {showReasoning ? "Hide reasoning" : "Show reasoning"}
-          </button>
-          {showReasoning ? (
-            <p className="mt-2 whitespace-pre-wrap rounded-md bg-ng-well px-3 py-2 text-ng-xs leading-relaxed text-ng-secondary">
-              {think}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="space-y-3 px-4 py-3.5">
+        {rec.action ? (
+          <p className="text-ng-base font-semibold leading-relaxed text-ng-primary">{rec.action}</p>
+        ) : null}
 
-      <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-ng-primary">{renderBold(answer)}</p>
+        {rec.rationale ? (
+          <p className="whitespace-pre-wrap border-l-2 border-ng-ai pl-3 text-ng-sm leading-relaxed text-ng-secondary">
+            {rec.rationale}
+          </p>
+        ) : null}
+
+        {rec.risks && rec.risks.length > 0 ? (
+          <div>
+            <p className="text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary">
+              Risks the model flagged
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {rec.risks.map((risk) => (
+                <li
+                  key={risk}
+                  className="flex gap-2 text-ng-sm leading-relaxed text-ng-warning-tx"
+                >
+                  <AlertTriangle size={12} className="mt-1 shrink-0" aria-hidden />
+                  {risk}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {rec.notes ? <p className="text-ng-xs text-ng-secondary">{rec.notes}</p> : null}
+        {rec.error ? (
+          <p className="rounded-md border border-ng-danger-bd bg-ng-danger-bg px-3 py-2 text-ng-xs text-ng-danger-tx">
+            {rec.error}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
