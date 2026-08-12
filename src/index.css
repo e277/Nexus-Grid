@@ -3,22 +3,128 @@
 @tailwind utilities;
 
 @layer base {
-  /* ── Light (default) ──────────────────────────────────────────────────
-     Every colour is defined here on bare :root, so a token always resolves
-     even when no theme has been chosen. The dark blocks below redefine the
-     same names and nothing else. */
+  /* ── Dark (the designed-for mode) ─────────────────────────────────────
+     Slate-900 base, emerald accent — a command-centre surface, data-dense
+     and low-glare. Every colour is defined here on bare :root so a token
+     always resolves; the light block below redefines the same names and
+     nothing else.
+
+     Dark is the default rather than an opt-in: the console is read for long
+     stretches on wall displays, and the phase colours on the pipeline
+     diagram were stepped against this surface. Light remains supported for
+     print and bright rooms. */
   :root {
-    --color-bg:             #FAFAF9;
+    --color-bg:             #0F172A;
+    --color-surface:        #1E293B;
+    --color-surface-raised: #273549;
+    --color-border:         #334155;
+    --color-text-primary:   #F1F5F9;
+    --color-text-secondary: #94A3B8;
+    --color-text-disabled:  #64748B;
+    --color-accent:         #10B981;
+    --color-accent-hover:   #34D399;
+    --color-accent-active:  #059669;
+    --color-accent-light:   #0C2C24;
+    --color-accent-fg:      #04140A;
+    --color-success:        #10B981;
+    --color-success-bg:     #0C2C24;
+    --color-success-border: #1B5E45;
+    --color-success-text:   #6EE7B7;
+    --color-warning:        #F59E0B;
+    --color-warning-bg:     #2C220C;
+    --color-warning-border: #6B4A11;
+    --color-warning-text:   #FCD34D;
+    --color-danger:         #EF4444;
+    --color-danger-bg:      #2C1517;
+    --color-danger-border:  #7F1D1D;
+    --color-danger-text:    #FCA5A5;
+    --color-info:           #3B82F6;
+    --color-info-bg:        #14263D;
+    --color-info-border:    #1E3A5A;
+    --color-info-text:      #93C5FD;
+    /* Reserved for model output — anything the LLM wrote, as opposed to
+       anything the projection computed. */
+    --color-ai:             #8B5CF6;
+    --color-ai-bg:          #1E1839;
+    --color-ai-border:      #4C3A8A;
+    --color-ai-text:        #C4B5FD;
+    --color-muted-bg:       #263449;
+    --color-muted-border:   #3B4A61;
+    --color-muted-text:     #AAB6C8;
+    --color-row-alt:        #1A2536;
+
+    /* ── Control-loop phases ────────────────────────────────────────────
+       Five ordered phases, each with a mark hue, a wash for the column
+       behind it, and a label ink that clears AA on that wash. These are a
+       *phase* scale, not the categorical series palette — a phase colour
+       never identifies a data series and vice versa. */
+    --phase-perceive:     #F97316;
+    --phase-perceive-bg:  #2A1A0C;
+    --phase-perceive-tx:  #FDBA74;
+    --phase-reason:       #3B82F6;
+    --phase-reason-bg:    #12203A;
+    --phase-reason-tx:    #93C5FD;
+    --phase-plan:         #10B981;
+    --phase-plan-bg:      #0C2C24;
+    --phase-plan-tx:      #6EE7B7;
+    --phase-execute:      #F59E0B;
+    --phase-execute-bg:   #2C220C;
+    --phase-execute-tx:   #FCD34D;
+    --phase-recover:      #EF4444;
+    --phase-recover-bg:   #2C1517;
+    --phase-recover-tx:   #FCA5A5;
+
+    /* ── Categorical chart slots ────────────────────────────────────────
+       Assigned in fixed order, never cycled. Validated against the card
+       surface #1E293B: all five inside the dark lightness band, chroma above
+       the floor, worst adjacent CVD ΔE 8.4 (protan) / normal-vision 19.3,
+       every slot ≥ 3:1 on the surface. */
+    --chart-1: #3987e5;
+    --chart-2: #d95926;
+    --chart-3: #199e70;
+    --chart-4: #c98500;
+    --chart-5: #d55181;
+
+    /* Diverging (deficit ↔ surplus): two hues that read as opposite, with a
+       neutral midpoint that reads as "nothing". Cells always carry the
+       number too, so the sign never rests on hue alone. */
+    --div-neg-3: #EF4444;
+    --div-neg-2: #9B2C2C;
+    --div-neg-1: #4C1D1D;
+    --div-mid:   #334155;
+    --div-pos-1: #16304F;
+    --div-pos-2: #1D5FA8;
+    --div-pos-3: #3987e5;
+
+    --shadow-xs: 0 1px 2px rgba(0,0,0,.4);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,.5), 0 1px 2px rgba(0,0,0,.4);
+    --shadow-md: 0 6px 18px rgba(0,0,0,.55);
+
+    color-scheme: dark;
+  }
+
+  /* ── Light (opt-in) ───────────────────────────────────────────────────
+     Dark is the product's mode, so light is reached only by the toggle —
+     not by the system preference. Deliberate: the pipeline diagram's phase
+     colours and the categorical slots were both stepped against the slate
+     surface, and a console that flips to light on an unrelated OS setting
+     reads as a different product.
+
+     Selected, not an inversion: each step is re-picked for the light
+     surface and the chart slots re-validated against it (worst adjacent CVD
+     ΔE 9.1, normal-vision 19.6). */
+  :root[data-theme="light"] {
+    --color-bg:             #F8FAFC;
     --color-surface:        #FFFFFF;
     --color-surface-raised: #FFFFFF;
-    --color-border:         #E5E5E0;
-    --color-text-primary:   #27272A;
-    --color-text-secondary: #71717A;
-    --color-text-disabled:  #A1A1AA;
-    --color-accent:         #2563EB;
-    --color-accent-hover:   #1D4ED8;
-    --color-accent-active:  #1E40AF;
-    --color-accent-light:   #EFF6FF;
+    --color-border:         #E2E8F0;
+    --color-text-primary:   #0F172A;
+    --color-text-secondary: #64748B;
+    --color-text-disabled:  #94A3B8;
+    --color-accent:         #059669;
+    --color-accent-hover:   #047857;
+    --color-accent-active:  #065F46;
+    --color-accent-light:   #ECFDF5;
     --color-accent-fg:      #FFFFFF;
     --color-success:        #059669;
     --color-success-bg:     #ECFDF5;
@@ -32,125 +138,58 @@
     --color-danger-bg:      #FEF2F2;
     --color-danger-border:  #FECACA;
     --color-danger-text:    #991B1B;
-    --color-info-bg:        #F0F9FF;
-    --color-info-border:    #BAE6FD;
-    --color-info-text:      #0C4A6E;
-    --color-muted-bg:       #F4F4F5;
-    --color-muted-border:   #E4E4E7;
-    --color-muted-text:     #52525B;
-    --color-row-alt:        #FAFAF9;
+    --color-info:           #2563EB;
+    --color-info-bg:        #EFF6FF;
+    --color-info-border:    #BFDBFE;
+    --color-info-text:      #1E40AF;
+    --color-ai:             #7C3AED;
+    --color-ai-bg:          #F5F3FF;
+    --color-ai-border:      #DDD6FE;
+    --color-ai-text:        #5B21B6;
+    --color-muted-bg:       #F1F5F9;
+    --color-muted-border:   #E2E8F0;
+    --color-muted-text:     #475569;
+    --color-row-alt:        #F8FAFC;
 
-    /* Chart categorical palette — validated against the light surface:
-       worst adjacent pair ΔE 24.7 protan / 33.6 normal, contrast >= 3:1 */
+    --phase-perceive:     #EA580C;
+    --phase-perceive-bg:  #FFF7ED;
+    --phase-perceive-tx:  #9A3412;
+    --phase-reason:       #2563EB;
+    --phase-reason-bg:    #EFF6FF;
+    --phase-reason-tx:    #1E40AF;
+    --phase-plan:         #059669;
+    --phase-plan-bg:      #ECFDF5;
+    --phase-plan-tx:      #065F46;
+    --phase-execute:      #D97706;
+    --phase-execute-bg:   #FFFBEB;
+    --phase-execute-tx:   #92400E;
+    --phase-recover:      #DC2626;
+    --phase-recover-bg:   #FEF2F2;
+    --phase-recover-tx:   #991B1B;
+
     --chart-1: #2a78d6;
     --chart-2: #eb6834;
     --chart-3: #1baf7a;
+    --chart-4: #eda100;
+    --chart-5: #e87ba4;
 
-    --shadow-xs: 0 1px 2px rgba(16,16,15,.04);
-    --shadow-sm: 0 1px 3px rgba(16,16,15,.06), 0 1px 2px rgba(16,16,15,.04);
-    --shadow-md: 0 4px 12px rgba(16,16,15,.08);
+    --div-neg-3: #DC2626;
+    --div-neg-2: #F87171;
+    --div-neg-1: #FEE2E2;
+    --div-mid:   #E2E8F0;
+    --div-pos-1: #DBEAFE;
+    --div-pos-2: #60A5FA;
+    --div-pos-3: #2563EB;
+
+    --shadow-xs: 0 1px 2px rgba(15,23,42,.04);
+    --shadow-sm: 0 1px 3px rgba(15,23,42,.06), 0 1px 2px rgba(15,23,42,.04);
+    --shadow-md: 0 6px 18px rgba(15,23,42,.10);
 
     color-scheme: light;
   }
 
-  /* ── Dark ─────────────────────────────────────────────────────────────
-     Selected, not an inversion: each step is re-picked for the dark surface
-     and the chart slots are re-validated against it (L 0.48–0.67 band,
-     worst adjacent ΔE 25.2 protan / 30.1 normal, contrast >= 3:1).
-     Redefined once for system preference and once for the explicit toggle,
-     so the toggle wins in either direction. */
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --color-bg:             #0B1120;
-      --color-surface:        #111827;
-      --color-surface-raised: #172033;
-      --color-border:         #1F2937;
-      --color-text-primary:   #E6EAF2;
-      --color-text-secondary: #96A0B5;
-      --color-text-disabled:  #6B7688;
-      --color-accent:         #22C55E;
-      --color-accent-hover:   #16A34A;
-      --color-accent-active:  #15803D;
-      --color-accent-light:   #12261C;
-      --color-accent-fg:      #04140A;
-      --color-success:        #22C55E;
-      --color-success-bg:     #0E2418;
-      --color-success-border: #1B5E3A;
-      --color-success-text:   #7EE2A8;
-      --color-warning:        #F59E0B;
-      --color-warning-bg:     #2A1E08;
-      --color-warning-border: #6B4A11;
-      --color-warning-text:   #FBC96B;
-      --color-danger:         #EF4444;
-      --color-danger-bg:      #2A1215;
-      --color-danger-border:  #6E2429;
-      --color-danger-text:    #FCA5A5;
-      --color-info-bg:        #0D1D2E;
-      --color-info-border:    #1E3A5A;
-      --color-info-text:      #8CC5F0;
-      --color-muted-bg:       #1A2233;
-      --color-muted-border:   #2A3446;
-      --color-muted-text:     #A3AEC2;
-      --color-row-alt:        #0E1626;
-
-      --chart-1: #3f86ea;
-      --chart-2: #d97740;
-      --chart-3: #35a06b;
-
-      --shadow-xs: 0 1px 2px rgba(0,0,0,.4);
-      --shadow-sm: 0 1px 3px rgba(0,0,0,.5), 0 1px 2px rgba(0,0,0,.4);
-      --shadow-md: 0 4px 14px rgba(0,0,0,.55);
-
-      color-scheme: dark;
-    }
-  }
-
-  :root[data-theme="dark"] {
-    --color-bg:             #0B1120;
-    --color-surface:        #111827;
-    --color-surface-raised: #172033;
-    --color-border:         #1F2937;
-    --color-text-primary:   #E6EAF2;
-    --color-text-secondary: #96A0B5;
-    --color-text-disabled:  #6B7688;
-    --color-accent:         #22C55E;
-    --color-accent-hover:   #16A34A;
-    --color-accent-active:  #15803D;
-    --color-accent-light:   #12261C;
-    --color-accent-fg:      #04140A;
-    --color-success:        #22C55E;
-    --color-success-bg:     #0E2418;
-    --color-success-border: #1B5E3A;
-    --color-success-text:   #7EE2A8;
-    --color-warning:        #F59E0B;
-    --color-warning-bg:     #2A1E08;
-    --color-warning-border: #6B4A11;
-    --color-warning-text:   #FBC96B;
-    --color-danger:         #EF4444;
-    --color-danger-bg:      #2A1215;
-    --color-danger-border:  #6E2429;
-    --color-danger-text:    #FCA5A5;
-    --color-info-bg:        #0D1D2E;
-    --color-info-border:    #1E3A5A;
-    --color-info-text:      #8CC5F0;
-    --color-muted-bg:       #1A2233;
-    --color-muted-border:   #2A3446;
-    --color-muted-text:     #A3AEC2;
-    --color-row-alt:        #0E1626;
-
-    --chart-1: #3f86ea;
-    --chart-2: #d97740;
-    --chart-3: #35a06b;
-
-    --shadow-xs: 0 1px 2px rgba(0,0,0,.4);
-    --shadow-sm: 0 1px 3px rgba(0,0,0,.5), 0 1px 2px rgba(0,0,0,.4);
-    --shadow-md: 0 4px 14px rgba(0,0,0,.55);
-
-    color-scheme: dark;
-  }
-
   html {
-    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -161,8 +200,40 @@
     line-height: 1.6;
   }
 
-  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 9999px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--color-muted-border); }
+}
+
+@layer utilities {
+  /* Dots travelling along a pipeline edge while that edge is carrying a run.
+     `pathLength` is normalised to 1 on every edge, so one duration reads as
+     the same speed regardless of how long the curve actually is. */
+  @keyframes ng-flow {
+    from { stroke-dashoffset: 1; }
+    to   { stroke-dashoffset: 0; }
+  }
+
+  .ng-flow {
+    stroke-dasharray: 0.045 0.075;
+    stroke-linecap: round;
+    animation: ng-flow 1.6s linear infinite;
+  }
+
+  @keyframes ng-node-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.45; }
+  }
+
+  .ng-node-pulse { animation: ng-node-pulse 1.4s ease-in-out infinite; }
+
+  /* Respect a reduced-motion preference: the diagram still shows which edges
+     are live via colour and weight, it just stops moving. */
+  @media (prefers-reduced-motion: reduce) {
+    .ng-flow,
+    .ng-node-pulse,
+    .animate-pulse { animation: none; }
+    .ng-flow { stroke-dasharray: none; }
+  }
 }

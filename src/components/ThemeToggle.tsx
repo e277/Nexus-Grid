@@ -8,25 +8,23 @@ type Theme = "light" | "dark";
 const STORAGE_KEY = "nexus_grid_theme";
 
 /**
- * Light/dark switch.
+ * Dark/light switch.
  *
- * The theme is applied before paint by an inline script in the layout, so this
- * only has to read back what is already on the element — starting from `null`
- * keeps the server and client markup identical until after mount.
+ * Dark is the product's mode and the stylesheet's bare `:root`, so an element
+ * with no `data-theme` is dark — the system preference is deliberately not
+ * consulted. The stored choice is applied before paint by an inline script in
+ * the layout, so this only reads back what is already on the element; starting
+ * from `null` keeps the server and client markup identical until after mount.
  */
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme | null>(null);
 
   useEffect(() => {
-    const applied = document.documentElement.dataset.theme as Theme | undefined;
-    setTheme(
-      applied ??
-        (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
-    );
+    setTheme((document.documentElement.dataset.theme as Theme | undefined) ?? "dark");
   }, []);
 
   function toggle() {
-    const next: Theme = theme === "dark" ? "light" : "dark";
+    const next: Theme = theme === "light" ? "dark" : "light";
     setTheme(next);
     document.documentElement.dataset.theme = next;
     try {
@@ -39,10 +37,10 @@ export function ThemeToggle() {
   return (
     <button
       onClick={toggle}
-      aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-      className="flex h-8 w-8 items-center justify-center rounded-md border border-ng-border bg-ng-surface text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent focus-visible:ring-offset-1"
+      aria-label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
+      className="flex h-8 w-8 items-center justify-center rounded-md border border-ng-border bg-ng-surface text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent"
     >
-      {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+      {theme === "light" ? <Moon size={15} /> : <Sun size={15} />}
     </button>
   );
 }

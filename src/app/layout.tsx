@@ -10,10 +10,11 @@ export const metadata: Metadata = {
 /**
  * Applies the stored theme before first paint.
  *
- * Without this the page renders in the system theme and then snaps to the
- * stored one — and because the value comes from localStorage, it cannot be
- * known during the server render. Setting the attribute inline is what keeps
- * that flash from happening.
+ * The stylesheet's bare `:root` is dark, so an unstamped document is already
+ * the mode the console is designed for and there is nothing to correct. This
+ * only matters for a reader who has chosen light: that value lives in
+ * localStorage, is unknowable during the server render, and without an inline
+ * stamp the page would paint dark and then snap.
  */
 const THEME_SCRIPT = `
 try {
