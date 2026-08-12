@@ -84,8 +84,9 @@ memory and the workflow checkpointer are process-local singletons on
 ### Stack
 
 Next.js 16 (App Router) · React 19 · TypeScript · Tailwind with shadcn-style
-primitives (Radix + CVA) · Recharts · Vitest. One process, no database, no
-broker, no Docker.
+primitives (Radix + CVA) · Recharts · LangGraph · Vitest. One process, no
+broker, no Docker; the only persistence is a single SQLite file holding paused
+workflow runs.
 
 ### The console
 
@@ -210,7 +211,7 @@ whatever the sources last returned.
 
 ---
 
-## 7. Interpretation
+## 7. Interpretation and the model step
 
 The only LLM call on the read path. It receives the derived picture — never raw
 payloads — and must return structured findings citing the figures they rest on.
@@ -223,6 +224,28 @@ Kinds: `import_substitution`, `production_alignment`, `climate_exposure`,
 Cached for 15 minutes and never run against a picture whose sources have not
 arrived — an early call produces a confident reading of nothing. Without a key
 it degrades to deterministic rule-derived signals labelled `source: "rules"`.
+
+### The recommendation step asks for a schema
+
+The workflow's `recommend` node used to request free text and then perform
+surgery on it: strip `<think>` blocks with a regex, split reasoning from answer
+on a pattern, truncate the remainder to fit a card. That is guesswork about a
+string, and it broke visibly — a model handed a prompt template whose slots
+were only sometimes filled reasonably talked about *the template*, and the
+approval card filled with its deliberation.
+
+It now sends `response_format: json_schema` for `{ action, rationale,
+confidence, risks }`, and the prompt states the observed figures as facts
+rather than as placeholders. The console renders named fields, the approval
+panel shows the model's own confidence instead of one inferred from which
+provider answered, and the risks it names sit unfolded above the decision
+buttons — a named risk is the reason a human is standing there.
+
+Not every OpenAI-compatible endpoint honours the parameter, and MiniMax was
+observed honouring it on some calls and not others. A response that is not
+valid JSON is therefore still accepted, carried as prose and labelled
+`structured: false`, which the card surfaces as an "unstructured" badge.
+Degraded and visible, rather than silently mis-parsed.
 
 ---
 
@@ -258,9 +281,37 @@ perceive → assess → recommend → plan → (approval gate) → execute → m
                                         hold (interrupt)      assess ◄── re-plan (max 1×)
 ```
 
-`workflows/graph.ts` is a small state-graph runtime: shared state merged from
-partial node updates, conditional edges, a checkpointer keyed by thread id, and
-`interrupt()` for the human gate.
+The graph runs on **LangGraph** (`@langchain/langgraph`). It ran on a
+hand-rolled runtime of about 220 lines — nodes, conditional edges, state merge,
+a checkpointer, `interrupt()` — which did the job for as long as the
+checkpointer only had to live as long as the process. It did not survive the
+requirement that it outlive one. Rather than grow a second implementation of
+durable execution, the graph moved to the library whose checkpointer
+abstraction is exactly that. Node bodies are unchanged pure functions; the
+wiring and the state declaration moved.
+
+Two constraints came with it, both visible in the code:
+
+- **A node may not share a name with a state channel.** The nodes are the
+  domain vocabulary — `plan`, `monitor` — and they appear in the diagram, the
+  docs and the brief, so the channels were renamed instead: `plan_data` and
+  `monitor_result`.
+- **`Annotation.Root` declares the state**, and every channel here is
+  last-write-wins, which is the same contract the nodes were already written
+  against.
+
+### Persistence
+
+`workflows/checkpointer.ts` selects the store. With `CHECKPOINT_DB_PATH` set
+(the default) it is SQLite — one file, no server, no container, so the app
+keeps its "no database required" property. Empty falls back to memory, and a
+missing native build degrades to memory with a warning rather than failing to
+boot.
+
+This is the difference between a gate a human can take an hour over and one
+that dies with the process. Verified end to end: a run paused at the gate, the
+server killed, restarted as a fresh process, and the same thread resumed with
+its decision and finished.
 
 **Execution is not a straight line.** The gate branches, and `monitor` can send
 a run back to `assess`. A real trace with elevated climate risk:
@@ -293,6 +344,48 @@ Each decision is audited under its own action name (`workflow.gate_modified`,
 outcomes down without re-reading run state. The route wrapper's `audit` option
 exists for exactly this: four outcomes at one gate are four different events,
 and `POST …/resume` cannot tell them apart from the path alone.
+
+### Streaming
+
+`POST /api/workflow/stream` runs or resumes a thread and emits each node as it
+completes, over server-sent events.
+
+The console used to animate a run it already had in full: the trigger endpoint
+returned every update at once and the client replayed them on 550ms timers.
+That looked live and was not — the pace was a constant, so a thirty-second
+model call and an instant rule branch drew identically, and nothing on screen
+was true until the whole run had finished. It now streams
+LangGraph's `updates` mode, which emits exactly `{ [node]: partialUpdate }` —
+the shape the console already read, so live progress and the collected result
+describe a run the same way.
+
+The diagram marks a node `running` only where the graph can be in exactly one
+place: at the entry node, and after any node whose single outgoing edge is
+unambiguous. `plan` and `monitor` both branch, so nothing is claimed there
+until the next event says which way the run went. Guessing would be the
+animation this replaced.
+
+### Delivering a plan
+
+The `execute` node hands an approved plan to an **OpenClaw** gateway — a
+separate long-running process that owns the channels a ministry desk actually
+reads, exposed as one HTTP tool surface (`POST /tools/invoke`). This app calls
+that surface; it does not embed the gateway.
+
+That is deliberate. The `openclaw` npm package *is* the gateway: 56 direct
+dependencies, ~365 packages installed, a CLI, an onboarding wizard and a plugin
+SDK with some three hundred export paths, meant to be run with `openclaw
+onboard` and left running. Embedding it in a Next.js route handler would
+multiply this app's ten runtime dependencies thirtyfold to obtain one thing —
+"send this text to that channel" — that the gateway already exposes over HTTP.
+It also declares a Node engine range this project does not satisfy.
+
+Only an approved or amended plan is delivered; a rejected or escalated one is a
+decision *not* to act, and sending it anyway would be the opposite of what the
+gate is for. Delivery is keyed by thread id, so re-running a thread does not
+re-notify the desk, and a delivery failure is recorded as a follow-up in
+`recover` rather than failing the run. With no gateway configured the status is
+`unconfigured` and the console says "not delivered" — never "done".
 
 ---
 
@@ -339,10 +432,11 @@ npm run build
 
 ## 13. Not yet built
 
-- **Persistence** — the most consequential gap. State is in-memory and
-  process-local; it resets on restart. `next start` was verified to run a
-  single process, so the singletons are shared, but that is a deployment
-  assumption worth re-checking.
+- **Persistence, partly closed.** Paused workflow runs now survive a restart
+  through the SQLite checkpointer. The source caches, agent memory and the two
+  observability tables are still in-memory and process-local, and still reset.
+  `next start` was verified to run a single process, so the singletons are
+  shared, but that is a deployment assumption worth re-checking.
 - **Additional publishers** — the five brief-named sources in §4.
 - **Freight capacity** — no free inter-island capacity API exists; the platform
   says so rather than inventing a vessel.

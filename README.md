@@ -86,13 +86,25 @@ The supply agent additionally runs on a timer.
 **Workflow** (`src/lib/server/workflows`) — the control loop
 `perceive → assess → recommend → plan → (approval gate) → execute → monitor → recover`,
 with a re-plan edge from `monitor` back to `assess` when a disruption appears
-(capped at one). `graph.ts` is a small state-graph runtime replacing LangGraph:
-shared state merged from partial node updates, conditional edges, a checkpointer
-keyed by thread id, and `interrupt()` for the human approval gate. A held run
-returns `status: "awaiting_approval"` and resumes on the same thread via
-`POST /api/workflow/{threadId}/resume` with one of four decisions — `approved`,
-`modified`, `rejected`, `escalated` — the last two carrying an operator note
-that is recorded against the gate.
+(capped at one). It runs on **LangGraph**, with `interrupt()` for the human
+approval gate. A held run returns `status: "awaiting_approval"` and resumes on
+the same thread with one of four decisions — `approved`, `modified`,
+`rejected`, `escalated` — the last three carrying an operator note that is
+recorded against the gate.
+
+**Paused runs survive a restart.** The checkpointer writes to a SQLite file
+(`CHECKPOINT_DB_PATH`), because a human takes human time over an approval and
+an in-memory gate dies on the next deploy. Set the path empty for in-memory.
+
+**Runs stream.** `POST /api/workflow/stream` emits each node as it completes
+over server-sent events, so the console shows a run's real pace rather than
+replaying a finished one on a timer.
+
+**Plans get delivered.** The `execute` node hands an approved plan to a running
+[OpenClaw](https://openclaw.ai) gateway over its HTTP tool surface — the
+gateway owns the channels a ministry desk reads. Unconfigured, the dispatch is
+labelled simulated rather than pretending to have sent; rejected and escalated
+plans are never delivered at all.
 
 ## API
 
@@ -105,6 +117,7 @@ trail. Every route is rate-limited and records Prometheus metrics.
 - `GET /api/signals` — the interpreted coordination signals
 - `GET /api/lanes` — supplier→importer lanes, port exposure, and what is *not* observed
 - `GET /api/workflow/status`, `POST /api/workflow/trigger`, `POST /api/workflow/{threadId}/resume`
+- `POST /api/workflow/stream` — run or resume, streaming each node as it completes (SSE)
 - `GET /api/agent-activities`, `GET /api/audit-logs`
 - `GET /api/health`, `GET /api/health/db`, `GET /api/metrics`
 
@@ -116,6 +129,9 @@ agent activities and the audit trail, and both are in-memory and process-local
 — they reset when the server restarts. Swapping
 `src/lib/server/observability/store.ts` for a real database is the one change
 needed to persist them.
+
+The one exception is the workflow checkpointer, which writes paused runs to a
+SQLite file so an approval gate outlives the process that created it.
 
 Everything else on screen is derived from the current source snapshots and
 recomputed on the next fetch.
