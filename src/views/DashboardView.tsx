@@ -3,7 +3,7 @@
 import { CircleCheck, Lock, Play, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { api } from "../api";
+import { api, streamWorkflow } from "../api";
 import { FormError } from "../components/Fields";
 import { ApprovalPanel, type HeldRecommendation } from "../components/pipeline/ApprovalPanel";
 import { PipelineDiagram } from "../components/pipeline/PipelineDiagram";
@@ -26,13 +26,21 @@ import type {
   SourceProvenance,
   SourceSlot,
   SubstitutionOpportunity,
-  WorkflowResult,
 } from "../types";
 
-// How long a node pulses "running" before flipping to "done".
-const RUN_MS = 550;
-// Pause after a node completes, before the next one starts — the visible gap.
-const GAP_MS = 700;
+/**
+ * Nodes with exactly one outgoing edge, so the graph's position is known the
+ * moment the predecessor lands. `plan` and `monitor` are absent on purpose:
+ * both branch, and until the next event arrives there is no honest answer to
+ * where the run is.
+ */
+const SOLE_SUCCESSOR: Record<string, string | undefined> = {
+  perceive: "assess",
+  assess: "recommend",
+  recommend: "plan",
+  hold: "recover",
+  execute: "monitor",
+};
 
 const PHASE_OPTIONS: PillOption<PhaseId | "all">[] = [
   { value: "all", label: "All" },
@@ -65,22 +73,25 @@ function usd(value: number): string {
   return `$${value.toLocaleString()}`;
 }
 
-function stripThink(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>\s*/i, "").trim();
-}
-
-function extractThink(text: string): string | null {
-  return text.match(/<think>([\s\S]*?)<\/think>/i)?.[1].trim() ?? null;
-}
-
 interface FinalState {
   decision?: string;
   gap_severity?: string;
   gate_decision?: GateDecision;
   gate_note?: string;
-  execution?: { status?: string; task?: string; details?: Record<string, unknown> };
+  execution?: {
+    status?: string;
+    task?: string;
+    details?: Record<string, unknown>;
+    dispatch_mode?: string;
+    dispatch_status?: string;
+    dispatch_channel?: string;
+    dispatch_target?: string;
+    dispatch_detail?: string;
+  };
   recovery?: Record<string, unknown>;
-  monitor?: { disruption_detected?: boolean; will_replan?: boolean };
+  // `monitor` is a node name, so the channel it writes is `monitor_result` —
+  // LangGraph does not allow a channel to share a name with a node.
+  monitor_result?: { disruption_detected?: boolean; will_replan?: boolean };
 }
 
 export function DashboardView() {
@@ -125,80 +136,86 @@ export function DashboardView() {
   const [recommendation, setRecommendation] = useState<unknown>(null);
   const [decided, setDecided] = useState<GateDecision | null>(null);
   const [finalState, setFinalState] = useState<FinalState | null>(null);
-  const timerRef = useRef<number | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
-  useEffect(
-    () => () => {
-      if (timerRef.current) window.clearTimeout(timerRef.current);
-    },
-    []
-  );
+  // A run in flight is a live HTTP stream; leaving the page must end it.
+  useEffect(() => () => abortRef.current?.abort(), []);
 
-  /** Reveal each `updates` node in sequence (running → done), then settle. */
-  function revealAndSettle(result: WorkflowResult, onSettled: () => void) {
-    const steps = result.result.updates
-      .map((entry) => {
-        const [id] = Object.keys(entry);
-        return { id, data: entry[id] };
-      })
-      .filter((s) => PIPELINE_NODES.some((n) => n.id === s.id));
-
-    function revealStep(index: number) {
-      if (index >= steps.length) {
-        onSettled();
-        return;
+  /**
+   * Consume a streamed run, updating the diagram as each node lands.
+   *
+   * A node is marked `running` only when the graph can be at exactly one
+   * place: at the start (the entry node), and after a node whose single
+   * outgoing edge is unambiguous. Where the graph branches — `plan`, and
+   * `monitor` — nothing is claimed until the next event says which way it
+   * went. The alternative is guessing, and a diagram that guesses is the
+   * animation this replaced.
+   */
+  async function consume(body: Record<string, unknown>, signal: AbortSignal) {
+    for await (const { event, data } of streamWorkflow(body, signal)) {
+      if (event === "started") {
+        setThreadId(String(data.thread_id));
+        setNodes((prev) => ({ ...prev, perceive: { ...prev.perceive, status: "running" } }));
+        continue;
       }
-      const step = steps[index];
-      setTrace((prev) => [...prev, step.id]);
-      setNodes((prev) => ({ ...prev, [step.id]: { ...prev[step.id], status: "running" } }));
-      timerRef.current = window.setTimeout(() => {
-        setNodes((prev) => ({
-          ...prev,
-          [step.id]: {
-            ...prev[step.id],
-            status: "done",
-            summary: summarizeUpdate(step.id, step.data),
-          },
-        }));
-        if (step.id === "recommend") setRecommendation(step.data.recommendation);
-        timerRef.current = window.setTimeout(() => revealStep(index + 1), GAP_MS);
-      }, RUN_MS);
-    }
 
-    revealStep(0);
-  }
+      if (event === "node") {
+        const id = String(data.node);
+        const update = (data.update ?? {}) as Record<string, unknown>;
+        if (!PIPELINE_NODES.some((n) => n.id === id)) continue;
 
-  function finishRun(result: WorkflowResult) {
-    setRunning(false);
-    setFinalState((result.result.values.at(-1) as FinalState | undefined) ?? null);
-    setNodes((prev) => {
-      const next = { ...prev };
-      for (const key of Object.keys(next)) {
-        if (next[key].status === "pending") next[key] = { ...next[key], status: "skipped" };
+        setTrace((prev) => [...prev, id]);
+        setNodes((prev) => {
+          const next = {
+            ...prev,
+            [id]: { ...prev[id], status: "done" as const, summary: summarizeUpdate(id, update) },
+          };
+          const successor = SOLE_SUCCESSOR[id];
+          if (successor && next[successor]?.status !== "done") {
+            next[successor] = { ...next[successor], status: "running" };
+          }
+          return next;
+        });
+
+        if (id === "recommend") setRecommendation(update.recommendation);
+        setFinalState((data.value ?? null) as FinalState | null);
+        continue;
       }
-      return next;
-    });
-  }
 
-  function handleResult(result: WorkflowResult) {
-    setThreadId(result.result.thread_id);
-    revealAndSettle(result, () => {
-      if (result.result.status === "awaiting_approval") {
+      if (event === "finished") {
+        if (data.status === "awaiting_approval") {
+          setRunning(false);
+          setAwaitingApproval(true);
+          setInterruptPayload((data.interrupt ?? null) as Record<string, unknown> | null);
+          // The graph is genuinely parked inside `hold` — show that, rather
+          // than leaving the node looking untouched.
+          setNodes((prev) => ({ ...prev, hold: { ...prev.hold, status: "running" } }));
+        } else {
+          setRunning(false);
+          setNodes((prev) => {
+            const next = { ...prev };
+            for (const key of Object.keys(next)) {
+              if (next[key].status !== "done") next[key] = { ...next[key], status: "skipped" };
+            }
+            return next;
+          });
+        }
+        continue;
+      }
+
+      if (event === "failed") {
         setRunning(false);
-        setAwaitingApproval(true);
-        setInterruptPayload(result.result.interrupt ?? null);
-        // The graph is genuinely paused inside `hold` — show that, rather than
-        // leaving the node looking untouched.
-        setNodes((prev) => ({ ...prev, hold: { ...prev.hold, status: "running" } }));
-      } else {
-        finishRun(result);
+        setRunError(String(data.detail ?? "The run failed."));
       }
-    });
+    }
   }
 
   async function run() {
     if (!selected || running) return;
-    if (timerRef.current) window.clearTimeout(timerRef.current);
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setRunning(true);
     setRunError(null);
     setAwaitingApproval(false);
@@ -211,8 +228,8 @@ export function DashboardView() {
     setTrace([]);
 
     try {
-      handleResult(
-        await api.triggerWorkflow({
+      await consume(
+        {
           event: "substitution_gap",
           commodity: selected.commodity,
           importer: selected.importer,
@@ -222,9 +239,11 @@ export function DashboardView() {
           regional_suppliers: selected.regional_suppliers,
           climate_risk: climateByIso3[selected.importer_iso3] ?? "low",
           require_approval: requireApproval,
-        })
+        },
+        controller.signal
       );
     } catch (err) {
+      if (controller.signal.aborted) return;
       setRunning(false);
       setRunError(err instanceof Error ? err.message : "Workflow trigger failed");
     }
@@ -233,16 +252,21 @@ export function DashboardView() {
   /** The one point a run does not proceed on its own. */
   async function decide(decision: GateDecision, note: string | null) {
     if (!threadId) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setResuming(true);
     setRunError(null);
+    setAwaitingApproval(false);
+    setInterruptPayload(null);
+    setDecided(decision);
+    setRunning(true);
+
     try {
-      const resumed = await api.resumeWorkflow(threadId, decision, note);
-      setAwaitingApproval(false);
-      setInterruptPayload(null);
-      setDecided(decision);
-      setRunning(true);
-      handleResult(resumed);
+      await consume({ thread_id: threadId, decision, note }, controller.signal);
     } catch (err) {
+      if (controller.signal.aborted) return;
+      setRunning(false);
       setRunError(err instanceof Error ? err.message : "Resume failed");
     } finally {
       setResuming(false);
@@ -263,15 +287,14 @@ export function DashboardView() {
     | { task?: string; details?: Record<string, unknown> }
     | undefined;
 
-  const modelSource =
-    recommendation && typeof recommendation === "object"
-      ? ((recommendation as Record<string, unknown>).source as string | undefined) ?? null
-      : null;
-
-  const modelText =
-    recommendation && typeof recommendation === "object"
-      ? ((recommendation as Record<string, unknown>).recommendation as string | undefined) ?? null
-      : null;
+  const model = (recommendation ?? null) as {
+    source?: string;
+    action?: string;
+    rationale?: string;
+    confidence?: number | null;
+    risks?: string[];
+  } | null;
+  const modelSource = model?.source ?? null;
 
   const held: HeldRecommendation | null = heldExecution
     ? {
@@ -281,9 +304,11 @@ export function DashboardView() {
         target: String(heldExecution.details?.target ?? "—"),
         strategy: (heldExecution.details?.strategy as string | undefined) ?? null,
         // The gate holds a rule-derived plan, so the confidence that matters
-        // is the model's on the recommendation it wraps.
-        confidence: modelSource === "minimax" ? 0.82 : modelSource ? 0.5 : null,
-        reasoning: modelText ? extractThink(modelText) ?? stripThink(modelText) : null,
+        // is the model's own on the recommendation it wraps — reported by the
+        // model rather than inferred from which provider answered.
+        confidence: typeof model?.confidence === "number" ? model.confidence : null,
+        reasoning: model?.rationale?.trim() || null,
+        risks: model?.risks ?? [],
         modelSource,
         valueAtStakeUsd:
           typeof heldExecution.details?.volume_at_stake_usd === "number"
@@ -450,13 +475,21 @@ function ResultsSection({
   const severity = state.gap_severity ?? "—";
   const severityTone =
     severity === "critical" ? "danger" : severity === "material" ? "warning" : "muted";
-  const disrupted = state.monitor?.disruption_detected ?? false;
-  const replanned = state.monitor?.will_replan ?? false;
+  const disrupted = state.monitor_result?.disruption_detected ?? false;
+  const replanned = state.monitor_result?.will_replan ?? false;
+
+  const dispatch = state.execution?.dispatch_status ?? null;
+  const dispatchCopy: Record<string, { label: string; tone: "success" | "warning" | "danger" }> = {
+    delivered: { label: "Delivered to the desk", tone: "success" },
+    skipped: { label: "Not delivered", tone: "warning" },
+    failed: { label: "Delivery failed", tone: "danger" },
+  };
 
   const actions = [
     state.decision ? `Assessed as: ${state.decision.replace(/_/g, " ")}` : null,
     state.execution?.task ? `Planned action: ${String(state.execution.task).replace(/_/g, " ")}` : null,
     state.execution?.status ? `Execution status: ${state.execution.status}` : null,
+    state.execution?.dispatch_detail ? `Dispatch: ${state.execution.dispatch_detail}` : null,
     state.recovery?.recovery_action
       ? `Follow-up: ${String(state.recovery.recovery_action).replace(/_/g, " ")} → ${String(state.recovery.next_step ?? "—").replace(/_/g, " ")}`
       : null,
@@ -498,6 +531,23 @@ function ResultsSection({
                 Directed at
               </p>
               <p className="mt-1 text-ng-sm text-ng-primary">{affected}</p>
+            </div>
+          ) : null}
+          {/* Whether the plan actually reached anyone. Without a gateway
+              configured this reads "not delivered", never "done". */}
+          {dispatch ? (
+            <div>
+              <p className="text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary">
+                Dispatch
+              </p>
+              <Badge variant={dispatchCopy[dispatch]?.tone ?? "muted"} className="mt-1">
+                {dispatchCopy[dispatch]?.label ?? dispatch}
+              </Badge>
+              {state.execution?.dispatch_target ? (
+                <p className="mt-1 text-ng-2xs text-ng-secondary">
+                  via OpenClaw → {state.execution.dispatch_target}
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>

@@ -56,6 +56,74 @@ function buildPath(path: string, params?: Record<string, string | number | boole
   return query ? `${path}${path.includes("?") ? "&" : "?"}${query}` : path;
 }
 
+/** One server-sent event from a streamed run. */
+export interface StreamEvent {
+  event: "started" | "node" | "finished" | "failed";
+  data: Record<string, unknown>;
+}
+
+/**
+ * Read `/api/workflow/stream` as it arrives.
+ *
+ * `fetch` rather than `EventSource` because the run has to be POSTed — the
+ * signal, or the gate decision, is the request body, and EventSource is
+ * GET-only.
+ */
+export async function* streamWorkflow(
+  body: Record<string, unknown>,
+  signal?: AbortSignal
+): AsyncGenerator<StreamEvent> {
+  const response = await fetch(`${BASE}/workflow/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  if (!response.ok || !response.body) {
+    const payload = await response.json().catch(() => null);
+    throw new ApiError(
+      response.status,
+      typeof payload?.detail === "string" ? payload.detail : "Failed to start the run"
+    );
+  }
+
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += value;
+
+      // SSE frames are separated by a blank line; anything after the last one
+      // is a partial frame and stays in the buffer.
+      let split = buffer.indexOf("\n\n");
+      while (split !== -1) {
+        const frame = buffer.slice(0, split);
+        buffer = buffer.slice(split + 2);
+        split = buffer.indexOf("\n\n");
+
+        let name = "message";
+        const dataLines: string[] = [];
+        for (const line of frame.split("\n")) {
+          if (line.startsWith("event:")) name = line.slice(6).trim();
+          else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+        }
+        if (dataLines.length === 0) continue;
+        try {
+          yield { event: name as StreamEvent["event"], data: JSON.parse(dataLines.join("\n")) };
+        } catch {
+          // A frame we cannot parse is skipped rather than killing the run.
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 export const api = {
   health: () => get<Health>("/health"),
 
