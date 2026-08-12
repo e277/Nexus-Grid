@@ -87,6 +87,62 @@ Next.js 16 (App Router) · React 19 · TypeScript · Tailwind with shadcn-style
 primitives (Radix + CVA) · Recharts · Vitest. One process, no database, no
 broker, no Docker.
 
+### The console
+
+Six pages behind a collapsible rail (60px icons / 240px labelled), grouped by
+what each section is *for*. A breadcrumb above every page names the group, and
+below `lg` the rail becomes a slide-over with a three-tab bottom bar for the
+destinations worth a thumb.
+
+```
+OVERVIEW       Dashboard              the coordination loop, end to end
+
+INTELLIGENCE   Farm-to-Market         sourcing gaps and what the region buys outside itself
+               Soil & Crop Intel      growing conditions, climate exposure, capability
+               Planting Coordination  rain-fed windows and where they complement
+               Port & Logistics       supplier→importer lanes, transit, weather at both ends
+
+OUTCOMES       Impact Metrics         the ceiling on coordination, and every decision taken
+```
+
+**There is no "Data Sources" page**, deliberately. Provenance is not a subject
+in its own right — it is a property of a figure, and a list of six publishers
+on a page of its own tells a reader nothing they can act on. Each page instead
+carries a source panel naming only the publishers behind *its* numbers, what
+each one contributed there, its live status, record count and age; and when one
+is degraded, which figures on that page are consequently missing or stale.
+
+`src/source-map.ts` holds that mapping. It is a claim about the code that has to
+stay true: a page that starts reading a new slot changes its entry there too.
+Attribution keys off `slot` (the `SourceBundle` key), not `Provenance.source` —
+Open-Meteo and the NOAA hurricane feed share the `climate` SourceId, so it
+cannot tell six publishers apart.
+
+| Page | Reads |
+| --- | --- |
+| Dashboard | UN Comtrade (the gap a run is triggered against), Open-Meteo (the disruption signal), plus the configured model at `recommend` |
+| Farm-to-Market | UN Comtrade only — every figure is one commodity trade table. The signals panel is attributed separately, being interpreted across the whole picture |
+| Soil & Crop Intel | ISRIC SoilGrids, World Bank, NASA POWER, Open-Meteo, NOAA NHC |
+| Planting Coordination | NASA POWER (the calendar), UN Comtrade (which pairs are worth staggering) |
+| Port & Logistics | UN Comtrade (which lanes exist), Open-Meteo (risk at both ends), NOAA NHC |
+| Impact Metrics | UN Comtrade, NASA POWER — and its decision half comes from the platform's own two tables, not a publisher |
+
+**Dark is the product's mode**, not a preference: tokens are defined on bare
+`:root` (slate-900 base, emerald accent) and light is reached only by the
+toggle, never by `prefers-color-scheme` — the phase colours and the categorical
+chart slots were both stepped and validated against the slate surface, and a
+console that flips on an unrelated OS setting reads as a different product.
+
+Chart colour is computed, not chosen. The five categorical slots are assigned
+in fixed order and never cycled, and both modes were validated against their
+own card surface for the lightness band, chroma floor, adjacent-pair CVD
+separation (worst ΔE 8.4 dark / 9.1 light under protanopia), the normal-vision
+floor (19.3 / 19.6) and contrast. Control-loop phase colours are a separate
+scale and never identify a data series; gate outcomes wear status tokens,
+because approved/rejected *mean* good and bad. Every heat matrix prints its own
+value in each cell, so colour is always a second reading of a number that is
+already there.
+
 ---
 
 ## 4. Sources
@@ -223,6 +279,21 @@ state is checkpointed *before* the node, the response reports
 `awaiting_approval` with the interrupt payload, and `updates` stops after
 `plan`. Resuming re-enters `hold` with the decision and continues.
 
+**Four answers at the gate**, not two: `approved`, `modified`, `rejected`,
+`escalated`. An operator who would approve the plan *with an amendment*, or who
+is not the right person to decide it, has nowhere to put that in an
+approve/reject pair, and collapsing either into "approved" loses the one piece
+of information the gate exists to capture. `modified` and `escalated` carry a
+free-text note, which `holdForApproval` records against the gate and `recover`
+reads — a modified plan proceeds with the amendment attached, an escalated one
+routes to `await_higher_authority` rather than closing either way.
+
+Each decision is audited under its own action name (`workflow.gate_modified`,
+…) with the note as the detail, so the Impact Metrics page can break gate
+outcomes down without re-reading run state. The route wrapper's `audit` option
+exists for exactly this: four outcomes at one gate are four different events,
+and `POST …/resume` cannot tell them apart from the path alone.
+
 ---
 
 ## 10. Against the build brief
@@ -234,7 +305,7 @@ state is checkpointed *before* the node, the response reports
 | Soil Monitoring & Agricultural Intelligence | **Implemented** — SoilGrids properties, live topsoil moisture |
 | Regional Planting Coordination | **Implemented** — complementary rain-fed window pairing |
 | Supply Chain Visibility | **Partial** — provenance on every input; no shipment-level tracking |
-| Port & Logistics Coordination | **Partial** — lane estimates and climate exposure; no port or customs system |
+| Port & Logistics Coordination | **Partial** — `/api/lanes` derives every supplier→importer lane behind a sourcing gap, with real great-circle distance and live weather at both ends; no port or customs system |
 | Freight Matching & Route Optimization | **Weak** — geographic transit estimates only; no free capacity feed exists |
 | Food Distribution & Inventory Optimization | **Not built** |
 

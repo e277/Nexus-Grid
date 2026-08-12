@@ -11,9 +11,11 @@ npm install
 npm run dev     # http://localhost:5173
 ```
 
-No database, broker, or API key is required. The store seeds a demo dataset on
-first request; register an account on the login screen to get in (the role you
-pick decides which tabs you see).
+No database, broker, or API key is required, and there is no sign-in — identity
+belongs to the system integrating this one. The first request warms the source
+caches in the background; UN Comtrade takes around a minute to answer, and the
+console shows each publisher as `pending` until it does rather than showing a
+zero.
 
 ```bash
 npm run build && npm start   # production
@@ -29,23 +31,30 @@ step; without it that step returns a labelled stub.
 ```
 src/
   app/
-    api/            # Route handlers — the HTTP surface (auth, domain, workflow, observability)
-    layout.tsx      # Root layout
+    api/            # Route handlers — the HTTP surface (domain, workflow, observability)
+    layout.tsx      # Root layout, applies the stored theme before first paint
     page.tsx        # Client shell
-  components/       # UI: panels, tables, charts, workflow pipeline, forms
-  views/            # Overview, Farm, Market, Logistics, Government, Workflow
+  App.tsx           # Shell: rail, breadcrumb, page switch
+  navigation.ts     # The seven pages and their groups — one source for nav and breadcrumb
+  components/
+    shell/          # Sidebar, TopBar, MobileNav, NavSheet
+    pipeline/       # Node model, phase/canvas geometry, SVG diagram, approval panel
+    charts/         # chart-kit (palette + chrome) and one file per chart
+    ui/             # shadcn-style primitives (Radix + CVA)
+  views/            # One per page: Dashboard, Sources, FarmToMarket, SoilCrop,
+                    #   Planting, Logistics, Impact
   api.ts            # Typed client for /api/*
-  auth.ts           # Bearer token storage
   types.ts          # Shared response types
+  index.css         # Design tokens — dark on bare :root, light under [data-theme]
   lib/server/       # Everything that used to be the Python service
-    agents/         # supervisor + supply, demand, logistics, climate-risk, customs
+    sources/        # Six publishers, each with provenance and its own cache
+    projection.ts   # The derived regional read model
+    lanes.ts        # Supplier→importer lanes derived from the projection
+    interpretation/ # The only LLM call on the read path
+    agents/         # supervisor + supply, demand, logistics, agronomy, climate, planting
     workflows/      # graph runtime, supply-chain graph, orchestrator, LLM step
-    services/       # domain rules, events, explainable intelligence
-    integrations/   # weather (Open-Meteo), routing (geo), pricing (reference), stubs
-    repositories.ts # Data access over the in-memory store
-    store.ts        # Tables, id sequences, demo seed
-    security.ts     # PBKDF2 hashing, HS256 JWTs, RBAC
-    http.ts         # Route wrapper: rate limit, metrics, error mapping
+    observability/  # Agent activity and the audit trail — the only records owned here
+    http.ts         # Route wrapper: rate limit, metrics, audit, error mapping
 ```
 
 `src/lib/server/**` is server-only: it is imported exclusively by route
@@ -54,18 +63,25 @@ loop, and the workflow checkpointer are process-local singletons.
 
 ## How it works
 
+**Sources** (`src/lib/server/sources`) — six publishers, fetched concurrently
+and independently, each with its own cache and a provenance record. One
+unavailable publisher degrades its own slice of the picture and nothing else,
+which is the property that lets this run against systems it does not control.
+A source that did not answer is reported as `pending`, `cached` or
+`unavailable`; it is never quietly treated as zero.
+
+**Projection** (`src/lib/server/projection.ts`) — the derived regional read
+model: per-state profiles, substitution opportunities, and complementary
+planting windows. Nothing in it is entered by hand, and it is thrown away on
+the next fetch. `lanes.ts` derives supplier→importer routes from the same
+model, pairing each sourcing gap with the member states already supplying that
+commodity and routing them on real port coordinates.
+
 **Agents** (`src/lib/server/agents`) — a supervisor routes each domain event to
 a specialist. Every agent returns a structured result with inputs, outputs,
 bounded memory, a rationale, and a 0..1 confidence score, and each run is
 persisted as an agent activity so operators can audit what happened and why.
-The supply agent additionally runs on a timer, scanning inventory and opening a
-workflow run for each surplus/shortage it finds.
-
-**Events** (`src/lib/server/events.ts`) — creating a demand, filing a weather
-alert, moving a shipment, or approving a customs document publishes a domain
-event (`buyer.request.created`, `weather.alert`, `shipment.departed`,
-`customs.approved`, …). Handlers run before the request returns, so an agent's
-reaction is visible in the same round trip that caused it.
+The supply agent additionally runs on a timer.
 
 **Workflow** (`src/lib/server/workflows`) — the control loop
 `perceive → assess → recommend → plan → (approval gate) → execute → monitor → recover`,
@@ -74,39 +90,35 @@ with a re-plan edge from `monitor` back to `assess` when a disruption appears
 shared state merged from partial node updates, conditional edges, a checkpointer
 keyed by thread id, and `interrupt()` for the human approval gate. A held run
 returns `status: "awaiting_approval"` and resumes on the same thread via
-`POST /api/workflow/{threadId}/resume`.
-
-**Intelligence** (`src/lib/server/services/intelligence.ts`) — demand forecast,
-spoilage risk, transport delay, and regional shortage. Each returns the number,
-the inputs that produced it, and a plain-language explanation.
+`POST /api/workflow/{threadId}/resume` with one of four decisions — `approved`,
+`modified`, `rejected`, `escalated` — the last two carrying an operator note
+that is recorded against the gate.
 
 ## API
 
-Every route requires `Authorization: Bearer <token>` except `/api`,
-`/api/health/*`, `/api/metrics`, and `/api/auth/*`. Writes additionally require a
-matching role — farmers create crops, buyers create demands, logistics manages
-shipments/ports/carriers, government approves customs and triggers workflows;
-admin passes everything.
+No authentication: identity belongs to the system integrating this one. An
+optional `X-Actor` header carries that system's own attribution into the audit
+trail. Every route is rate-limited and records Prometheus metrics.
 
-- `POST /api/auth/register`, `POST /api/auth/token`, `GET /api/auth/me`
-- `GET|POST /api/farmers`, `/api/crops`, `/api/buyers`, `/api/demands`, `/api/shipments` (+ `GET .../{id}`)
-- `PATCH /api/demands/{id}/status`, `PATCH /api/shipments/{id}/status`
-- `GET|POST /api/carriers`, `/api/warehouses`, `/api/ports` (+ `PATCH /api/ports/{id}/status`), `/api/trade-routes`
-- `GET|POST /api/weather-events`, `/api/customs-documents` (+ `PATCH /api/customs-documents/{id}/status`)
-- `GET /api/intelligence/overview`, `/demand-forecast/{crop}`, `/spoilage/{cropId}`, `/transport-delay`, `/shortage/{crop}`
+- `GET /api/sources`, `POST /api/sources/refresh` — provenance, and a forced sweep
+- `GET /api/picture` — the derived regional read model (`?refresh=true` to refetch)
+- `GET /api/signals` — the interpreted coordination signals
+- `GET /api/lanes` — supplier→importer lanes, port exposure, and what is *not* observed
 - `GET /api/workflow/status`, `POST /api/workflow/trigger`, `POST /api/workflow/{threadId}/resume`
-- `GET /api/agent-activities`, `GET /api/audit-logs` (government/admin)
+- `GET /api/agent-activities`, `GET /api/audit-logs`
 - `GET /api/health`, `GET /api/health/db`, `GET /api/metrics`
 
 ## Data
 
-State is in-memory and process-local: the store seeds three farmers with
-harvested lots, three buyers with open demand, two shipments, two active
-hazards, and three ports on startup, and resets when the server restarts. That
-matches how the service behaved before — it seeded the same dataset whenever the
-database was empty — and keeps the app dependency-free. Swapping
-`src/lib/server/store.ts` for a real database is the one change needed to
-persist.
+The platform holds no domain records: farmers, crops, shipments and customs
+filings live in the systems it coordinates. The only two tables it owns are
+agent activities and the audit trail, and both are in-memory and process-local
+— they reset when the server restarts. Swapping
+`src/lib/server/observability/store.ts` for a real database is the one change
+needed to persist them.
+
+Everything else on screen is derived from the current source snapshots and
+recomputed on the next fetch.
 
 ## Architecture
 
