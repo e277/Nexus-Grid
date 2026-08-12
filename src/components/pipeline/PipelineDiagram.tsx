@@ -309,10 +309,14 @@ export function PipelineDiagram({
           const x = center.x - CARD.width / 2;
           const y = center.y - CARD.height / 2;
 
-          const body =
-            node.status === "skipped"
-              ? "Not on this run's path"
-              : (node.summary ?? node.desc);
+          // The card always describes what the node *is*. It used to be
+          // overwritten by that node's output on the last run, which turned a
+          // map of the loop into a place to dump text: a 156px card cannot
+          // hold a model's answer, so it arrived truncated mid-word and
+          // carrying raw markdown, and the reader lost the one thing the
+          // diagram is for — knowing what each step does. Run output belongs
+          // in the results and approval panels, which have room for it.
+          const body = node.status === "skipped" ? "Not on this run's path" : node.desc;
           // 132px of usable width at 10.5px ≈ 25 characters a line.
           const lines = wrap(body, 25, 3);
 
@@ -385,8 +389,11 @@ export function PipelineDiagram({
                 </text>
               ))}
 
+              {/* The run's own summary is still reachable, on hover, without
+                  it displacing the description on the face of the card. */}
               <title>
-                {`${node.label} — ${node.status}${ran.length ? ` · step ${ran.join(", ")}` : ""}\n${body}`}
+                {`${node.label} — ${node.status}${ran.length ? ` · step ${ran.join(", ")}` : ""}\n${node.desc}` +
+                  (node.summary ? `\n\nThis run: ${node.summary}` : "")}
               </title>
             </g>
           );
