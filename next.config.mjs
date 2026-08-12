@@ -7,6 +7,9 @@ const nextConfig = {
   reactStrictMode: true,
   // Next writes AGENTS.md/CLAUDE.md to the repo root otherwise.
   agentRules: false,
+  // better-sqlite3 is a native addon: bundling it breaks the binding lookup,
+  // so the checkpointer's driver has to stay an external require at runtime.
+  serverExternalPackages: ["better-sqlite3", "@langchain/langgraph-checkpoint-sqlite"],
 };
 
 export default nextConfig;

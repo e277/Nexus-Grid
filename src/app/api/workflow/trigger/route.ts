@@ -11,7 +11,7 @@ export const POST = api(async ({ request }) => {
   const body = await jsonBody(request);
 
   const suppliers = body.regional_suppliers;
-  const context: SupplyState = {
+  const context: Partial<SupplyState> = {
     event: optionalString(body, "event") ?? undefined,
     commodity: optionalString(body, "commodity"),
     importer: optionalString(body, "importer"),

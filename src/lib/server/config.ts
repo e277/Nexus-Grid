@@ -24,6 +24,30 @@ export interface Settings {
   shoBaseUrl: string;
   shoModel: string;
 
+  /**
+   * Where the workflow checkpointer writes.
+   *
+   * A file path gives paused approval gates that survive a restart, which is
+   * the difference between a gate a human can take an hour over and one that
+   * dies with the process. Empty keeps everything in memory.
+   */
+  checkpointDbPath: string;
+
+  /**
+   * OpenClaw gateway, used by the `execute` node to actually deliver a plan.
+   *
+   * The gateway is a separate long-running process that owns the channels
+   * (Slack, WhatsApp, Signal, …); this app talks to it over its HTTP tool
+   * surface. Without a URL and token the node reports `unconfigured` and the
+   * dispatch is labelled simulated rather than pretending to have sent.
+   */
+  openclawGatewayUrl: string;
+  openclawGatewayToken: string;
+  /** Channel target the plan is delivered to, e.g. a Slack channel id. */
+  openclawTarget: string;
+  /** Gateway agent whose session the message is sent through. */
+  openclawAgentId: string;
+
   /** Agent runtime */
   skipAgentStartup: boolean;
   agentPollIntervalSeconds: number;
@@ -64,6 +88,13 @@ export function getSettings(): Settings {
     shoApiKey: str("SHO_API_KEY", ""),
     shoBaseUrl: str("SHO_BASE_URL", ""),
     shoModel: str("SHO_MODEL", ""),
+
+    checkpointDbPath: str("CHECKPOINT_DB_PATH", ".nexus-grid/checkpoints.sqlite"),
+
+    openclawGatewayUrl: str("OPENCLAW_GATEWAY_URL", ""),
+    openclawGatewayToken: str("OPENCLAW_GATEWAY_TOKEN", ""),
+    openclawTarget: str("OPENCLAW_TARGET", ""),
+    openclawAgentId: str("OPENCLAW_AGENT_ID", "main"),
 
     skipAgentStartup: bool("SKIP_AGENT_STARTUP", false),
     agentPollIntervalSeconds: int("AGENT_POLL_INTERVAL_SECONDS", 10),

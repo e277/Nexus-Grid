@@ -1,5 +1,5 @@
 /**
- * Core supply-chain workflow graph.
+ * Core supply-chain workflow graph, on LangGraph.
  *
  * Implements the roadmap control loop as a stateful graph:
  *
@@ -7,53 +7,73 @@
  *         → monitor → recover
  *                  ↘ assess (re-plan once when a disruption is detected)
  *
- * State is a plain object so each node returns only the keys it updates and
- * the runtime merges them into the shared state. The compiled graph uses an
- * in-memory checkpointer so each run's state history is inspectable and
- * resumable by thread id.
+ * This ran on a hand-rolled runtime until the checkpointer needed to outlive
+ * the process. Rather than grow a second implementation of durable execution,
+ * the graph now uses LangGraph, whose checkpointer abstraction is exactly that
+ * — see `checkpointer.ts`. Node bodies are unchanged pure functions; only the
+ * wiring and the state declaration moved.
  */
+
+import {
+  Annotation,
+  END,
+  interrupt,
+  START,
+  StateGraph,
+  type CompiledStateGraph,
+} from "@langchain/langgraph";
 
 import { classifyGap, withSignalDefaults } from "./supply-rules";
 import { utcnowIso } from "../time";
-import { CompiledGraph, MemoryCheckpointer, StateGraph } from "./graph";
+import { getCheckpointer } from "./checkpointer";
 import { recommendAction } from "./language-step";
-import { openclawRuntimeStatus } from "./llm-recommend";
+import { dispatchPlan, dispatchStatus } from "../dispatch/openclaw";
 
 const MAX_REPLANS = 1;
 const RECOMMEND_ATTEMPTS = 3;
 
-export interface SupplyState {
+/**
+ * Shared state. Every channel is last-write-wins: nodes return the keys they
+ * changed and the runtime merges them, which is the same contract the nodes
+ * were written against.
+ */
+export const SupplyAnnotation = Annotation.Root({
   // Incoming signal context — a sourcing gap observed in the trade data
-  event?: string;
-  commodity?: string | null;
-  importer?: string | null;
-  importer_iso3?: string | null;
-  external_usd?: number;
-  external_share_pct?: number;
-  regional_suppliers?: string[] | string;
-  climate_risk?: string;
-  market_context?: string;
-  require_approval?: boolean;
+  event: Annotation<string | undefined>,
+  commodity: Annotation<string | null | undefined>,
+  importer: Annotation<string | null | undefined>,
+  importer_iso3: Annotation<string | null | undefined>,
+  external_usd: Annotation<number | undefined>,
+  external_share_pct: Annotation<number | undefined>,
+  regional_suppliers: Annotation<string[] | string | undefined>,
+  climate_risk: Annotation<string | undefined>,
+  market_context: Annotation<string | undefined>,
+  require_approval: Annotation<boolean | undefined>,
   // Derived along the workflow
-  phase?: string;
-  gap_severity?: string;
-  observed_at?: string;
-  decision?: string;
-  decision_rationale?: string;
-  rationale?: string;
-  recommendation?: unknown;
-  source?: string;
-  plan?: Record<string, unknown>;
-  execution?: Record<string, unknown>;
-  monitor?: Record<string, unknown>;
-  recovery?: Record<string, unknown>;
-  replan_count?: number;
+  phase: Annotation<string | undefined>,
+  gap_severity: Annotation<string | undefined>,
+  observed_at: Annotation<string | undefined>,
+  decision: Annotation<string | undefined>,
+  decision_rationale: Annotation<string | undefined>,
+  rationale: Annotation<string | undefined>,
+  recommendation: Annotation<unknown>,
+  source: Annotation<string | undefined>,
+  plan_data: Annotation<Record<string, unknown> | undefined>,
+  execution: Annotation<Record<string, unknown> | undefined>,
+  monitor_result: Annotation<Record<string, unknown> | undefined>,
+  recovery: Annotation<Record<string, unknown> | undefined>,
+  replan_count: Annotation<number | undefined>,
   /** What a human answered at the approval gate, if the run reached it. */
-  gate_decision?: string;
-  gate_note?: string;
-}
+  gate_decision: Annotation<string | undefined>,
+  gate_note: Annotation<string | undefined>,
+  /** Thread id, so the execute node can key an idempotent dispatch. */
+  thread_id: Annotation<string | undefined>,
+});
 
-export function perceive(state: SupplyState): Partial<SupplyState> {
+export type SupplyState = typeof SupplyAnnotation.State;
+export type SupplyUpdate = typeof SupplyAnnotation.Update;
+
+export function perceive(state: SupplyState): SupplyUpdate {
   const normalized = withSignalDefaults(state);
   return {
     phase: "perceive",
@@ -65,11 +85,9 @@ export function perceive(state: SupplyState): Partial<SupplyState> {
   };
 }
 
-export function assess(state: SupplyState): Partial<SupplyState> {
+export function assess(state: SupplyState): SupplyUpdate {
   const severity = state.gap_severity ?? "minor";
-  const suppliers = Array.isArray(state.regional_suppliers)
-    ? state.regional_suppliers
-    : [];
+  const suppliers = Array.isArray(state.regional_suppliers) ? state.regional_suppliers : [];
 
   let decision = "monitor";
   if (severity === "critical" && suppliers.length > 0) {
@@ -85,15 +103,10 @@ export function assess(state: SupplyState): Partial<SupplyState> {
     `external=${state.external_share_pct}% ($${(state.external_usd ?? 0).toLocaleString()}), ` +
     `severity=${severity}, regional suppliers=${suppliers.length}`;
 
-  return {
-    phase: "assess",
-    decision,
-    decision_rationale: rationale,
-    rationale,
-  };
+  return { phase: "assess", decision, decision_rationale: rationale, rationale };
 }
 
-export async function recommend(state: SupplyState): Promise<Partial<SupplyState>> {
+export async function recommend(state: SupplyState): Promise<SupplyUpdate> {
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= RECOMMEND_ATTEMPTS; attempt += 1) {
     try {
@@ -108,13 +121,17 @@ export async function recommend(state: SupplyState): Promise<Partial<SupplyState
     phase: "recommend",
     recommendation: {
       source: "error",
-      recommendation: "Recommendation unavailable after retries.",
+      action: "Recommendation unavailable after retries.",
+      rationale: "",
+      confidence: null,
+      risks: [],
+      structured: false,
       error: lastError instanceof Error ? lastError.message : String(lastError),
     },
   };
 }
 
-export function plan(state: SupplyState): Partial<SupplyState> {
+export function plan(state: SupplyState): SupplyUpdate {
   const decision = state.decision ?? "monitor";
   const suppliers = Array.isArray(state.regional_suppliers) ? state.regional_suppliers : [];
   let planData: Record<string, unknown>;
@@ -153,16 +170,13 @@ export function plan(state: SupplyState): Partial<SupplyState> {
   }
 
   planData.recommendation = state.recommendation;
-  return { phase: "plan", plan: planData };
+  return { phase: "plan", plan_data: planData };
 }
 
 /** Approval gate: urgent plans go to a human unless pre-approved. */
 export function needsApproval(state: SupplyState): string {
-  const planData = state.plan ?? {};
-  const priority = planData.priority as string | undefined;
-  if (state.require_approval && (priority === "high" || priority === "urgent")) {
-    return "hold";
-  }
+  const priority = (state.plan_data ?? {}).priority as string | undefined;
+  if (state.require_approval && (priority === "high" || priority === "urgent")) return "hold";
   return "execute";
 }
 
@@ -184,9 +198,7 @@ function readDecision(value: unknown): { decision: GateDecision; note: string | 
   }
   if (typeof value === "string") {
     return {
-      decision: GATE_DECISIONS.includes(value as GateDecision)
-        ? (value as GateDecision)
-        : "rejected",
+      decision: GATE_DECISIONS.includes(value as GateDecision) ? (value as GateDecision) : "rejected",
       note: null,
     };
   }
@@ -197,62 +209,79 @@ function readDecision(value: unknown): { decision: GateDecision; note: string | 
 /**
  * Pause the graph for a real human decision.
  *
- * `interrupt()` throws on first entry, checkpointing state and halting the
- * run — the caller sees `status: awaiting_approval` with this task as the
- * payload. A client resumes via the same thread id (see
- * `orchestrator.resumeRun`), at which point this node re-runs from the top
- * and `interrupt()` returns the supplied decision instead of throwing again.
+ * `interrupt()` halts the run on first entry, checkpointing the state before
+ * this node — the caller sees `awaiting_approval` with this task as the
+ * payload. Resuming the same thread re-runs the node from the top, and
+ * `interrupt()` returns the supplied decision instead of halting.
  *
  * Four answers, not two: an operator who would approve the plan *with an
  * amendment*, or who is not the right person to decide it, has nowhere to put
  * that in an approve/reject pair, and collapsing either into "approved" loses
  * the one piece of information the gate exists to capture.
  */
-export function holdForApproval(
-  state: SupplyState,
-  context: { interrupt(value: unknown): unknown }
-): Partial<SupplyState> {
-  const planData = state.plan ?? {};
+export function holdForApproval(state: SupplyState): SupplyUpdate {
+  const planData = state.plan_data ?? {};
   const task: Record<string, unknown> = {
     task: planData.action ?? "monitor",
     status: "awaiting_approval",
     details: planData,
-    approval: {
-      required: true,
-      reason: `priority=${planData.priority}`,
-    },
+    approval: { required: true, reason: `priority=${planData.priority}` },
   };
 
-  const { decision, note } = readDecision(context.interrupt({ phase: "hold", execution: task }));
+  const { decision, note } = readDecision(interrupt({ phase: "hold", execution: task }));
+
   task.status = decision;
   const approval = task.approval as Record<string, unknown>;
   approval.decision = decision;
   approval.decided_at = utcnowIso();
   if (note) approval.note = note;
+
   return { phase: "hold", execution: task, gate_decision: decision, gate_note: note ?? undefined };
 }
 
-export function execute(state: SupplyState): Partial<SupplyState> {
-  const planData = state.plan ?? {};
+/**
+ * Dispatch the plan.
+ *
+ * Only an approved or amended plan is actually delivered — a rejected or
+ * escalated one is a decision not to act, and sending it to a ministry desk
+ * anyway would be the opposite of what the gate is for.
+ */
+export async function execute(state: SupplyState): Promise<SupplyUpdate> {
+  const planData = state.plan_data ?? {};
+  const gate = state.gate_decision ?? null;
+  const deliverable = gate === null || gate === "approved" || gate === "modified";
+
+  const dispatch = deliverable
+    ? await dispatchPlan({
+        plan: planData,
+        decision: gate,
+        note: state.gate_note ?? null,
+        threadId: state.thread_id ?? "unknown",
+      })
+    : {
+        mode: "simulated" as const,
+        status: "skipped" as const,
+        detail: `Not delivered — the plan was ${gate} at the approval gate.`,
+      };
+
   const task: Record<string, unknown> = {
     task: planData.action ?? "monitor",
     status: "scheduled",
     details: planData,
-    // Honest, not decorative: reflects whether a real OpenClaw runtime is
-    // available for this dispatch or it is only simulated.
-    dispatch_mode: openclawRuntimeStatus() === "ready" ? "openclaw" : "simulated",
+    // Honest, not decorative: says whether a real gateway took this, or
+    // whether there was nowhere to send it.
+    dispatch_mode: dispatch.mode,
+    dispatch_status: dispatch.status,
+    dispatch_channel: dispatchStatus(),
   };
+  if (dispatch.target) task.dispatch_target = dispatch.target;
+  if (dispatch.detail) task.dispatch_detail = dispatch.detail;
 
-  if (task.task === "dispatch_surplus") {
-    task.eta = "24h";
-  } else if (task.task === "escalate_shortage") {
-    task.escalation = "operations notified";
-  }
   return { phase: "execute", execution: task };
 }
 
 /** Watch execution for disruption signals that force a re-plan. */
-export function monitor(state: SupplyState): Partial<SupplyState> {
+export function monitor(state: SupplyState): SupplyUpdate {
   // Live climate risk at the importing state is the disruption signal here:
   // a coordination plan agreed into a storm window is worth re-planning.
   const disruption = state.climate_risk === "high" || state.climate_risk === "severe";
@@ -264,7 +293,7 @@ export function monitor(state: SupplyState): Partial<SupplyState> {
     checked_at: utcnowIso(),
   };
 
-  const updates: Partial<SupplyState> = { phase: "monitor", monitor: result };
+  const updates: SupplyUpdate = { phase: "monitor", monitor_result: result };
   if (result.will_replan) {
     updates.replan_count = (state.replan_count ?? 0) + 1;
     // Downgrade the signal so the re-plan converges instead of looping
@@ -274,10 +303,10 @@ export function monitor(state: SupplyState): Partial<SupplyState> {
 }
 
 export function routeAfterMonitor(state: SupplyState): string {
-  return state.monitor?.will_replan ? "assess" : "recover";
+  return state.monitor_result?.will_replan ? "assess" : "recover";
 }
 
-export function recover(state: SupplyState): Partial<SupplyState> {
+export function recover(state: SupplyState): SupplyUpdate {
   const decision = state.decision ?? "monitor";
   const executionStatus = state.execution?.status;
 
@@ -307,50 +336,56 @@ export function recover(state: SupplyState): Partial<SupplyState> {
     recovery.next_step = "notify_regional_coordination";
     recovery.feedback = "re-plan once updated trade and production signals arrive";
   }
+
+  // A plan that was decided but could not be delivered is a follow-up in its
+  // own right, and the operator should not have to infer that from a badge.
+  if (state.execution?.dispatch_status === "failed") {
+    recovery.delivery_failed = state.execution.dispatch_detail ?? true;
+    recovery.next_step = "retry_delivery";
+  }
+
   return { phase: "recover", recovery };
 }
 
-function buildGraph(): StateGraph<SupplyState> {
-  const workflow = new StateGraph<SupplyState>();
-  workflow.addNode("perceive", perceive);
-  workflow.addNode("assess", assess);
-  workflow.addNode("recommend", recommend);
-  workflow.addNode("plan", plan);
-  workflow.addNode("hold", holdForApproval);
-  workflow.addNode("execute", execute);
-  workflow.addNode("monitor", monitor);
-  workflow.addNode("recover", recover);
-
-  workflow.setEntryPoint("perceive");
-  workflow.addEdge("perceive", "assess");
-  workflow.addEdge("assess", "recommend");
-  workflow.addEdge("recommend", "plan");
-  workflow.addConditionalEdges("plan", needsApproval, { execute: "execute", hold: "hold" });
-  workflow.addEdge("hold", "recover");
-  workflow.addEdge("execute", "monitor");
-  workflow.addConditionalEdges("monitor", routeAfterMonitor, {
-    assess: "assess",
-    recover: "recover",
-  });
-  // `recover` has no outgoing edge, so the run ends there.
-  return workflow;
+export function buildGraph() {
+  return new StateGraph(SupplyAnnotation)
+    .addNode("perceive", perceive)
+    .addNode("assess", assess)
+    .addNode("recommend", recommend)
+    .addNode("plan", plan)
+    .addNode("hold", holdForApproval)
+    .addNode("execute", execute)
+    .addNode("monitor", monitor)
+    .addNode("recover", recover)
+    .addEdge(START, "perceive")
+    .addEdge("perceive", "assess")
+    .addEdge("assess", "recommend")
+    .addEdge("recommend", "plan")
+    .addConditionalEdges("plan", needsApproval, { execute: "execute", hold: "hold" })
+    .addEdge("hold", "recover")
+    .addEdge("execute", "monitor")
+    .addConditionalEdges("monitor", routeAfterMonitor, { assess: "assess", recover: "recover" })
+    .addEdge("recover", END);
 }
 
+type CompiledSupplyGraph = ReturnType<ReturnType<typeof buildGraph>["compile"]>;
+
 const globalGraph = globalThis as typeof globalThis & {
-  __nexusGridGraphV2?: CompiledGraph<SupplyState>;
+  __nexusGridGraphV3?: CompiledSupplyGraph;
 };
 
 /**
- * Compile the workflow once with the in-memory checkpointer.
+ * Compile the workflow once against the shared checkpointer.
  *
- * Held on `globalThis` so paused threads stay resumable across hot reloads. The
- * key carries a version because the node set has been replaced once: a stale
- * compiled graph would keep running the retired workflow after a reload.
+ * Held on `globalThis` so paused threads stay resumable across hot reloads.
+ * The key carries a version because the runtime beneath it has been replaced:
+ * a stale compiled graph would keep serving the retired implementation.
  */
-export function getGraph(): CompiledGraph<SupplyState> {
-  if (!globalGraph.__nexusGridGraphV2) {
-    globalGraph.__nexusGridGraphV2 = buildGraph().compile(new MemoryCheckpointer<SupplyState>());
-    console.info("Workflow checkpointer: in-memory");
+export function getGraph(): CompiledSupplyGraph {
+  if (!globalGraph.__nexusGridGraphV3) {
+    globalGraph.__nexusGridGraphV3 = buildGraph().compile({ checkpointer: getCheckpointer() });
   }
-  return globalGraph.__nexusGridGraphV2;
+  return globalGraph.__nexusGridGraphV3;
 }
+
+export type { CompiledStateGraph };

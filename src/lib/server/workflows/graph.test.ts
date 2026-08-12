@@ -1,127 +1,170 @@
 /**
- * The graph runtime replaced LangGraph, so its interrupt/resume semantics are
- * load-bearing and worth pinning down: the human approval gate is the one
- * point where a run is not autonomous, and a regression there would look like
- * a run that either never pauses or never continues.
+ * The approval gate is the one point where a run is not autonomous, so its
+ * interrupt/resume semantics are load-bearing: a regression there looks like a
+ * run that either never pauses or never continues.
+ *
+ * These test the *supply-chain graph*, not the runtime under it. The runtime
+ * is now LangGraph and testing it here would only assert that a dependency
+ * works; what has to hold is that this graph pauses on an urgent plan, carries
+ * a human's four possible answers through to recovery, survives being
+ * recompiled against the same checkpointer, and re-plans at most once.
  */
 
-import { describe, expect, it } from "vitest";
+import { MemorySaver } from "@langchain/langgraph";
+import { Command } from "@langchain/langgraph";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MemoryCheckpointer, StateGraph, type NodeContext } from "./graph";
+// The recommend node calls a model; stub it so these stay offline and fast.
+vi.mock("./llm-recommend", () => ({
+  recommendSupplyResponse: vi.fn(async () => ({
+    source: "stub",
+    action: "Open a regional supply line.",
+    rationale: "stubbed",
+    confidence: 0.5,
+    risks: [],
+    structured: true,
+  })),
+}));
 
-interface TestState {
-  trail?: string[];
-  branch?: string;
-  decision?: unknown;
-  value?: number;
+// No gateway in tests: dispatch must report "nowhere to send", not invent one.
+vi.mock("../dispatch/openclaw", () => ({
+  dispatchStatus: () => "unconfigured",
+  dispatchPlan: vi.fn(async () => ({
+    mode: "simulated",
+    status: "skipped",
+    detail: "No OpenClaw gateway configured.",
+  })),
+}));
+
+import { dispatchPlan } from "../dispatch/openclaw";
+import { buildGraph } from "./supply-chain-graph";
+
+/** A gap big enough to be classified critical, so the plan is urgent. */
+const CRITICAL_GAP = {
+  event: "substitution_gap",
+  commodity: "Cereals",
+  importer: "Guyana",
+  importer_iso3: "GUY",
+  external_usd: 190_000_000,
+  external_share_pct: 100,
+  regional_suppliers: ["Jamaica", "Trinidad and Tobago"],
+  climate_risk: "low",
+  require_approval: true,
+};
+
+function compile(saver = new MemorySaver()) {
+  return { app: buildGraph().compile({ checkpointer: saver }), saver };
 }
 
-function append(state: TestState, name: string): Partial<TestState> {
-  return { trail: [...(state.trail ?? []), name] };
-}
+let counter = 0;
+const nextThread = () => ({ configurable: { thread_id: `t${(counter += 1)}` } });
 
-describe("StateGraph", () => {
-  it("runs nodes in edge order and merges partial updates", async () => {
-    const graph = new StateGraph<TestState>()
-      .addNode("a", (s) => append(s, "a"))
-      .addNode("b", (s) => ({ ...append(s, "b"), value: 42 }))
-      .setEntryPoint("a")
-      .addEdge("a", "b")
-      .compile(new MemoryCheckpointer<TestState>());
+beforeEach(() => {
+  vi.mocked(dispatchPlan).mockClear();
+});
 
-    const outcome = await graph.run("t1", {});
+describe("supply-chain graph", () => {
+  it("runs the loop end to end when no approval is required", async () => {
+    const { app } = compile();
+    const cfg = nextThread();
 
-    expect(outcome.next).toBeNull();
-    expect(outcome.updates.map((u) => Object.keys(u)[0])).toEqual(["a", "b"]);
-    expect(outcome.values.at(-1)).toMatchObject({ trail: ["a", "b"], value: 42 });
+    const out = await app.invoke({ ...CRITICAL_GAP, require_approval: false }, cfg);
+
+    expect(out.gap_severity).toBe("critical");
+    expect(out.decision).toBe("coordinate_substitution");
+    expect(out.execution?.status).toBe("scheduled");
+    expect(out.recovery?.recovery_action).toBe("activate_followup");
+    expect((await app.getState(cfg)).next).toEqual([]);
   });
 
-  it("follows conditional edges based on state", async () => {
-    const graph = new StateGraph<TestState>()
-      .addNode("start", () => ({ branch: "left" }))
-      .addNode("left", (s) => append(s, "left"))
-      .addNode("right", (s) => append(s, "right"))
-      .setEntryPoint("start")
-      .addConditionalEdges("start", (s) => s.branch ?? "right", {
-        left: "left",
-        right: "right",
-      })
-      .compile(new MemoryCheckpointer<TestState>());
+  it("halts at the gate on an urgent plan, without running execute", async () => {
+    const { app } = compile();
+    const cfg = nextThread();
 
-    const outcome = await graph.run("t2", {});
-    expect(outcome.updates.map((u) => Object.keys(u)[0])).toEqual(["start", "left"]);
+    const held = await app.invoke(CRITICAL_GAP, cfg);
+    const snapshot = await app.getState(cfg);
+
+    expect(snapshot.next).toEqual(["hold"]);
+    // `__interrupt__` rides alongside the state channels rather than in them.
+    const raised = (held as { __interrupt__?: { value: unknown }[] }).__interrupt__;
+    expect(raised?.[0]?.value).toMatchObject({ phase: "hold" });
+    // The paused node did not complete, so nothing downstream ran.
+    expect(held.execution).toBeUndefined();
+    expect(dispatchPlan).not.toHaveBeenCalled();
   });
 
-  it("halts at interrupt(), checkpointing the state from before the node", async () => {
-    const graph = new StateGraph<TestState>()
-      .addNode("before", (s) => append(s, "before"))
-      .addNode("gate", (s: TestState, ctx: NodeContext) => {
-        const decision = ctx.interrupt({ awaiting: true });
-        return { ...append(s, "gate"), decision };
-      })
-      .addNode("after", (s) => append(s, "after"))
-      .setEntryPoint("before")
-      .addEdge("before", "gate")
-      .addEdge("gate", "after")
-      .compile(new MemoryCheckpointer<TestState>());
+  it.each([
+    ["approved", "activate_followup", "notify_supply_chain_ops", true],
+    ["modified", "activate_followup", "notify_supply_chain_ops", true],
+    ["rejected", "plan_rejected", "await_revised_plan", false],
+    ["escalated", "escalated_for_decision", "await_higher_authority", false],
+  ])(
+    "carries a %s decision through to recovery",
+    async (decision, recoveryAction, nextStep, delivers) => {
+      const { app } = compile();
+      const cfg = nextThread();
 
-    const held = await graph.run("t3", {});
+      await app.invoke(CRITICAL_GAP, cfg);
+      const out = await app.invoke(
+        new Command({ resume: { decision, note: "because" } }),
+        cfg
+      );
 
-    expect(held.next).toBe("gate");
-    expect(held.interrupt).toEqual({ awaiting: true });
-    // The paused node must not appear in updates — it did not complete.
-    expect(held.updates.map((u) => Object.keys(u)[0])).toEqual(["before"]);
+      expect(out.gate_decision).toBe(decision);
+      expect(out.gate_note).toBe("because");
+      expect(out.execution?.status).toBe(decision);
+      expect(out.recovery?.recovery_action).toBe(recoveryAction);
+      expect(out.recovery?.next_step).toBe(nextStep);
+      expect((await app.getState(cfg)).next).toEqual([]);
+
+      // Hold routes straight to recover, so nothing is dispatched from the
+      // gate itself — a rejected plan must never reach a ministry desk.
+      expect(dispatchPlan).not.toHaveBeenCalled();
+      expect(delivers || out.recovery?.recovery_action !== "activate_followup").toBeTruthy();
+    }
+  );
+
+  it("keeps a paused gate resumable across a recompiled graph", async () => {
+    // Standing in for a restart: same checkpointer, brand new compiled graph.
+    const saver = new MemorySaver();
+    const cfg = nextThread();
+
+    await compile(saver).app.invoke(CRITICAL_GAP, cfg);
+
+    const { app: revived } = compile(saver);
+    const recovered = await revived.getState(cfg);
+    expect(recovered.next).toEqual(["hold"]);
+    expect(recovered.tasks?.[0]?.interrupts?.[0]?.value).toMatchObject({ phase: "hold" });
+
+    const out = await revived.invoke(new Command({ resume: { decision: "approved" } }), cfg);
+    expect(out.gate_decision).toBe("approved");
   });
 
-  it("resumes the same thread, re-entering the node with the decision", async () => {
-    const graph = new StateGraph<TestState>()
-      .addNode("before", (s) => append(s, "before"))
-      .addNode("gate", (s: TestState, ctx: NodeContext) => {
-        const decision = ctx.interrupt({ awaiting: true });
-        return { ...append(s, "gate"), decision };
-      })
-      .addNode("after", (s) => append(s, "after"))
-      .setEntryPoint("before")
-      .addEdge("before", "gate")
-      .addEdge("gate", "after")
-      .compile(new MemoryCheckpointer<TestState>());
+  it("re-plans at most once when the importer is under climate risk", async () => {
+    const { app } = compile();
+    const cfg = nextThread();
 
-    await graph.run("t4", {});
-    const resumed = await graph.run("t4", { resume: "approved" });
+    const out = await app.invoke(
+      { ...CRITICAL_GAP, require_approval: false, climate_risk: "high" },
+      cfg
+    );
 
-    expect(resumed.next).toBeNull();
-    expect(resumed.updates.map((u) => Object.keys(u)[0])).toEqual(["gate", "after"]);
-    expect(resumed.values.at(-1)).toMatchObject({
-      decision: "approved",
-      // State from before the pause carried across the resume.
-      trail: ["before", "gate", "after"],
-    });
+    expect(out.replan_count).toBe(1);
+    // The signal is downgraded on re-plan so the loop converges.
+    expect(out.climate_risk).toBe("replanned");
+    expect(out.monitor_result?.will_replan).toBe(false);
+    expect((await app.getState(cfg)).next).toEqual([]);
   });
 
-  it("refuses to resume a thread that is not paused", async () => {
-    const graph = new StateGraph<TestState>()
-      .addNode("only", (s) => append(s, "only"))
-      .setEntryPoint("only")
-      .compile(new MemoryCheckpointer<TestState>());
+  it("reports a simulated dispatch rather than claiming delivery", async () => {
+    const { app } = compile();
+    const cfg = nextThread();
 
-    await graph.run("t5", {});
-    await expect(graph.run("t5", { resume: "approved" })).rejects.toThrow(/No paused run/);
-  });
+    const out = await app.invoke({ ...CRITICAL_GAP, require_approval: false }, cfg);
 
-  it("does not consume a resume value on a later interrupt", async () => {
-    // Two gates: resuming should satisfy the first and pause again at the
-    // second, rather than sliding the same decision into both.
-    const graph = new StateGraph<TestState>()
-      .addNode("gate1", (_s, ctx: NodeContext) => ({ decision: ctx.interrupt("first") }))
-      .addNode("gate2", (_s, ctx: NodeContext) => ({ decision: ctx.interrupt("second") }))
-      .setEntryPoint("gate1")
-      .addEdge("gate1", "gate2")
-      .compile(new MemoryCheckpointer<TestState>());
-
-    await graph.run("t6", {});
-    const resumed = await graph.run("t6", { resume: "approved" });
-
-    expect(resumed.next).toBe("gate2");
-    expect(resumed.interrupt).toBe("second");
+    expect(dispatchPlan).toHaveBeenCalledTimes(1);
+    expect(out.execution?.dispatch_mode).toBe("simulated");
+    expect(out.execution?.dispatch_status).toBe("skipped");
+    expect(out.execution?.dispatch_channel).toBe("unconfigured");
   });
 });
