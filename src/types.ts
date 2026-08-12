@@ -12,6 +12,8 @@ export interface AuditLog {
   action: string;
   entity_type?: string | null;
   entity_id?: number | null;
+  /** Free text the writer attached — the operator's note at the gate. */
+  detail?: string | null;
   created_at?: string | null;
 }
 
@@ -21,6 +23,9 @@ export interface Health {
   version: string;
   environment: string;
 }
+
+/** What a human may answer at the approval gate. */
+export type GateDecision = "approved" | "modified" | "rejected" | "escalated";
 
 export interface WorkflowResult {
   status: string;
@@ -43,7 +48,22 @@ export type SourceStatus =
   | "unauthorized"
   | "unavailable";
 
+/**
+ * Which upstream slot a provenance record came from.
+ *
+ * Stable and unique per publisher — unlike `source`, which Open-Meteo and the
+ * NOAA hurricane feed share. Pages attribute against this.
+ */
+export type SourceSlot =
+  | "indicators"
+  | "trade"
+  | "climate"
+  | "storms"
+  | "soil"
+  | "agroclimate";
+
 export interface SourceProvenance {
+  slot: SourceSlot;
   source: string;
   publisher: string;
   endpoint: string;
@@ -137,6 +157,54 @@ export interface SubstitutionOpportunity {
   external_share_pct: number;
   regional_suppliers: string[];
   top_external_partners: string[];
+}
+
+// ── Logistics ─────────────────────────────────────────────────────────────
+
+/**
+ * One supplier→importer lane behind a substitution opportunity.
+ *
+ * Distance is real (great-circle between the two main ports); transit is an
+ * estimate from a documented average sea speed plus port handling, and is
+ * labelled as such. Nothing here is a carrier booking.
+ */
+export interface Lane {
+  commodity: string;
+  supplier: string;
+  supplier_iso3: string;
+  importer: string;
+  importer_iso3: string;
+  mode: "sea" | "air" | "land";
+  distance_km: number | null;
+  transit_hours: number;
+  estimate_source: string;
+  supplier_climate_risk: "low" | "medium" | "high" | null;
+  importer_climate_risk: "low" | "medium" | "high" | null;
+  /** Rolls the two ends up into one status for the lane. */
+  status: "clear" | "watch" | "at_risk";
+  /** Value this lane could displace from outside the region, USD. */
+  external_usd: number;
+}
+
+/** A port's exposure — the platform observes weather, not congestion. */
+export interface PortExposure {
+  iso3: string;
+  name: string;
+  climate_risk: "low" | "medium" | "high" | null;
+  /** Lanes that touch this port in either direction. */
+  lanes: number;
+  /** Trade value observed moving through this state, USD. */
+  food_imports_usd: number;
+}
+
+export interface LanesResponse {
+  lanes: Lane[];
+  ports: PortExposure[];
+  active_storms: { name: string; classification: string; intensity_kt: number | null }[];
+  /** What this endpoint cannot observe, stated rather than implied. */
+  unobserved: string[];
+  sources: SourceProvenance[];
+  generated_at: string;
 }
 
 export interface PictureResponse {

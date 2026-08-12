@@ -36,6 +36,14 @@ type Handler<P> = (context: RouteContext<P>) => unknown | Promise<unknown>;
 interface Options {
   /** Status for a successful JSON response (201 for creates). */
   status?: number;
+  /**
+   * Refine the audited action from the handler's result.
+   *
+   * The route path alone names most state changes well enough, but not one
+   * whose meaning is in the body — an approval gate resolved four different
+   * ways is four different events, and all of them are `POST …/resume`.
+   */
+  audit?: (result: unknown) => { action?: string; detail?: string } | null;
 }
 
 function jsonResponse(body: unknown, status: number, headers?: Record<string, string>): Response {
@@ -73,16 +81,23 @@ function auditAction(method: string, path: string): { entityType: string; action
   return { entityType, action: `${entityType}.${tail}` };
 }
 
-function recordStateChange(request: Request, path: string, result: unknown): void {
+function recordStateChange(
+  request: Request,
+  path: string,
+  result: unknown,
+  refine: Options["audit"]
+): void {
   const named = auditAction(request.method, path);
   if (named === null) return;
 
+  const override = refine?.(result) ?? null;
   const id = (result as { id?: unknown })?.id;
   recordAudit({
     actor: actorFrom(request),
-    action: named.action,
+    action: override?.action ?? named.action,
     entityType: named.entityType,
     entityId: typeof id === "number" ? id : null,
+    detail: override?.detail ?? null,
   });
 }
 
@@ -122,7 +137,7 @@ export function api<P = Record<string, string>>(handler: Handler<P>, options: Op
 
       if (result instanceof Response) return finish(result);
 
-      recordStateChange(request, path, result);
+      recordStateChange(request, path, result, options.audit);
       return finish(jsonResponse(result, options.status ?? 200));
     } catch (error) {
       if (error instanceof HttpError) {

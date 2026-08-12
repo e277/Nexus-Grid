@@ -48,6 +48,9 @@ export interface SupplyState {
   monitor?: Record<string, unknown>;
   recovery?: Record<string, unknown>;
   replan_count?: number;
+  /** What a human answered at the approval gate, if the run reached it. */
+  gate_decision?: string;
+  gate_note?: string;
 }
 
 export function perceive(state: SupplyState): Partial<SupplyState> {
@@ -163,6 +166,34 @@ export function needsApproval(state: SupplyState): string {
   return "execute";
 }
 
+/** What a human may answer at the gate. */
+export const GATE_DECISIONS = ["approved", "modified", "rejected", "escalated"] as const;
+export type GateDecision = (typeof GATE_DECISIONS)[number];
+
+/** Normalize whatever the resume carried into a decision plus an operator note. */
+function readDecision(value: unknown): { decision: GateDecision; note: string | null } {
+  if (value && typeof value === "object") {
+    const raw = value as { decision?: unknown; note?: unknown };
+    const decision = GATE_DECISIONS.includes(raw.decision as GateDecision)
+      ? (raw.decision as GateDecision)
+      : "rejected";
+    return {
+      decision,
+      note: typeof raw.note === "string" && raw.note.trim() ? raw.note.trim() : null,
+    };
+  }
+  if (typeof value === "string") {
+    return {
+      decision: GATE_DECISIONS.includes(value as GateDecision)
+        ? (value as GateDecision)
+        : "rejected",
+      note: null,
+    };
+  }
+  // A bare truthy resume (an older client) still means "go ahead".
+  return { decision: value ? "approved" : "rejected", note: null };
+}
+
 /**
  * Pause the graph for a real human decision.
  *
@@ -171,6 +202,11 @@ export function needsApproval(state: SupplyState): string {
  * payload. A client resumes via the same thread id (see
  * `orchestrator.resumeRun`), at which point this node re-runs from the top
  * and `interrupt()` returns the supplied decision instead of throwing again.
+ *
+ * Four answers, not two: an operator who would approve the plan *with an
+ * amendment*, or who is not the right person to decide it, has nowhere to put
+ * that in an approve/reject pair, and collapsing either into "approved" loses
+ * the one piece of information the gate exists to capture.
  */
 export function holdForApproval(
   state: SupplyState,
@@ -187,11 +223,13 @@ export function holdForApproval(
     },
   };
 
-  const decision = context.interrupt({ phase: "hold", execution: task });
-  const approved = typeof decision === "string" ? decision === "approved" : Boolean(decision);
-  task.status = approved ? "approved" : "rejected";
-  (task.approval as Record<string, unknown>).decision = decision;
-  return { phase: "hold", execution: task };
+  const { decision, note } = readDecision(context.interrupt({ phase: "hold", execution: task }));
+  task.status = decision;
+  const approval = task.approval as Record<string, unknown>;
+  approval.decision = decision;
+  approval.decided_at = utcnowIso();
+  if (note) approval.note = note;
+  return { phase: "hold", execution: task, gate_decision: decision, gate_note: note ?? undefined };
 }
 
 export function execute(state: SupplyState): Partial<SupplyState> {
@@ -253,6 +291,15 @@ export function recover(state: SupplyState): Partial<SupplyState> {
   if (executionStatus === "rejected") {
     recovery.recovery_action = "plan_rejected";
     recovery.next_step = "await_revised_plan";
+  } else if (executionStatus === "escalated") {
+    // Not a refusal — the decision was referred to someone with the standing
+    // to make it, so the plan stays open rather than closing either way.
+    recovery.recovery_action = "escalated_for_decision";
+    recovery.next_step = "await_higher_authority";
+  } else if (executionStatus === "modified") {
+    recovery.recovery_action = "activate_followup";
+    recovery.next_step = "notify_supply_chain_ops";
+    if (state.gate_note) recovery.operator_amendment = state.gate_note;
   } else if (executionStatus === "approved") {
     recovery.recovery_action = "activate_followup";
     recovery.next_step = "notify_supply_chain_ops";

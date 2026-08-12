@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import { utcnowIso } from "../time";
 import type { Command } from "./graph";
-import { getGraph, type SupplyState } from "./supply-chain-graph";
+import { getGraph, type GateDecision, type SupplyState } from "./supply-chain-graph";
 
 export interface WorkflowRunResult {
   status: "completed" | "awaiting_approval" | "failed";
@@ -83,12 +83,14 @@ export async function runOnce(
 /**
  * Continue a thread paused at the approval gate with a human decision.
  *
- * `decision` is delivered to the `interrupt()` call inside `holdForApproval`
- * (see `supply-chain-graph.ts`) — `"approved"` or `"rejected"`.
+ * The decision and any operator note are delivered together to the
+ * `interrupt()` call inside `holdForApproval` (see `supply-chain-graph.ts`),
+ * which is the only place either is interpreted.
  */
 export function resumeRun(
   threadId: string,
-  decision: "approved" | "rejected"
+  decision: GateDecision,
+  note: string | null = null
 ): Promise<WorkflowRunResult> {
-  return run({ resume: decision }, threadId);
+  return run({ resume: { decision, note } }, threadId);
 }

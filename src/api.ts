@@ -1,7 +1,9 @@
 import type {
   AgentActivity,
   AuditLog,
+  GateDecision,
   Health,
+  LanesResponse,
   PictureResponse,
   SignalsResponse,
   SourceProvenance,
@@ -64,13 +66,14 @@ export const api = {
     get<PictureResponse>(`/picture${refresh ? "?refresh=true" : ""}`),
   signals: (refresh = false) =>
     get<SignalsResponse>(`/signals${refresh ? "?refresh=true" : ""}`),
+  lanes: () => get<LanesResponse>("/lanes"),
 
   // Orchestration & observability
   workflowStatus: () => get<{ workflow: string; status: string }>("/workflow/status"),
   triggerWorkflow: (body: Record<string, unknown>) =>
     post<WorkflowResult>("/workflow/trigger", body),
-  resumeWorkflow: (threadId: string, decision: "approved" | "rejected") =>
-    post<WorkflowResult>(`/workflow/${threadId}/resume`, { decision }),
+  resumeWorkflow: (threadId: string, decision: GateDecision, note?: string | null) =>
+    post<WorkflowResult>(`/workflow/${threadId}/resume`, { decision, note: note ?? null }),
   agentActivities: (params?: { skip?: number; limit?: number; agent_name?: string }) =>
     get<AgentActivity[]>(buildPath("/agent-activities", params)),
   auditLogs: (params?: { skip?: number; limit?: number; actor?: string; entity_type?: string }) =>
