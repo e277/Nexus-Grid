@@ -39,10 +39,8 @@ src/
   components/
     shell/          # Sidebar, TopBar, MobileNav, NavSheet
     pipeline/       # Node model, phase/canvas geometry, SVG diagram, approval panel
-    charts/         # chart-kit (palette + chrome) and one file per chart
     ui/             # shadcn-style primitives (Radix + CVA)
-  views/            # One per page: Dashboard, Sources, FarmToMarket, SoilCrop,
-                    #   Planting, Logistics, Impact
+  views/            # Dashboard (loop + outcomes) and IntelligenceView (one per domain)
   api.ts            # Typed client for /api/*
   types.ts          # Shared response types
   index.css         # Design tokens — dark on bare :root, light under [data-theme]
@@ -50,7 +48,7 @@ src/
     sources/        # Six publishers, each with provenance and its own cache
     projection.ts   # The derived regional read model
     lanes.ts        # Supplier→importer lanes derived from the projection
-    interpretation/ # The only LLM call on the read path
+    interpretation/ # Per-domain agent analysis — what every page renders
     agents/         # supervisor + supply, demand, logistics, agronomy, climate, planting
     workflows/      # graph runtime, supply-chain graph, orchestrator, LLM step
     observability/  # Agent activity and the audit trail — the only records owned here
@@ -62,6 +60,15 @@ handlers, which all declare the Node.js runtime because the store, the agent
 loop, and the workflow checkpointer are process-local singletons.
 
 ## How it works
+
+**The console is agent output.** Each page asks an agent one question about one
+domain and renders the answer — a summary, then findings carrying a severity, a
+confidence, what should change, who would act, and the figures the claim rests
+on. It does not render the read model as tables and charts: a member state can
+already produce its own trade table, and what it cannot produce is what the
+region's figures mean together. The numbers appear as the evidence each finding
+cites. Without an API key the same shape is filled deterministically and
+labelled `Rule-derived`.
 
 **Sources** (`src/lib/server/sources`) — six publishers, fetched concurrently
 and independently, each with its own cache and a provenance record. One
@@ -115,6 +122,7 @@ trail. Every route is rate-limited and records Prometheus metrics.
 - `GET /api/sources`, `POST /api/sources/refresh` — provenance, and a forced sweep
 - `GET /api/picture` — the derived regional read model (`?refresh=true` to refetch)
 - `GET /api/signals` — the interpreted coordination signals
+- `GET /api/analysis/{domain}` — one agent's reading of `market`, `soil`, `planting`, `logistics` or `impact` (`?refresh=true` to re-read)
 - `GET /api/lanes` — supplier→importer lanes, port exposure, and what is *not* observed
 - `GET /api/workflow/status`, `POST /api/workflow/trigger`, `POST /api/workflow/{threadId}/resume`
 - `POST /api/workflow/stream` — run or resume, streaming each node as it completes (SSE)

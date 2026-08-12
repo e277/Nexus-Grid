@@ -3,18 +3,11 @@ import {
   LayoutDashboard,
   Ship,
   Sprout,
-  Target,
   TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 
-export type PageId =
-  | "dashboard"
-  | "farm-to-market"
-  | "soil"
-  | "planting"
-  | "logistics"
-  | "impact";
+export type PageId = "dashboard" | "farm-to-market" | "soil" | "planting" | "logistics";
 
 export interface Page {
   id: PageId;
@@ -52,7 +45,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: LayoutDashboard,
         title: "AI Agent Pipeline",
         description:
-          "The coordination loop end to end — autonomous at every step except the approval gate.",
+          "The coordination loop end to end — autonomous at every step except the approval gate — and what its decisions have added up to.",
       },
     ],
   },
@@ -65,7 +58,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: TrendingUp,
         title: "Farm-to-Market",
         description:
-          "Where the region buys outside itself something a member state already supplies into it.",
+          "What the agent reads in the region's trade flows: where the money leaves, and which gaps a member state could close.",
       },
       {
         id: "soil",
@@ -73,7 +66,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: Sprout,
         title: "Soil & Crop Intel",
         description:
-          "Growing conditions per member state — soil under the main growing area, climate exposure, and what the land yields.",
+          "What the agent reads in the region's growing conditions: which states can physically supply what the region imports, and what constrains them.",
       },
       {
         id: "planting",
@@ -81,7 +74,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: CalendarRange,
         title: "Planting Coordination",
         description:
-          "Rain-fed windows lined up across states, so the region covers more of the calendar instead of gluting the same weeks.",
+          "What the agent reads in the region's planting calendars: where states compete in the same weeks, and where they could stagger instead.",
       },
       {
         id: "logistics",
@@ -89,20 +82,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: Ship,
         title: "Port & Logistics",
         description:
-          "The lanes a coordination plan would actually move over: distance, transit, and live weather at both ends.",
-      },
-    ],
-  },
-  {
-    label: "Outcomes",
-    pages: [
-      {
-        id: "impact",
-        label: "Impact Metrics",
-        icon: Target,
-        title: "Impact Metrics",
-        description:
-          "What the coordination layer is worth against the region's import bill, and every decision the agents took to get there.",
+          "What the agent reads in the routes a plan would move over: which lanes are viable now, and what the weather at each end implies.",
       },
     ],
   },

@@ -38,15 +38,21 @@ export interface SourceUse {
   contributes: string;
 }
 
-function fetchedAgo(iso: string): string {
+/** Full words rather than "20m ago": an abbreviated unit is ambiguous — "m"
+ * reads as either minutes or months — and this sits next to figures whose
+ * freshness is the reason to trust them. */
+function agoInWords(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
-  if (!Number.isFinite(ms)) return "unknown";
-  const min = Math.round(ms / 60_000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.round(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  return `${Math.round(hr / 24)}d ago`;
+  if (!Number.isFinite(ms)) return "at an unknown time";
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes === 1) return "1 minute ago";
+  if (minutes < 60) return `${minutes} minutes ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours === 1) return "1 hour ago";
+  if (hours < 24) return `${hours} hours ago`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? "1 day ago" : `${days} days ago`;
 }
 
 /**
@@ -101,7 +107,7 @@ export function SourceBar({
         </span>
         <span className="ml-auto flex items-center gap-2.5">
           {oldest ? (
-            <span className="text-ng-2xs text-ng-secondary">Oldest fetch {fetchedAgo(oldest)}</span>
+            <span className="text-ng-2xs text-ng-secondary">Oldest fetch {agoInWords(oldest)}</span>
           ) : null}
           {onRefresh ? (
             <button
@@ -166,7 +172,7 @@ export function SourceBar({
 
             <span className="ml-auto shrink-0 text-ng-2xs tabular-nums text-ng-secondary">
               {source.records.toLocaleString()} records
-              {source.covers ? ` · ${source.covers}` : ""} · {fetchedAgo(source.fetched_at)}
+              {source.covers ? ` · ${source.covers}` : ""} · {agoInWords(source.fetched_at)}
             </span>
           </li>
         ))}

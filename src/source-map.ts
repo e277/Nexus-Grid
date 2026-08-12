@@ -3,11 +3,15 @@ import type { SourceUse } from "./components/SourceBar";
 /**
  * Which upstream publisher feeds which page, and what it contributes there.
  *
+ * Each page is now an agent's reading rather than a rendering of the
+ * projection, so these lines name what the agent was *given* for that domain —
+ * the inputs behind its findings. That is what makes the panel worth showing:
+ * when a publisher is down, the reader can see which of the agent's
+ * conclusions are standing on missing ground.
+ *
  * Kept in one file because it is a claim about the code that has to stay true:
- * if a page starts reading a new slot, its entry here is what has to change
- * with it. Each line names the figures on that page, not the publisher's
- * catalogue in general — "arable land and cereal yield" is checkable against
- * the view; "agricultural indicators" is not.
+ * if a domain's prompt starts reading a new slot, its entry here changes with
+ * it. See `lib/server/interpretation/analysis.ts` for the prompts themselves.
  *
  * Derived from `SourceBundle` in `lib/server/sources/index.ts`:
  *   indicators  → World Bank Open Data
@@ -32,12 +36,12 @@ export const DASHBOARD_SOURCES: SourceUse[] = [
   },
 ];
 
-/** Farm-to-Market — every number on the page is one commodity trade table. */
+/** Farm-to-Market — the agent reads one commodity trade table. */
 export const FARM_TO_MARKET_SOURCES: SourceUse[] = [
   {
     slot: "trade",
     contributes:
-      "Every figure here: the regional import bill, the intra-CARICOM share, and each commodity–importer gap with its external share and existing regional suppliers.",
+      "Everything the agent reads here: the regional import bill, the intra-CARICOM share, and every commodity–importer gap with its external share and existing regional suppliers.",
   },
 ];
 
@@ -51,16 +55,15 @@ export const SOIL_SOURCES: SourceUse[] = [
   {
     slot: "indicators",
     contributes:
-      "Arable land, agricultural land, cereal yield and agriculture's share of GDP — four of the five radar axes.",
+      "Arable land, agricultural land, cereal yield and agriculture's share of GDP for each member state.",
   },
   {
     slot: "agroclimate",
-    contributes:
-      "How many months each state can start a season on rainfall alone — the fifth radar axis and the rain-fed column.",
+    contributes: "How many months each state can start a season on rainfall alone.",
   },
   {
     slot: "climate",
-    contributes: "Current climate risk per island, shown on each soil card and in the table.",
+    contributes: "Current climate risk per island, which bounds what the conditions actually permit.",
   },
   {
     slot: "storms",
@@ -73,7 +76,7 @@ export const PLANTING_SOURCES: SourceUse[] = [
   {
     slot: "agroclimate",
     contributes:
-      "The whole calendar on this page: each state's rain-fed planting window, the monthly coverage chart, and the window grid.",
+      "Every state's rain-fed planting window — the calendar the agent reasons over to find overlap and complement.",
   },
   {
     slot: "trade",
@@ -96,19 +99,6 @@ export const LOGISTICS_SOURCES: SourceUse[] = [
   },
   {
     slot: "storms",
-    contributes: "Named storms active in the basin, shown as a banner above the lanes.",
-  },
-];
-
-/** Impact Metrics — the ceiling on coordination against this snapshot. */
-export const IMPACT_SOURCES: SourceUse[] = [
-  {
-    slot: "trade",
-    contributes:
-      "The region's import bill, what is already sourced regionally, the substitution ceiling, and the lane count behind it.",
-  },
-  {
-    slot: "agroclimate",
-    contributes: "The planting months that could be aligned across the staggerable pairs.",
+    contributes: "Named storms active in the basin.",
   },
 ];

@@ -84,65 +84,81 @@ memory and the workflow checkpointer are process-local singletons on
 ### Stack
 
 Next.js 16 (App Router) · React 19 · TypeScript · Tailwind with shadcn-style
-primitives (Radix + CVA) · Recharts · LangGraph · Vitest. One process, no
+primitives (Radix + CVA) · LangGraph · Vitest. One process, no
 broker, no Docker; the only persistence is a single SQLite file holding paused
 workflow runs.
 
 ### The console
 
-Six pages behind a collapsible rail (60px icons / 240px labelled), grouped by
+Five pages behind a collapsible rail (60px icons / 240px labelled), grouped by
 what each section is *for*. A breadcrumb above every page names the group, and
-below `lg` the rail becomes a slide-over with a three-tab bottom bar for the
-destinations worth a thumb.
+below `lg` the rail becomes a slide-over with a three-tab bottom bar.
 
 ```
-OVERVIEW       Dashboard              the coordination loop, end to end
+OVERVIEW       Dashboard              the coordination loop, and what its decisions add up to
 
-INTELLIGENCE   Farm-to-Market         sourcing gaps and what the region buys outside itself
-               Soil & Crop Intel      growing conditions, climate exposure, capability
-               Planting Coordination  rain-fed windows and where they complement
-               Port & Logistics       supplier→importer lanes, transit, weather at both ends
-
-OUTCOMES       Impact Metrics         the ceiling on coordination, and every decision taken
+INTELLIGENCE   Farm-to-Market         where the region's food money leaves it
+               Soil & Crop Intel      what the region can physically grow
+               Planting Coordination  where calendars compete and where they complement
+               Port & Logistics       which routes a plan could move over
 ```
+
+**Every page is an agent's reading, not a rendering of the projection.** This
+is the central decision about the console and it was made twice — the first
+version rendered the read model directly: stat tiles of trade totals, a stacked
+bar of import values, a matrix of external shares, a sortable table of every
+gap. All of it correct, and all of it something a member state can already
+produce from its own systems. What no member state can produce is what the
+region's figures mean *together*, which is the only thing this platform exists
+to say. So each page now asks an agent one question about one domain and
+renders the answer: a summary, then findings carrying a severity, a confidence,
+what should change, who would act, and the figures the claim rests on.
+
+The numbers did not go away — they moved into the evidence each finding cites,
+where they are attached to the conclusion they support rather than left for the
+reader to draw one from. That preserves the property the platform depends on: a
+finding an operator cannot check is not actionable.
+
+`lib/server/interpretation/analysis.ts` holds the domains, their prompts and
+their deterministic fallbacks. Each domain gets its own slice of the picture,
+its own brief, and the same rules: cite figures present in the input, never
+invent a number, and raise a `gap` finding rather than reason around a missing
+source. Readings are cached 15 minutes per domain and revalidated behind the
+request — a model round-trip is far too slow for a polling loop and is billed
+per call — so the first read returns rule-derived findings immediately and the
+console's next poll swaps in the agent's.
 
 **There is no "Data Sources" page**, deliberately. Provenance is not a subject
 in its own right — it is a property of a figure, and a list of six publishers
 on a page of its own tells a reader nothing they can act on. Each page instead
-carries a source panel naming only the publishers behind *its* numbers, what
-each one contributed there, its live status, record count and age; and when one
-is degraded, which figures on that page are consequently missing or stale.
+carries a source panel naming only the publishers its agent was given, what
+each contributed to that reading, its live status and age; and when one is
+degraded, which of the agent's conclusions are consequently standing on
+missing ground.
 
-`src/source-map.ts` holds that mapping. It is a claim about the code that has to
-stay true: a page that starts reading a new slot changes its entry there too.
-Attribution keys off `slot` (the `SourceBundle` key), not `Provenance.source` —
-Open-Meteo and the NOAA hurricane feed share the `climate` SourceId, so it
-cannot tell six publishers apart.
+`src/source-map.ts` holds that mapping. It is a claim about the code that has
+to stay true: if a domain's prompt starts reading a new slot, its entry changes
+with it. Attribution keys off `slot` (the `SourceBundle` key), not
+`Provenance.source` — Open-Meteo and the NOAA hurricane feed share the
+`climate` SourceId, so it cannot tell six publishers apart.
 
-| Page | Reads |
+| Page | The agent is given |
 | --- | --- |
-| Dashboard | UN Comtrade (the gap a run is triggered against), Open-Meteo (the disruption signal), plus the configured model at `recommend` |
-| Farm-to-Market | UN Comtrade only — every figure is one commodity trade table. The signals panel is attributed separately, being interpreted across the whole picture |
+| Dashboard | UN Comtrade (the gap a run is triggered against), Open-Meteo (the disruption signal), plus the platform's own record of agent and gate decisions for the outcomes reading |
+| Farm-to-Market | UN Comtrade only |
 | Soil & Crop Intel | ISRIC SoilGrids, World Bank, NASA POWER, Open-Meteo, NOAA NHC |
-| Planting Coordination | NASA POWER (the calendar), UN Comtrade (which pairs are worth staggering) |
-| Port & Logistics | UN Comtrade (which lanes exist), Open-Meteo (risk at both ends), NOAA NHC |
-| Impact Metrics | UN Comtrade, NASA POWER — and its decision half comes from the platform's own two tables, not a publisher |
+| Planting Coordination | NASA POWER, UN Comtrade |
+| Port & Logistics | UN Comtrade, Open-Meteo, NOAA NHC |
 
 **Dark is the product's mode**, not a preference: tokens are defined on bare
 `:root` (slate-900 base, emerald accent) and light is reached only by the
-toggle, never by `prefers-color-scheme` — the phase colours and the categorical
-chart slots were both stepped and validated against the slate surface, and a
-console that flips on an unrelated OS setting reads as a different product.
+toggle, never by `prefers-color-scheme` — the phase colours on the pipeline
+diagram were stepped against the slate surface, and a console that flips on an
+unrelated OS setting reads as a different product.
 
-Chart colour is computed, not chosen. The five categorical slots are assigned
-in fixed order and never cycled, and both modes were validated against their
-own card surface for the lightness band, chroma floor, adjacent-pair CVD
-separation (worst ΔE 8.4 dark / 9.1 light under protanopia), the normal-vision
-floor (19.3 / 19.6) and contrast. Control-loop phase colours are a separate
-scale and never identify a data series; gate outcomes wear status tokens,
-because approved/rejected *mean* good and bad. Every heat matrix prints its own
-value in each cell, so colour is always a second reading of a number that is
-already there.
+Severity and confidence wear the semantic status tokens, never a categorical
+palette: a finding marked critical *means* critical, and colour there is a
+second reading of a word already on screen, never the only carrier.
 
 ---
 

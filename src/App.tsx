@@ -9,12 +9,14 @@ import { Sidebar } from "./components/shell/Sidebar";
 import { TopBar } from "./components/shell/TopBar";
 import { usePoll } from "./hooks";
 import { findPage, type PageId } from "./navigation";
+import {
+  FARM_TO_MARKET_SOURCES,
+  LOGISTICS_SOURCES,
+  PLANTING_SOURCES,
+  SOIL_SOURCES,
+} from "./source-map";
 import { DashboardView } from "./views/DashboardView";
-import { FarmToMarketView } from "./views/FarmToMarketView";
-import { ImpactView } from "./views/ImpactView";
-import { LogisticsView } from "./views/LogisticsView";
-import { PlantingView } from "./views/PlantingView";
-import { SoilCropView } from "./views/SoilCropView";
+import { IntelligenceView } from "./views/IntelligenceView";
 
 const COLLAPSE_KEY = "nexus_grid_sidebar_collapsed";
 
@@ -22,8 +24,6 @@ export default function App() {
   const [page, setPage] = useState<PageId>("dashboard");
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
-  const [lastSeenId, setLastSeenId] = useState<number | null>(null);
 
   // Read after mount: the server render has no localStorage, and the sidebar
   // width is not worth an inline script the way the theme is.
@@ -49,37 +49,13 @@ export default function App() {
 
   const { data: health } = usePoll(() => api.health(), 30_000);
 
-  const { data: recentActivity } = usePoll(
-    () => api.agentActivities({ limit: 5 }).catch(() => null),
-    20_000
-  );
-
-  const unreadCount = recentActivity
-    ? recentActivity.filter((a) => lastSeenId === null || a.id > lastSeenId).length
-    : 0;
-
   const active = findPage(page);
-
-  function toggleNotifications() {
-    setNotifOpen((open) => {
-      const next = !open;
-      if (next && recentActivity && recentActivity.length > 0) {
-        setLastSeenId(Math.max(...recentActivity.map((a) => a.id)));
-      }
-      return next;
-    });
-  }
-
-  function navigate(id: PageId) {
-    setPage(id);
-    setNotifOpen(false);
-  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-ng-bg">
       <Sidebar
         page={page}
-        onNavigate={navigate}
+        onNavigate={setPage}
         collapsed={collapsed}
         onToggleCollapsed={toggleCollapsed}
         health={health}
@@ -88,22 +64,13 @@ export default function App() {
       <NavSheet
         open={menuOpen}
         page={page}
-        onNavigate={navigate}
+        onNavigate={setPage}
         onClose={() => setMenuOpen(false)}
         health={health}
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar
-          page={page}
-          health={health}
-          recentActivity={recentActivity}
-          unreadCount={unreadCount}
-          notifOpen={notifOpen}
-          onToggleNotifications={toggleNotifications}
-          onCloseNotifications={() => setNotifOpen(false)}
-          onOpenMenu={() => setMenuOpen(true)}
-        />
+        <TopBar page={page} health={health} onOpenMenu={() => setMenuOpen(true)} />
 
         <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
           {/* Page heading: what this screen is, before any numbers. */}
@@ -115,14 +82,19 @@ export default function App() {
           </div>
 
           {page === "dashboard" && <DashboardView />}
-          {page === "farm-to-market" && <FarmToMarketView />}
-          {page === "soil" && <SoilCropView />}
-          {page === "planting" && <PlantingView />}
-          {page === "logistics" && <LogisticsView />}
-          {page === "impact" && <ImpactView />}
+          {page === "farm-to-market" && (
+            <IntelligenceView domain="market" uses={FARM_TO_MARKET_SOURCES} />
+          )}
+          {page === "soil" && <IntelligenceView domain="soil" uses={SOIL_SOURCES} />}
+          {page === "planting" && (
+            <IntelligenceView domain="planting" uses={PLANTING_SOURCES} />
+          )}
+          {page === "logistics" && (
+            <IntelligenceView domain="logistics" uses={LOGISTICS_SOURCES} />
+          )}
         </main>
 
-        <MobileNav page={page} onNavigate={navigate} />
+        <MobileNav page={page} onNavigate={setPage} />
       </div>
     </div>
   );

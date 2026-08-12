@@ -4,6 +4,7 @@ import { CircleCheck, Lock, Play, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { api, streamWorkflow } from "../api";
+import { AnalysisView } from "../components/AnalysisView";
 import { FormError } from "../components/Fields";
 import { ApprovalPanel, type HeldRecommendation } from "../components/pipeline/ApprovalPanel";
 import { PipelineDiagram } from "../components/pipeline/PipelineDiagram";
@@ -19,6 +20,7 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { PillTabs, type PillOption } from "../components/ui/tabs";
+import { usePoll } from "../hooks";
 import { cn } from "../lib/utils";
 import { DASHBOARD_SOURCES } from "../source-map";
 import type {
@@ -461,6 +463,79 @@ export function DashboardView() {
       {complete && finalState ? (
         <ResultsSection state={finalState} recommendation={recommendation} />
       ) : null}
+
+      {/* ── Outcomes ─────────────────────────────────────────────────────
+          What the loop above has added up to. This was its own page, which
+          put the decisions one navigation step away from the thing that makes
+          them — a run finishes here and its consequence was somewhere else. */}
+      <OutcomesSection />
+    </div>
+  );
+}
+
+/**
+ * The agent's reading of what the coordination layer is achieving, plus the
+ * decisions it has actually taken.
+ *
+ * Both halves are agent output rather than a projection of source data: the
+ * analysis is a model reading, and the decision counts are the platform's own
+ * record of what its agents and its operators did.
+ */
+function OutcomesSection() {
+  const { data } = usePoll(() => api.analysis("impact"), 30_000);
+  const { data: decisions } = usePoll(
+    () => api.agentActivities({ limit: 200 }).catch(() => []),
+    30_000
+  );
+  const { data: audits } = usePoll(() => api.auditLogs({ limit: 200 }).catch(() => []), 30_000);
+
+  const gate = (audits ?? [])
+    .filter((log) => log.action.startsWith("workflow.gate_"))
+    .reduce<Record<string, number>>((acc, log) => {
+      const decision = log.action.replace("workflow.gate_", "");
+      acc[decision] = (acc[decision] ?? 0) + 1;
+      return acc;
+    }, {});
+
+  const scored = (decisions ?? []).filter((d) => typeof d.confidence === "number");
+  const meanConfidence =
+    scored.length > 0
+      ? scored.reduce((sum, d) => sum + (d.confidence ?? 0), 0) / scored.length
+      : null;
+
+  const gateTotal = Object.values(gate).reduce((sum, n) => sum + n, 0);
+
+  return (
+    <div className="space-y-4 border-t border-ng-border pt-5">
+      <div>
+        <h2 className="text-ng-lg font-bold tracking-tight text-ng-primary">Outcomes</h2>
+        <p className="mt-0.5 max-w-3xl text-ng-sm text-ng-secondary">
+          What the loop above is adding up to, and every decision taken to get there.
+        </p>
+      </div>
+
+      {/* The platform's own record: not a publisher's data, its agents' and
+          its operators' actual decisions. */}
+      <div className="flex flex-wrap gap-2">
+        <Badge variant="ai">{decisions?.length ?? 0} agent decisions</Badge>
+        {meanConfidence !== null ? (
+          <Badge variant="muted">mean confidence {Math.round(meanConfidence * 100)}%</Badge>
+        ) : null}
+        {gateTotal > 0 ? (
+          Object.entries(gate).map(([decision, count]) => (
+            <Badge
+              key={decision}
+              variant={DECISION_COPY[decision as GateDecision]?.tone ?? "muted"}
+            >
+              {count} {DECISION_COPY[decision as GateDecision]?.label.toLowerCase() ?? decision}
+            </Badge>
+          ))
+        ) : (
+          <Badge variant="muted">no gate decisions recorded yet</Badge>
+        )}
+      </div>
+
+      <AnalysisView analysis={data?.analysis ?? null} />
     </div>
   );
 }
