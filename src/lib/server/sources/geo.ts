@@ -7,6 +7,8 @@
  * inter-island distance estimates, not for navigation.
  */
 
+import { byName } from "./caricom";
+
 export type Coordinates = readonly [latitude: number, longitude: number];
 
 /** (latitude, longitude) of each island's capital / main port */
@@ -37,10 +39,22 @@ export const ISLAND_COORDINATES: Record<string, Coordinates> = {
   "dominican republic": [18.4861, -69.9312], // Santo Domingo
 };
 
-/** Case-insensitive lookup; returns null for unrecognized/blank names. */
+/**
+ * Case-insensitive lookup; returns null for unrecognized/blank names.
+ *
+ * Falls back to the member-state table, which is the canonical one: it already
+ * carries every state's main-port coordinates plus the aliases the upstream
+ * sources use. The local table above only has to cover the non-CARICOM
+ * islands, and the two tables drifting apart is exactly how a member state
+ * ends up silently routed by the deterministic stub — `Saint Vincent and the
+ * Grenadines` and `Montserrat` both did, because only their short names were
+ * listed here.
+ */
 export function lookupIsland(island: string | null | undefined): Coordinates | null {
   if (!island) return null;
-  return ISLAND_COORDINATES[island.trim().toLowerCase()] ?? null;
+  const local = ISLAND_COORDINATES[island.trim().toLowerCase()];
+  if (local) return local;
+  return byName(island)?.coordinates ?? null;
 }
 
 /** Great-circle distance between two (lat, lon) points, in kilometers. */
