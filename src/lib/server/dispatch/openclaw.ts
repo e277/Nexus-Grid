@@ -50,7 +50,7 @@ export function dispatchStatus(): DispatchStatus {
 export const DISPATCH_SETTINGS = [
   {
     key: "OPENCLAW_GATEWAY_URL",
-    describes: "Where the gateway is reachable, e.g. http://127.0.0.1:8080",
+    describes: "Where the gateway is reachable, e.g. http://127.0.0.1:18789",
   },
   {
     key: "OPENCLAW_GATEWAY_TOKEN",

@@ -6,14 +6,31 @@
 # container sidesteps both: the gateway brings its own runtime, and the app's
 # toolchain is untouched.
 #
+# First run — seed the config into the state volume. The gateway refuses to
+# start without gateway.mode=local, and it owns the file afterwards (adding a
+# channel rewrites it), so openclaw.json here is a seed, not the live copy:
+#   docker compose -f openclaw/docker-compose.yml up -d
+#   docker run --rm -v openclaw_openclaw-state:/state #     -v "$PWD/openclaw:/seed:ro" --entrypoint sh ghcr.io/openclaw/openclaw:latest #     -c 'cp /seed/openclaw.json /state/openclaw.json && chown node:node /state/openclaw.json'
+#   docker compose -f openclaw/docker-compose.yml restart
+#
+# Then the WhatsApp channel, which is a plugin fetched at setup time:
+#   …run --rm cli channels add --channel whatsapp --name "Nexus-Grid"
+#   …run --rm cli channels login      # prints a QR — scan it from the phone
+#
 # Start:   docker compose -f openclaw/docker-compose.yml up -d
-# Pair:    docker compose -f openclaw/docker-compose.yml run --rm cli channels login
+# Status:  docker compose -f openclaw/docker-compose.yml run --rm cli channels status
 # Health:  curl http://127.0.0.1:18789/healthz
 services:
   gateway:
     image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
     container_name: nexus-grid-openclaw
     restart: unless-stopped
+    # `bind: lan` is load-bearing, not a widening. OpenClaw's default bind is
+    # loopback, which inside a container means the container's own 127.0.0.1 —
+    # traffic published by Docker arrives on eth0 and finds nothing listening.
+    # The gateway's own docs call this out for exactly this setup. What keeps
+    # it private is the host publish below, not the in-container bind.
+    command: ["node", "openclaw.mjs", "gateway", "--bind", "lan", "--auth", "token"]
     environment:
       # The shared secret Nexus-Grid presents as a bearer token. This endpoint
       # is full operator access on the gateway, which is why the port below is
@@ -41,6 +58,15 @@ services:
     image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
     profiles: ["cli"]
     entrypoint: ["openclaw"]
+    depends_on:
+      - gateway
+    # Share the gateway's network namespace, so 127.0.0.1:18789 in here is the
+    # gateway. Reaching it as ws://gateway:18789 across the compose network
+    # instead trips OpenClaw's refusal to speak plaintext ws:// to a
+    # non-loopback address — a refusal worth keeping rather than switching off
+    # with OPENCLAW_ALLOW_INSECURE_PRIVATE_WS. This way the traffic really is
+    # loopback and never crosses an interface, so nothing is being waived.
+    network_mode: "service:gateway"
     environment:
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-}
     volumes:
