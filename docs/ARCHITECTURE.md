@@ -405,6 +405,42 @@ re-notify the desk, and a delivery failure is recorded as a follow-up in
 
 ---
 
+## 9a. Ranking suppliers
+
+Lanes answer *what routes exist*. Sixty lanes is a list, not a decision, so
+`matching.ts` ranks them: for one gap, which supplier to approach first.
+
+Four factors, each observed or derived, weighted to 100:
+
+| Factor | Weight | Source |
+| --- | --- | --- |
+| Transit | 35 | Great-circle distance between main ports at a documented average sea speed |
+| Weather at both ends | 25 | Live Open-Meteo risk; the weaker end sets the score, since both must be clear for a lane to run |
+| Complementary planting | 20 | NASA POWER rain-fed windows the supplier has and the importer does not |
+| Established regional trade | 20 | Whether the supplier already ships that commodity into the region at observed volume |
+
+Three rules keep it honest:
+
+- **An unknown weather reading scores 0.5, not 1.** Scoring it as clear would
+  reward a state precisely because nothing is known about it, and the rationale
+  says "no current weather reading" rather than "clear" — that distinction was
+  a real bug, caught when the sentence claimed clear weather over factors that
+  said unknown.
+- **A supplier the routing layer cannot place is dropped, not scored.** Missing
+  coordinates fall back to a hashed stub distance, and ranking on a hashed
+  number is ranking on noise.
+- **Price, vessel capacity and port throughput are not scored, and the response
+  says so.** No free source publishes any of them for this region. A ranking
+  that silently weighted an invented number would be worse than no ranking.
+
+The shortlist is what the logistics analyst reads. It is passed *instead of*
+the raw lane list, not alongside it: an earlier version gave both — one sorted
+by score, one by value — and the analyst read them as a single ranking and
+reported that the nearer supplier had been placed lower than the farther one,
+which it had not.
+
+---
+
 ## 10. Against the build brief
 
 | Brief area | Status |
@@ -414,8 +450,8 @@ re-notify the desk, and a delivery failure is recorded as a follow-up in
 | Soil Monitoring & Agricultural Intelligence | **Implemented** — SoilGrids properties, live topsoil moisture |
 | Regional Planting Coordination | **Implemented** — complementary rain-fed window pairing |
 | Supply Chain Visibility | **Partial** — provenance on every input; no shipment-level tracking |
-| Port & Logistics Coordination | **Partial** — `/api/lanes` derives every supplier→importer lane behind a sourcing gap, with real great-circle distance and live weather at both ends; no port or customs system |
-| Freight Matching & Route Optimization | **Weak** — geographic transit estimates only; no free capacity feed exists |
+| Port & Logistics Coordination | **Partial** — `/api/lanes` derives every supplier→importer lane and returns a ranked shortlist per gap; no port or customs system |
+| Freight Matching & Route Optimization | **Implemented** — `matching.ts` ranks every regional supplier per gap on transit, live weather at both ends, complementary planting and established trade, and states the factors it refuses to score |
 | Food Distribution & Inventory Optimization | **Not built** |
 
 ---
@@ -455,7 +491,10 @@ npm run build
   shared, but that is a deployment assumption worth re-checking.
 - **Additional publishers** — the five brief-named sources in §4.
 - **Freight capacity** — no free inter-island capacity API exists; the platform
-  says so rather than inventing a vessel.
+  says so rather than inventing a vessel. Supplier ranking scores what *is*
+  observed and lists price, capacity and port throughput as explicitly
+  unscored, so a reader can see the shape of what is missing.
 - **Port and customs systems** — no ASYCUDA or port authority connection.
-- **Test depth** — 19 tests cover the graph runtime, projection and caching.
-  Sources are verified against live endpoints, not mocked in CI.
+- **Test depth** — 40 tests cover the coordination graph, projection, caching,
+  supplier matching and the naming layers. Sources are verified against live
+  endpoints, not mocked in CI.

@@ -48,6 +48,7 @@ src/
     sources/        # Six publishers, each with provenance and its own cache
     projection.ts   # The derived regional read model
     lanes.ts        # Supplier→importer lanes derived from the projection
+    matching.ts     # Ranks those lanes — which supplier to approach first, and why
     interpretation/ # Per-domain agent analysis — what every page renders
     agents/         # supervisor + supply, demand, logistics, agronomy, climate, planting
     workflows/      # graph runtime, supply-chain graph, orchestrator, LLM step
@@ -123,7 +124,7 @@ trail. Every route is rate-limited and records Prometheus metrics.
 - `GET /api/picture` — the derived regional read model (`?refresh=true` to refetch)
 - `GET /api/signals` — the interpreted coordination signals
 - `GET /api/analysis/{domain}` — one agent's reading of `market`, `soil`, `planting`, `logistics` or `impact` (`?refresh=true` to re-read)
-- `GET /api/lanes` — supplier→importer lanes, port exposure, and what is *not* observed
+- `GET /api/lanes` — supplier→importer lanes, a ranked supplier shortlist per gap, port exposure, and what is *not* observed
 - `GET /api/workflow/status`, `POST /api/workflow/trigger`, `POST /api/workflow/{threadId}/resume`
 - `POST /api/workflow/stream` — run or resume, streaming each node as it completes (SSE)
 - `GET /api/agent-activities`, `GET /api/audit-logs`
