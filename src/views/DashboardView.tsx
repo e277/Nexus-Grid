@@ -1,6 +1,6 @@
 "use client";
 
-import { Circle, CircleCheck, Lock, Play, RotateCcw } from "lucide-react";
+import { Circle, CircleCheck, Play, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { api, streamWorkflow } from "../api";
@@ -138,7 +138,6 @@ export function DashboardView() {
   const [awaitingApproval, setAwaitingApproval] = useState(false);
   const [interruptPayload, setInterruptPayload] = useState<Record<string, unknown> | null>(null);
   const [recommendation, setRecommendation] = useState<unknown>(null);
-  const [decided, setDecided] = useState<GateDecision | null>(null);
   const [finalState, setFinalState] = useState<FinalState | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -307,7 +306,6 @@ export function DashboardView() {
     setInterruptPayload(null);
     setThreadId(null);
     setRecommendation(null);
-    setDecided(null);
     setFinalState(null);
     setNodes(buildInitialNodes());
     setTrace([]);
@@ -372,7 +370,6 @@ export function DashboardView() {
     setInterruptPayload(null);
     setThreadId(null);
     setRecommendation(null);
-    setDecided(null);
     setFinalState(null);
     setNodes(buildInitialNodes());
     setTrace([]);
@@ -415,7 +412,6 @@ export function DashboardView() {
     setRunError(null);
     setAwaitingApproval(false);
     setInterruptPayload(null);
-    setDecided(decision);
     setRunning(true);
 
     try {
@@ -474,6 +470,18 @@ export function DashboardView() {
     : null;
 
   const complete = finalState !== null && !running;
+  /**
+   * Whether the agents have actually produced anything on this visit.
+   *
+   * Counted in finished gaps, not in `running` or `finalState`. Both of those
+   * turn true the moment the first node of the first gap lands — a second
+   * after the button is pressed — which would put the findings on screen
+   * while the run that is supposed to produce them is still in `perceive`.
+   *
+   * One finished gap is enough: the findings fill in as the sweep proceeds
+   * rather than waiting for all twelve.
+   */
+  const swept = completed.length > 0;
   const activePhase = focus === "all" ? null : focus;
 
   return (
@@ -531,75 +539,15 @@ export function DashboardView() {
         </div>
       </Card>
 
-      {/* ── The sweep control, under the diagram it drives ──────────────
-             Above the diagram it read as a form to fill in before anything
-             happened. Below it, the button sits next to the flow it starts
-             and the checklist it advances, which is the order the page is
-             actually read in. */}
-      <Card className="flex flex-wrap items-center gap-3 p-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-ng-xs font-semibold uppercase tracking-[.6px] text-ng-secondary">
-            Coordination sweep
-          </p>
-          <p className="mt-0.5 truncate text-ng-sm text-ng-primary">
-            {gaps.length === 0
-              ? "Loading live trade data…"
-              : `${gaps.length} sourcing gap${gaps.length === 1 ? "" : "s"}`}
-          </p>
-        </div>
-
-        <label className="flex shrink-0 items-center gap-2 text-ng-xs text-ng-secondary">
-          <input
-            type="checkbox"
-            checked={requireApproval}
-            disabled={running || awaitingApproval}
-            onChange={(e) => setRequireApproval(e.target.checked)}
-            className="h-3.5 w-3.5 rounded border-ng-border text-ng-accent focus:ring-ng-accent"
-          />
-          Gate urgent plans
-        </label>
-
-        <span className="shrink-0 text-ng-2xs text-ng-secondary">
-          {requireApproval
-            ? "runs one at a time so each gate can be answered in turn"
-            : "runs all gaps at once — nothing pauses"}
-        </span>
-
-        <Button
-          onClick={runAll}
-          disabled={running || awaitingApproval || gaps.length === 0}
-          className="shrink-0 rounded-full"
-        >
-          {running ? (
-            <>
-              <RotateCcw size={14} className="animate-spin" aria-hidden />
-              Running…
-            </>
-          ) : (
-            <>
-              <Play size={14} aria-hidden />
-              Run sweep
-            </>
-          )}
-        </Button>
-      </Card>
-
       {/* ── The gate ────────────────────────────────────────────────────
              Always on screen, inert until a run parks here. A control that
              appears and vanishes reads as incidental, and this is the one
-             point in the loop where a run is not autonomous. */}
-      {awaitingApproval ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-ng-warning-bd bg-ng-warning-bg px-4 py-3">
-          <Lock size={15} className="shrink-0 text-ng-warning-tx" aria-hidden />
-          <p className="text-ng-base font-semibold text-ng-warning-tx">
-            Sweep paused — awaiting human approval
-          </p>
-          <p className="w-full text-ng-sm text-ng-warning-tx sm:w-auto sm:border-l sm:border-ng-warning-bd sm:pl-2">
-            The next gap starts the moment a decision is recorded.
-          </p>
-        </div>
-      ) : null}
+             point in the loop where a run is not autonomous.
 
+             The banner above this used to read "Sweep paused — awaiting human
+             approval", beside a panel already headed "Approval gate" and
+             badged with the held plan's priority. Two elements saying one
+             thing, and the louder one was the element with no buttons on it. */}
       <ApprovalPanel
         recommendation={held}
         onDecide={decide}
@@ -613,34 +561,79 @@ export function DashboardView() {
           and it has to be legible at the moment of the decision. */}
       {analysis ? <DispatchPanel dispatch={analysis.dispatch} /> : null}
 
-      {decided && !awaitingApproval ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-ng-border bg-ng-surface px-4 py-2.5">
-          <CircleCheck size={15} className="shrink-0 text-ng-accent" aria-hidden />
-          <span className="text-ng-sm text-ng-secondary">Gate decision recorded:</span>
-          <Badge variant={DECISION_COPY[decided].tone}>{DECISION_COPY[decided].label}</Badge>
-        </div>
-      ) : null}
-
-      {/* ── The sweep, as a checklist ────────────────────────────────────
+      {/* ── The sweep: the control and the list it advances ──────────────
              Every gap is listed from the start and ticks off as it finishes.
              Showing only the completed ones hid the shape of the work: a
              reader could not tell whether two done meant two of three or two
              of twelve, and the gap currently in the diagram had no place in
-             the list it came from. */}
-      {gaps.length > 0 ? (
+             the list it came from.
+
+             The card is always here, never gated on the gaps having loaded.
+             The run button belongs to the loop, not to the list, and a button
+             that appears once data arrives cannot be found by someone waiting
+             for it — it goes inert instead, which is the same rule the
+             approval gate follows. */}
         <Card className="overflow-hidden p-0">
-          <div className="flex flex-wrap items-center gap-2 border-b border-ng-border px-4 py-2.5">
-            <h2 className="text-ng-base font-semibold text-ng-primary">Sourcing gaps</h2>
-            <span className="text-ng-2xs text-ng-secondary">
-              {done.size} of {gaps.length} swept
-            </span>
-            <span className="ml-auto h-1.5 w-32 overflow-hidden rounded-full bg-ng-muted">
+          {/* The control and the list it advances, in one card. They were two
+              stacked cards that both counted the same gaps — one as "12
+              sourcing gaps" beside the button, the other as "0 of 12 swept"
+              over the progress bar. The same number under two headings, with
+              nothing to say they were the same number. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-ng-border px-4 py-3">
+            <div className="min-w-0">
+              <h2 className="text-ng-base font-semibold text-ng-primary">Coordination sweep</h2>
+              <p className="mt-0.5 text-ng-2xs text-ng-secondary">
+                {gaps.length === 0
+                  ? "Loading live trade data…"
+                  : `${done.size} of ${gaps.length} sourcing gap${gaps.length === 1 ? "" : "s"} swept`}
+              </p>
+            </div>
+
+            <span className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-ng-muted sm:w-32">
               <span
                 className="block h-full rounded-full bg-ng-accent transition-[width] duration-300"
-                style={{ width: `${(done.size / gaps.length) * 100}%` }}
+                style={{ width: `${(done.size / Math.max(1, gaps.length)) * 100}%` }}
               />
             </span>
+
+            <label className="ml-auto flex shrink-0 items-center gap-2 text-ng-xs text-ng-secondary">
+              <input
+                type="checkbox"
+                checked={requireApproval}
+                disabled={running || awaitingApproval}
+                onChange={(e) => setRequireApproval(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-ng-border text-ng-accent focus:ring-ng-accent"
+              />
+              Gate urgent plans
+              <span className="hidden text-ng-2xs text-ng-disabled lg:inline">
+                {requireApproval ? "· one at a time" : "· all at once"}
+              </span>
+            </label>
+
+            <Button
+              onClick={runAll}
+              disabled={running || awaitingApproval || gaps.length === 0}
+              className="shrink-0 rounded-full"
+            >
+              {running ? (
+                <>
+                  <RotateCcw size={14} className="animate-spin" aria-hidden />
+                  Running…
+                </>
+              ) : (
+                <>
+                  <Play size={14} aria-hidden />
+                  Run sweep
+                </>
+              )}
+            </Button>
           </div>
+
+          {gaps.length === 0 ? (
+            <p className="px-4 py-6 text-ng-sm text-ng-secondary">
+              Reading the regional trade picture…
+            </p>
+          ) : null}
 
           <ul className="divide-y divide-ng-border">
             {gaps.map((gap, index) => {
@@ -713,7 +706,6 @@ export function DashboardView() {
             })}
           </ul>
         </Card>
-      ) : null}
 
       {/* ── Results: only once the run has actually finished ────────────── */}
       {complete && finalState ? (
@@ -725,7 +717,14 @@ export function DashboardView() {
              which asked an operator to leave the run in order to read what the
              run produced. Everything below is model output — findings the
              agents raised, the confidence they attached, how they scored
-             suppliers, and what humans answered at the gate. */}
+             suppliers, and what humans answered at the gate.
+
+             It appears once a sweep has produced something, not on page load.
+             Charts standing ready before any agent has run invite the reader
+             to take them for the state of the region, when they are the state
+             of a run that has not happened yet. */}
+      {swept ? (
+        <>
       <div className="border-t border-ng-border pt-5">
         <h2 className="text-ng-xl font-bold tracking-tight text-ng-primary">
           What the agents concluded
@@ -750,6 +749,8 @@ export function DashboardView() {
       ) : (
         <AnalysisSection data={analysis} />
       )}
+        </>
+      ) : null}
 
     </div>
   );

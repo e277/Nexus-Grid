@@ -1,6 +1,6 @@
 "use client";
 
-import { Brain, Filter, Send, Sparkles, Target, X } from "lucide-react";
+import { Brain, Filter, Send, Sparkles, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
@@ -99,7 +99,6 @@ export function AnalysisSection({ data }: { data: AnalysisOverview }) {
   const detail = selectedFinding !== null ? (filtered[selectedFinding] ?? null) : null;
 
   const interpreted = data.analyses.filter((a) => a.source !== "rules").length;
-  const criticals = allFindings.filter((f) => f.severity === "critical").length;
   const scored = data.decisions.filter((d) => typeof d.confidence === "number");
   const meanConfidence =
     scored.length > 0
@@ -130,22 +129,7 @@ export function AnalysisSection({ data }: { data: AnalysisOverview }) {
 
   return (
     <div className="space-y-5">
-      {/* ── What the agents have produced ──────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat
-          label="Findings raised"
-          value={allFindings.length}
-          hint={`across ${data.analyses.length} agents`}
-          icon={<Sparkles size={13} />}
-          tone="ai"
-        />
-        <Stat
-          label="Rated critical"
-          value={criticals}
-          hint={criticals > 0 ? "needs a decision first" : "nothing critical right now"}
-          icon={<Target size={13} />}
-          tone={criticals > 0 ? "danger" : "success"}
-        />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Stat
           label="Agent decisions"
           value={data.decisions.length}
@@ -158,7 +142,7 @@ export function AnalysisSection({ data }: { data: AnalysisOverview }) {
           value={`${interpreted} / ${data.analyses.length}`}
           hint={
             interpreted === data.analyses.length
-              ? "every page is a model reading"
+              ? "every reading below came from a model"
               : "the rest are rule-derived"
           }
           icon={<Sparkles size={13} />}
