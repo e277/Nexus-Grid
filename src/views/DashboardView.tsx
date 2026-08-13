@@ -138,8 +138,6 @@ export function DashboardView() {
   const [decided, setDecided] = useState<GateDecision | null>(null);
   const [finalState, setFinalState] = useState<FinalState | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  /** Mirrors `finalState` so the parallel sweep can bank it after awaiting. */
-  const finalStateRef = useRef<FinalState | null>(null);
 
   const done = new Map(
     completed.map(({ gap, state }) => [`${gap.importer_iso3}-${gap.commodity_code}`, state])
@@ -168,12 +166,18 @@ export function DashboardView() {
      * traversal, and twelve runs writing to it would render a composite of
      * twelve different positions — a picture of no run in particular.
      */
-    options: { drivesDiagram: boolean; gap: SubstitutionOpportunity | null } = {
+    options: {
+      drivesDiagram: boolean;
+      /** Whether finishing should start the next gap. False in a parallel sweep. */
+      chain: boolean;
+      gap: SubstitutionOpportunity | null;
+    } = {
       drivesDiagram: true,
+      chain: true,
       gap: null,
     }
   ) {
-    const { drivesDiagram, gap } = options;
+    const { drivesDiagram, chain, gap } = options;
     for await (const { event, data } of streamWorkflow(body, signal)) {
       if (event === "started") {
         if (!drivesDiagram) continue;
@@ -201,29 +205,21 @@ export function DashboardView() {
         });
 
         if (id === "recommend") setRecommendation(update.recommendation);
-        finalStateRef.current = (data.value ?? null) as FinalState | null;
-        setFinalState(finalStateRef.current);
+        setFinalState((data.value ?? null) as FinalState | null);
         continue;
       }
 
       if (event === "finished") {
-        // A parallel run banks its own outcome and nothing else; the sweep is
-        // finished when every promise settles, not when one of them does.
-        if (!drivesDiagram) {
-          if (gap) {
-            setCompleted((done) => [...done, { gap, state: (data.value ?? {}) as FinalState }]);
+        if (drivesDiagram) {
+          if (data.status === "awaiting_approval") {
+            setRunning(false);
+            setAwaitingApproval(true);
+            setInterruptPayload((data.interrupt ?? null) as Record<string, unknown> | null);
+            // The graph is genuinely parked inside `hold` — show that, rather
+            // than leaving the node looking untouched.
+            setNodes((prev) => ({ ...prev, hold: { ...prev.hold, status: "running" } }));
+            continue;
           }
-          continue;
-        }
-
-        if (data.status === "awaiting_approval") {
-          setRunning(false);
-          setAwaitingApproval(true);
-          setInterruptPayload((data.interrupt ?? null) as Record<string, unknown> | null);
-          // The graph is genuinely parked inside `hold` — show that, rather
-          // than leaving the node looking untouched.
-          setNodes((prev) => ({ ...prev, hold: { ...prev.hold, status: "running" } }));
-        } else {
           setNodes((prev) => {
             const next = { ...prev };
             for (const key of Object.keys(next)) {
@@ -231,18 +227,30 @@ export function DashboardView() {
             }
             return next;
           });
-          // Bank this gap's outcome, then continue the sweep.
-          setQueueIndex((index) => {
-            if (index === null) {
-              setRunning(false);
-              return null;
-            }
-            const gap = gapsRef.current[index];
-            setCompleted((done) => [...done, { gap, state: (data.value ?? {}) as FinalState }]);
-            void runFrom(index + 1);
-            return index;
-          });
         }
+
+        // A parallel run banks its own outcome and starts nothing: the sweep
+        // is over when every promise settles, not when one of them does.
+        // Chaining here as well as awaiting the promises would run each gap
+        // twice.
+        if (!chain) {
+          if (gap) {
+            setCompleted((done) => [...done, { gap, state: (data.value ?? {}) as FinalState }]);
+          }
+          continue;
+        }
+
+        // Bank this gap's outcome, then continue the sweep.
+        setQueueIndex((index) => {
+          if (index === null) {
+            setRunning(false);
+            return null;
+          }
+          const current = gapsRef.current[index];
+          setCompleted((done) => [...done, { gap: current, state: (data.value ?? {}) as FinalState }]);
+          void runFrom(index + 1);
+          return index;
+        });
         continue;
       }
 
@@ -261,11 +269,11 @@ export function DashboardView() {
    * basis to answer — the ranking of what matters is the agents' job, and a
    * dropdown quietly limited a sweep to whatever was selected.
    *
-   * Sequential, not parallel. A gap that reaches the approval gate stops the
-   * queue where it is, because the whole point of the gate is that a human
-   * decides before anything downstream happens; firing twelve runs at once
-   * would produce twelve simultaneous gates and no way to answer them in
-   * order. `decide()` restarts the queue at the next gap.
+   * This is the gated path, and it is sequential for the gate's sake: a gap
+   * that reaches the gate stops the queue where it is, because the point of
+   * the gate is that a human decides before anything downstream happens.
+   * `decide()` restarts the queue at the next gap. When the gate is off,
+   * `runAll` skips this and runs every gap at once instead.
    */
   async function runFrom(index: number) {
     const queue = gapsRef.current;
@@ -329,21 +337,25 @@ export function DashboardView() {
   async function runAll() {
     if (running || gaps.length === 0) return;
 
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
     gapsRef.current = gaps;
     setCompleted([]);
     setRunError(null);
 
+    // Gated: one at a time, each gap with its own controller inside runFrom.
     if (requireApproval) {
       void runFrom(0);
       return;
     }
 
+    // Ungated: one controller for the whole sweep, so stopping stops all of it.
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setRunning(true);
-    setQueueIndex(0);
+    // Null, not 0: in a parallel sweep there is no "current" gap. The
+    // checklist reads that as "every unswept gap is in flight", which is true.
+    setQueueIndex(null);
     setAwaitingApproval(false);
     setInterruptPayload(null);
     setThreadId(null);
@@ -367,21 +379,11 @@ export function DashboardView() {
 
     const outcomes = await Promise.allSettled(
       gaps.map((gap, index) =>
-        consume(body(gap), controller.signal, { drivesDiagram: index === 0, gap })
+        consume(body(gap), controller.signal, { drivesDiagram: index === 0, chain: false, gap })
       )
     );
 
     if (controller.signal.aborted) return;
-
-    // The first run drives the diagram but banks nothing, so bank it here.
-    const first = gaps[0];
-    if (first) {
-      setCompleted((done) =>
-        done.some((d) => d.gap.commodity_code === first.commodity_code && d.gap.importer_iso3 === first.importer_iso3)
-          ? done
-          : [...done, { gap: first, state: (finalStateRef.current ?? {}) as FinalState }]
-      );
-    }
 
     const failed = outcomes.filter((o) => o.status === "rejected").length;
     if (failed > 0) {
@@ -627,7 +629,9 @@ export function DashboardView() {
             {gaps.map((gap, index) => {
               const key = `${gap.importer_iso3}-${gap.commodity_code}`;
               const outcome = done.get(key) ?? null;
-              const active = queueIndex === index && running;
+              // queueIndex is null throughout a parallel sweep, where every
+              // gap that has not landed yet is in flight.
+              const active = running && !outcome && (queueIndex === null || queueIndex === index);
 
               return (
                 <li key={key} className="flex flex-wrap items-center gap-2 px-4 py-2">
