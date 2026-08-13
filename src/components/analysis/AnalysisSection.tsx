@@ -399,9 +399,18 @@ export function DispatchPanel({ dispatch }: { dispatch: DispatchReadiness }) {
         <>
           <p className="mt-2 max-w-3xl text-ng-sm leading-relaxed text-ng-secondary">
             Approved plans have nowhere to go, so the execute step reports its dispatch as
-            simulated rather than claiming a delivery. Set these on the server and restart — a
-            value added to <span className="font-mono">.env</span> after a build is not picked up
-            by <span className="font-mono">next start</span>.
+            simulated rather than claiming a delivery.
+          </p>
+          {/* Which environment these belong to, because the gateway is a
+              separate process and is usually configured somewhere else
+              entirely — a container, a service, another host. Setting them
+              there instead of here is the obvious wrong turn, and this panel
+              is where a reader decides which one to open. */}
+          <p className="mt-1.5 max-w-3xl text-ng-sm leading-relaxed text-ng-secondary">
+            These belong to <span className="font-medium text-ng-primary">this app</span>, in its
+            own <span className="font-mono">.env</span> — not to the gateway, which keeps its own
+            configuration and owns the channel itself. They are read once at startup, so restart
+            the server after setting one.
           </p>
           <ul className="mt-2.5 space-y-1.5">
             {dispatch.missing.map((setting) => (
