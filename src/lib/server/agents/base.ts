@@ -14,6 +14,7 @@
  */
 
 import { recordAgentActivity } from "../observability/activity";
+import { actionLabel, agentTitle } from "./labels";
 
 const MEMORY_SIZE = 50;
 
@@ -45,7 +46,8 @@ export abstract class BaseAgent {
     if (this.memory.length > MEMORY_SIZE) this.memory.shift();
 
     console.info(
-      `${this.name} -> ${result.action} (confidence=${result.confidence.toFixed(2)}): ${result.rationale}`
+      `${agentTitle(this.name)}: ${actionLabel(result.action)} ` +
+        `(confidence ${result.confidence.toFixed(2)}) — ${result.rationale}`
     );
 
     try {
