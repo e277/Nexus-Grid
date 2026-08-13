@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 
+import { cn } from "../../lib/utils";
+
 /**
  * Shared chart chrome, so every chart on the analysis page reads as one system.
  *
@@ -160,18 +162,21 @@ export function ChartFrame({
         <h3 className="text-ng-base font-semibold text-ng-primary">{title}</h3>
         {subtitle ? <p className="mt-0.5 text-ng-xs text-ng-secondary">{subtitle}</p> : null}
       </div>
-      <div className="p-4">{children}</div>
-      {/* The table is shown, not tucked behind a disclosure. It is the
-          WCAG-clean twin of the chart above it, and a value a reader has to
-          find and open is a value most readers never see. */}
-      {table ? (
-        <div className="border-t border-ng-border px-4 py-3">
-          <p className="mb-1.5 text-ng-2xs font-semibold uppercase tracking-[.6px] text-ng-secondary">
-            The same numbers
-          </p>
-          <div className="overflow-x-auto">{table}</div>
-        </div>
-      ) : null}
+      {/* Chart and table side by side from `xl`, stacked below it. The table
+          is the chart's WCAG-clean twin, not an appendix to it — reading a
+          value off the rows while looking at the shape is the point, and that
+          only works when both are in view at once. */}
+      <div className={cn("gap-4 p-4", table ? "xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]" : "")}>
+        <div className="min-w-0">{children}</div>
+        {table ? (
+          <div className="mt-4 min-w-0 border-t border-ng-border pt-3 xl:mt-0 xl:border-l xl:border-t-0 xl:pl-4 xl:pt-0">
+            <p className="mb-1.5 text-ng-2xs font-semibold uppercase tracking-[.6px] text-ng-secondary">
+              The same numbers
+            </p>
+            <div className="overflow-x-auto">{table}</div>
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }

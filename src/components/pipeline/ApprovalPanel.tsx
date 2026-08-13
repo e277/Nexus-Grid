@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronUp, Pencil, ShieldAlert, ThumbsDown, ThumbsUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Lock, Pencil, ShieldAlert, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useState } from "react";
 
 import { cn } from "../../lib/utils";
@@ -57,18 +57,30 @@ export function ApprovalPanel({
   recommendation,
   onDecide,
   busy,
+  /** True only while a run is genuinely parked here. */
+  active,
+  /** False when the operator has turned the gate off for this sweep. */
+  gateEnabled,
 }: {
-  recommendation: HeldRecommendation;
+  recommendation: HeldRecommendation | null;
   onDecide: (decision: GateDecision, note: string | null) => void;
   busy: boolean;
+  active: boolean;
+  gateEnabled: boolean;
 }) {
+  // Always rendered, never conditionally mounted. Controls that appear and
+  // vanish make the gate look incidental, and it is the one point in the loop
+  // where a run is not autonomous — so it stays on screen and goes inert.
+  const disabled = !active || busy;
   const [showReasoning, setShowReasoning] = useState(false);
   /** Which note-taking action is open, if any. */
   const [noteFor, setNoteFor] = useState<"modified" | "escalated" | null>(null);
   const [note, setNote] = useState("");
 
   const band =
-    recommendation.confidence !== null ? confidenceBand(recommendation.confidence) : null;
+    recommendation && recommendation.confidence !== null
+      ? confidenceBand(recommendation.confidence)
+      : null;
 
   function submitNote() {
     if (!noteFor) return;
@@ -78,23 +90,33 @@ export function ApprovalPanel({
   }
 
   return (
-    <div className="rounded-[10px] border border-ng-warning-bd bg-ng-surface">
+    <div
+      className={cn(
+        "rounded-[10px] border bg-ng-surface transition-opacity",
+        active ? "border-ng-warning-bd" : "border-ng-border opacity-70"
+      )}
+    >
       <div className="flex flex-wrap items-center gap-2 border-b border-ng-border px-4 py-3">
-        <Badge variant={PRIORITY_VARIANT[recommendation.priority] ?? "muted"}>
-          {recommendation.priority} priority
-        </Badge>
-        <Badge variant="muted" className="font-mono">
-          {recommendation.agent}
-        </Badge>
+        <Lock size={14} className="shrink-0 text-ng-secondary" aria-hidden />
+        <span className="text-ng-base font-semibold text-ng-primary">Approval gate</span>
+        {recommendation ? (
+          <Badge variant={PRIORITY_VARIANT[recommendation.priority] ?? "muted"}>
+            {recommendation.priority} priority
+          </Badge>
+        ) : (
+          <Badge variant="muted">
+            {gateEnabled ? "waiting for an urgent plan" : "gate off for this sweep"}
+          </Badge>
+        )}
         {band ? (
           <Badge variant={band.variant}>
-            {Math.round((recommendation.confidence ?? 0) * 100)}% · {band.label}
+            {Math.round((recommendation?.confidence ?? 0) * 100)}% · {band.label}
           </Badge>
         ) : null}
-        {recommendation.modelSource ? (
+        {recommendation?.modelSource ? (
           <Badge variant="ai">{recommendation.modelSource}</Badge>
         ) : null}
-        {recommendation.valueAtStakeUsd ? (
+        {recommendation?.valueAtStakeUsd ? (
           <span className="ml-auto text-ng-xs tabular-nums text-ng-secondary">
             {usd(recommendation.valueAtStakeUsd)} at stake
           </span>
@@ -102,16 +124,24 @@ export function ApprovalPanel({
       </div>
 
       <div className="space-y-3 px-4 py-3.5">
-        <div>
-          <p className="text-ng-base font-semibold leading-relaxed text-ng-primary">
-            {recommendation.action.replace(/_/g, " ")}
+        {recommendation ? (
+          <div>
+            <p className="text-ng-base font-semibold leading-relaxed text-ng-primary">
+              {recommendation.action.replace(/_/g, " ")}
+            </p>
+            <p className="mt-0.5 text-ng-sm text-ng-secondary">
+              Directed at {recommendation.target}
+            </p>
+          </div>
+        ) : (
+          <p className="text-ng-sm leading-relaxed text-ng-secondary">
+            {gateEnabled
+              ? "Urgent and high-priority plans stop here for a human decision. Nothing is held right now."
+              : "The gate is switched off for this sweep, so plans dispatch without a human decision. Tick “Gate urgent plans” above to hold them here."}
           </p>
-          <p className="mt-0.5 text-ng-sm text-ng-secondary">
-            Directed at {recommendation.target}
-          </p>
-        </div>
+        )}
 
-        {recommendation.strategy ? (
+        {recommendation?.strategy ? (
           <p className="border-l-2 border-ng-accent pl-3 text-ng-base leading-relaxed text-ng-primary">
             {recommendation.strategy}
           </p>
@@ -120,7 +150,7 @@ export function ApprovalPanel({
         {/* Risks sit above the buttons, unfolded. A named risk is the whole
             reason a human is standing here, so it must not be behind a
             disclosure the approver can skip. */}
-        {recommendation.risks.length > 0 ? (
+        {recommendation && recommendation.risks.length > 0 ? (
           <div className="rounded-md border border-ng-warning-bd bg-ng-warning-bg px-3 py-2">
             <p className="text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-warning-tx">
               Risks the model flagged
@@ -136,7 +166,7 @@ export function ApprovalPanel({
           </div>
         ) : null}
 
-        {recommendation.reasoning ? (
+        {recommendation?.reasoning ? (
           <div>
             <button
               type="button"
@@ -165,7 +195,7 @@ export function ApprovalPanel({
           <Button
             variant="success"
             size="sm"
-            disabled={busy}
+            disabled={disabled}
             onClick={() => onDecide("approved", null)}
           >
             <ThumbsUp size={13} aria-hidden />
@@ -174,7 +204,7 @@ export function ApprovalPanel({
           <Button
             variant="outline"
             size="sm"
-            disabled={busy}
+            disabled={disabled}
             aria-expanded={noteFor === "modified"}
             onClick={() => {
               setNoteFor((v) => (v === "modified" ? null : "modified"));
@@ -188,7 +218,7 @@ export function ApprovalPanel({
           <Button
             variant="danger"
             size="sm"
-            disabled={busy}
+            disabled={disabled}
             onClick={() => onDecide("rejected", null)}
           >
             <ThumbsDown size={13} aria-hidden />
@@ -197,7 +227,7 @@ export function ApprovalPanel({
           <Button
             variant="outline"
             size="sm"
-            disabled={busy}
+            disabled={disabled}
             aria-expanded={noteFor === "escalated"}
             onClick={() => {
               setNoteFor((v) => (v === "escalated" ? null : "escalated"));
@@ -244,14 +274,14 @@ export function ApprovalPanel({
               className="mt-2 bg-ng-surface"
             />
             <div className="mt-2 flex items-center gap-2">
-              <Button size="sm" disabled={busy || !note.trim()} onClick={submitNote}>
+              <Button size="sm" disabled={disabled || !note.trim()} onClick={submitNote}>
                 {busy
                   ? "Working…"
                   : noteFor === "modified"
                     ? "Approve with amendment"
                     : "Escalate"}
               </Button>
-              <Button size="sm" variant="ghost" disabled={busy} onClick={() => setNoteFor(null)}>
+              <Button size="sm" variant="ghost" disabled={disabled} onClick={() => setNoteFor(null)}>
                 Cancel
               </Button>
               <span className="text-ng-2xs text-ng-secondary">

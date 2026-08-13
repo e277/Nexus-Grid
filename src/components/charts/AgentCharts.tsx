@@ -112,7 +112,7 @@ export function FindingsByDomainChart({
   return (
     <ChartFrame
       title="Findings by domain"
-      subtitle={`${total} finding${total === 1 ? "" : "s"} across ${rows.length} agents — click a bar to filter`}
+      subtitle={`How many conclusions each agent raised, stacked by how serious it judged them. ${total} finding${total === 1 ? "" : "s"} across ${rows.length} agents — click a bar to filter`}
       table={
         <SimpleTable
           columns={["Domain", ...SEVERITY_ORDER.map((s) => SEVERITY_LABEL[s])]}
@@ -134,7 +134,19 @@ export function FindingsByDomainChart({
           <BarChart data={rows} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
             <CartesianGrid {...GRID_PROPS} vertical={false} />
             <XAxis dataKey="domain" {...AXIS_PROPS} interval={0} />
-            <YAxis allowDecimals={false} width={28} {...AXIS_PROPS} />
+            <YAxis
+              allowDecimals={false}
+              width={46}
+              {...AXIS_PROPS}
+              label={{
+                value: "Findings",
+                angle: -90,
+                position: "insideLeft",
+                fill: INK.secondary,
+                fontSize: 11,
+                style: { textAnchor: "middle" },
+              }}
+            />
             <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--color-accent-light)" }} />
             {SEVERITY_ORDER.map((severity, index) => (
               <Bar
@@ -207,15 +219,38 @@ export function ConfidenceChart({ findings }: { findings: Finding[] }) {
   return (
     <ChartFrame
       title="Confidence across findings"
-      subtitle="How sure each agent was in what it raised"
+      subtitle="How many findings sit at each confidence level. Low confidence is not wrong — it means the agent wants the figure checked before it is acted on"
       table={<SimpleTable columns={["Confidence", "Findings"]} rows={buckets.map((b) => [b.level, b.count])} />}
     >
       <div className="h-[240px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={buckets} margin={{ top: 20, right: 12, bottom: 4, left: 0 }}>
+          <BarChart data={buckets} margin={{ top: 20, right: 12, bottom: 18, left: 0 }}>
             <CartesianGrid {...GRID_PROPS} vertical={false} />
-            <XAxis dataKey="level" {...AXIS_PROPS} interval={0} />
-            <YAxis allowDecimals={false} width={28} {...AXIS_PROPS} />
+            <XAxis
+              dataKey="level"
+              {...AXIS_PROPS}
+              interval={0}
+              label={{
+                value: "Confidence the agent attached",
+                position: "insideBottom",
+                offset: -2,
+                fill: INK.secondary,
+                fontSize: 11,
+              }}
+            />
+            <YAxis
+              allowDecimals={false}
+              width={46}
+              {...AXIS_PROPS}
+              label={{
+                value: "Findings",
+                angle: -90,
+                position: "insideLeft",
+                fill: INK.secondary,
+                fontSize: 11,
+                style: { textAnchor: "middle" },
+              }}
+            />
             <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--color-accent-light)" }} />
             <Bar
               dataKey="count"
@@ -319,11 +354,22 @@ export function SupplierScoreChart({ match }: { match: GapMatch | null }) {
           <BarChart
             data={rows}
             layout="vertical"
-            margin={{ top: 4, right: 40, bottom: 4, left: 8 }}
+            margin={{ top: 4, right: 40, bottom: 18, left: 8 }}
             barCategoryGap="28%"
           >
             <CartesianGrid {...GRID_PROPS} horizontal={false} />
-            <XAxis type="number" domain={[0, 100]} {...AXIS_PROPS} />
+            <XAxis
+              type="number"
+              domain={[0, 100]}
+              {...AXIS_PROPS}
+              label={{
+                value: "Match score out of 100",
+                position: "insideBottom",
+                offset: -2,
+                fill: INK.secondary,
+                fontSize: 11,
+              }}
+            />
             <YAxis type="category" dataKey="supplier" width={160} {...AXIS_PROPS} />
             <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--color-accent-light)" }} />
             {FACTOR_KEYS.map((factor, index) => (
@@ -407,7 +453,7 @@ export function AgentDecisionChart({
   return (
     <ChartFrame
       title="Decisions by agent"
-      subtitle="The platform's own record of what its agents concluded"
+      subtitle="How many decisions each specialist recorded, and how confident it was on average. These are the platform's own records, not a publisher's data"
       table={
         <SimpleTable
           columns={["Agent", "Decisions", "Mean confidence"]}
@@ -424,11 +470,22 @@ export function AgentDecisionChart({
           <BarChart
             data={byAgent}
             layout="vertical"
-            margin={{ top: 4, right: 40, bottom: 4, left: 8 }}
+            margin={{ top: 4, right: 40, bottom: 18, left: 8 }}
             barCategoryGap="30%"
           >
             <CartesianGrid {...GRID_PROPS} horizontal={false} />
-            <XAxis type="number" allowDecimals={false} {...AXIS_PROPS} />
+            <XAxis
+              type="number"
+              allowDecimals={false}
+              {...AXIS_PROPS}
+              label={{
+                value: "Decisions recorded",
+                position: "insideBottom",
+                offset: -2,
+                fill: INK.secondary,
+                fontSize: 11,
+              }}
+            />
             <YAxis type="category" dataKey="agent" width={150} {...AXIS_PROPS} />
             <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--color-accent-light)" }} />
             <Bar
@@ -467,7 +524,7 @@ export function GateOutcomeChart({
       subtitle={
         total === 0
           ? "No run has been decided yet — the gate is the one point a run is not autonomous"
-          : `${total} decision${total === 1 ? "" : "s"} recorded`
+          : `${total} decision${total === 1 ? "" : "s"} recorded. Approved and modified plans are delivered; rejected and escalated ones are decisions not to act`
       }
       table={<SimpleTable columns={["Decision", "Count"]} rows={rows.map((r) => [r.decision, r.count])} />}
     >
@@ -478,10 +535,22 @@ export function GateOutcomeChart({
       ) : (
         <div className="h-[220px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={rows} margin={{ top: 20, right: 12, bottom: 4, left: 0 }}>
+            <BarChart data={rows} margin={{ top: 20, right: 12, bottom: 18, left: 0 }}>
               <CartesianGrid {...GRID_PROPS} vertical={false} />
               <XAxis dataKey="decision" {...AXIS_PROPS} interval={0} />
-              <YAxis allowDecimals={false} width={28} {...AXIS_PROPS} />
+              <YAxis
+                allowDecimals={false}
+                width={46}
+                {...AXIS_PROPS}
+                label={{
+                  value: "Gate decisions",
+                  angle: -90,
+                  position: "insideLeft",
+                  fill: INK.secondary,
+                  fontSize: 11,
+                  style: { textAnchor: "middle" },
+                }}
+              />
               <Tooltip
                 cursor={{ fill: "var(--color-accent-light)" }}
                 content={({ active, payload, label }) =>

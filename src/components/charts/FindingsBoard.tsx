@@ -155,13 +155,13 @@ export function FindingsMatrix({
 }
 
 /**
- * Every finding as a tile, led by its own headline figure.
+ * Every finding as a table row.
  *
- * The list this replaces was three paragraphs per finding and twenty-four
- * findings — the page was a document. A tile carries what a reader scans by:
- * severity in the stripe, the domain, the headline, and the agent's own lead
- * metric drawn as a bar. The prose is one click away rather than all of it at
- * once, which is what makes twenty-four of them readable.
+ * A tile grid still spent a card on each finding; twenty-four of them was a
+ * gallery to scroll rather than a set to compare. Rows put severity,
+ * confidence and the agent's own headline figure in fixed columns, so the
+ * findings can be read against each other — which is the whole reason they are
+ * on a page together. Selecting a row opens the one detail panel below.
  */
 export function FindingsBoard({
   findings,
@@ -175,91 +175,108 @@ export function FindingsBoard({
   if (findings.length === 0) return null;
 
   return (
-    <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {findings.map((finding, index) => {
-        const Icon = SEVERITY_ICON[finding.severity] ?? Eye;
-        const lead = finding.metrics[0] ?? null;
-        const share =
-          lead && lead.of !== null && lead.of > 0
-            ? Math.max(0, Math.min(1, lead.value / lead.of))
-            : null;
-        const active = selectedIndex === index;
+    <div className="overflow-x-auto rounded-[10px] border border-ng-border bg-ng-surface">
+      <table className="w-full min-w-[720px] text-left">
+        <thead>
+          <tr className="border-b border-ng-border">
+            {["Severity", "Domain", "Finding", "Key figure", "Confidence"].map((column, i) => (
+              <th
+                key={column}
+                className={cn(
+                  "px-3 py-2 text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary",
+                  i === 3 && "text-right"
+                )}
+              >
+                {column}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {findings.map((finding, index) => {
+            const Icon = SEVERITY_ICON[finding.severity] ?? Eye;
+            const lead = finding.metrics[0] ?? null;
+            const share =
+              lead && lead.of !== null && lead.of > 0
+                ? Math.max(0, Math.min(1, lead.value / lead.of))
+                : null;
+            const active = selectedIndex === index;
 
-        return (
-          <li key={`${finding.domain}-${finding.title}-${index}`}>
-            <button
-              onClick={() => onSelect(active ? null : index)}
-              aria-expanded={active}
-              className={cn(
-                "flex h-full w-full flex-col rounded-[10px] border bg-ng-surface p-3 text-left transition-colors hover:border-ng-muted-bd focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent",
-                active ? "border-ng-accent ring-1 ring-ng-accent" : "border-ng-border"
-              )}
-            >
-              <span className="flex items-center gap-1.5">
-                <Icon
-                  size={12}
-                  aria-hidden
-                  style={{ color: SEVERITY_COLOR[finding.severity] }}
-                  className="shrink-0"
-                />
-                <span className="truncate text-ng-2xs font-semibold uppercase tracking-[.5px] text-ng-secondary">
-                  {finding.domain}
-                </span>
-                <span
-                  className="ml-auto shrink-0 text-ng-2xs font-semibold"
-                  style={{ color: SEVERITY_COLOR[finding.severity] }}
-                >
-                  {SEVERITY_LABEL[finding.severity]}
-                </span>
-              </span>
-
-              <span className="mt-1.5 line-clamp-2 text-ng-sm font-semibold leading-snug text-ng-primary">
-                {finding.title}
-              </span>
-
-              {lead ? (
-                <span className="mt-auto block pt-2.5">
-                  <span className="block text-ng-2xl font-bold leading-none tracking-tight text-ng-primary">
-                    {formatMetric(lead.value, lead.unit)}
-                  </span>
-                  <span className="mt-0.5 block truncate text-ng-2xs text-ng-secondary">
-                    {lead.label}
-                  </span>
-                  {share !== null ? (
-                    <span className="mt-1.5 block h-1 w-full overflow-hidden rounded-full bg-ng-muted">
-                      <span
-                        className="block h-full rounded-full"
-                        style={{
-                          width: `${share * 100}%`,
-                          background: SEVERITY_COLOR[finding.severity],
-                        }}
-                      />
+            return (
+              <tr
+                key={`${finding.domain}-${finding.title}-${index}`}
+                onClick={() => onSelect(active ? null : index)}
+                className={cn(
+                  "cursor-pointer border-b border-ng-border transition-colors last:border-0 hover:bg-ng-accent-lit",
+                  active && "bg-ng-accent-lit",
+                  index % 2 === 1 && !active && "bg-ng-row-alt"
+                )}
+              >
+                <td className="whitespace-nowrap px-3 py-2">
+                  <span className="flex items-center gap-1.5">
+                    <Icon
+                      size={12}
+                      aria-hidden
+                      style={{ color: SEVERITY_COLOR[finding.severity] }}
+                      className="shrink-0"
+                    />
+                    <span
+                      className="text-ng-xs font-semibold"
+                      style={{ color: SEVERITY_COLOR[finding.severity] }}
+                    >
+                      {SEVERITY_LABEL[finding.severity]}
                     </span>
-                  ) : null}
-                </span>
-              ) : null}
-
-              <span className="mt-2 flex items-center gap-1.5 text-ng-2xs text-ng-secondary">
-                <span
-                  aria-hidden
-                  className={cn(
-                    "h-1.5 w-1.5 rounded-full",
-                    finding.confidence === "high"
-                      ? "bg-ng-success"
-                      : finding.confidence === "medium"
-                        ? "bg-ng-warning"
-                        : "bg-ng-muted-bd"
+                  </span>
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-ng-xs text-ng-secondary">
+                  {finding.domain}
+                </td>
+                <td className="px-3 py-2 text-ng-sm font-medium leading-snug text-ng-primary">
+                  {finding.title}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-right">
+                  {lead ? (
+                    <span className="inline-block min-w-[92px] align-middle">
+                      <span className="block text-ng-sm font-semibold tabular-nums text-ng-primary">
+                        {formatMetric(lead.value, lead.unit)}
+                      </span>
+                      {share !== null ? (
+                        <span className="mt-1 block h-1 w-full overflow-hidden rounded-full bg-ng-muted">
+                          <span
+                            className="block h-full rounded-full"
+                            style={{
+                              width: `${share * 100}%`,
+                              background: SEVERITY_COLOR[finding.severity],
+                            }}
+                          />
+                        </span>
+                      ) : null}
+                    </span>
+                  ) : (
+                    <span className="text-ng-xs text-ng-disabled">—</span>
                   )}
-                />
-                {finding.confidence} confidence
-                <span className="ml-auto text-ng-accent">
-                  {active ? "Hide detail" : "Show detail"}
-                </span>
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+                </td>
+                <td className="whitespace-nowrap px-3 py-2">
+                  <span className="flex items-center gap-1.5 text-ng-xs text-ng-secondary">
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "h-1.5 w-1.5 rounded-full",
+                        finding.confidence === "high"
+                          ? "bg-ng-success"
+                          : finding.confidence === "medium"
+                            ? "bg-ng-warning"
+                            : "bg-ng-muted-bd"
+                      )}
+                    />
+                    {finding.confidence}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }

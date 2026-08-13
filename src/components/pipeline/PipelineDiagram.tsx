@@ -259,7 +259,13 @@ export function PipelineDiagram({
           const used = traversed.has(`${edge.from}->${edge.to}`);
           const targetPhase = PHASE_OF_NODE[edge.to];
           const { d } = edgePath(edge);
-          const flowing = used && nodes[edge.to]?.status === "running";
+          // Not `used`: an edge is only in `traversed` once BOTH ends have
+          // completed, because a node enters the trace when it finishes. The
+          // edge feeding a node that is running right now therefore never
+          // qualified, and the flow animation never once fired. What makes an
+          // edge live is that its source finished and its target is working.
+          const flowing =
+            nodes[edge.from]?.status === "done" && nodes[edge.to]?.status === "running";
           const opacity = Math.min(dim(PHASE_OF_NODE[edge.from]), dim(targetPhase));
           const hue = edge.loop ? "var(--phase-recover)" : phaseVar(targetPhase);
 
@@ -270,6 +276,7 @@ export function PipelineDiagram({
               style={{ transition: "opacity .2s" }}
             >
               <path
+                className={flowing ? "ng-edge-live" : undefined}
                 d={d}
                 fill="none"
                 stroke={used ? hue : "var(--color-muted-border)"}
@@ -284,15 +291,29 @@ export function PipelineDiagram({
                   motion means "this hop is happening now", not "this hop
                   exists". */}
               {flowing ? (
-                <path
-                  className="ng-flow"
-                  d={d}
-                  pathLength={1}
-                  fill="none"
-                  stroke={hue}
-                  strokeWidth={5}
-                  aria-hidden
-                />
+                <>
+                  {/* Tail first, particles over it — the two together read as
+                      motion in one direction rather than as a dotted line. */}
+                  <path
+                    className="ng-flow-tail"
+                    d={d}
+                    pathLength={1}
+                    fill="none"
+                    stroke={hue}
+                    strokeWidth={6}
+                    strokeOpacity={0.28}
+                    aria-hidden
+                  />
+                  <path
+                    className="ng-flow"
+                    d={d}
+                    pathLength={1}
+                    fill="none"
+                    stroke={hue}
+                    strokeWidth={5.5}
+                    aria-hidden
+                  />
+                </>
               ) : null}
             </g>
           );

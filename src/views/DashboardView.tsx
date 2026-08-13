@@ -104,6 +104,8 @@ export function DashboardView() {
     api
       .picture()
       .then((data) => {
+        // Left in the projection's order: largest gap first, so the sweep
+        // works through the biggest money before the smallest.
         setGaps(data.picture.substitution_opportunities);
         setClimateByIso3(
           Object.fromEntries(data.picture.states.map((s) => [s.iso3, s.climate_risk ?? "low"]))
@@ -137,7 +139,6 @@ export function DashboardView() {
   const [finalState, setFinalState] = useState<FinalState | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  const current = queueIndex !== null ? (gapsRef.current[queueIndex] ?? null) : null;
   const done = new Map(
     completed.map(({ gap, state }) => [`${gap.importer_iso3}-${gap.commodity_code}`, state])
   );
@@ -365,50 +366,6 @@ export function DashboardView() {
 
   return (
     <div className="space-y-4">
-      {/* ── Control row: the sweep, and how far through it is ────────── */}
-      <Card className="flex flex-wrap items-center gap-3 p-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-ng-xs font-semibold uppercase tracking-[.6px] text-ng-secondary">
-            Coordination sweep
-          </p>
-          <p className="mt-0.5 truncate text-ng-sm text-ng-primary">
-            {gaps.length === 0
-              ? "Loading live trade data…"
-              : current
-                ? `Run ${(queueIndex ?? 0) + 1} of ${gaps.length} — ${current.importer} · ${current.commodity} · ${usd(current.external_usd)} external`
-                : `${gaps.length} sourcing gap${gaps.length === 1 ? "" : "s"} ready to run`}
-          </p>
-        </div>
-
-        <label className="flex shrink-0 items-center gap-2 text-ng-xs text-ng-secondary">
-          <input
-            type="checkbox"
-            checked={requireApproval}
-            disabled={running || awaitingApproval}
-            onChange={(e) => setRequireApproval(e.target.checked)}
-            className="h-3.5 w-3.5 rounded border-ng-border text-ng-accent focus:ring-ng-accent"
-          />
-          Gate urgent plans
-        </label>
-
-        <Button
-          onClick={runAll}
-          disabled={running || awaitingApproval || gaps.length === 0}
-          className="shrink-0 rounded-full"
-        >
-          {running ? (
-            <>
-              <RotateCcw size={14} className="animate-spin" aria-hidden />
-              Running {(queueIndex ?? 0) + 1} of {gaps.length}…
-            </>
-          ) : (
-            <>
-              <Play size={14} aria-hidden />
-              Run all {gaps.length || ""} gaps
-            </>
-          )}
-        </Button>
-      </Card>
 
       <PillTabs
         label="Filter the diagram by phase"
@@ -420,15 +377,6 @@ export function DashboardView() {
       {loadError ? <FormError message={loadError} /> : null}
       {runError ? <FormError message={runError} /> : null}
 
-      {current ? (
-        <p className="text-ng-sm leading-relaxed text-ng-secondary">
-          <span className="font-semibold text-ng-primary">{current.importer}</span> buys{" "}
-          {usd(current.external_usd)} of {current.commodity.toLowerCase()} outside CARICOM (
-          {current.external_share_pct}% of its imports of that commodity), while{" "}
-          {current.regional_suppliers.slice(0, 3).join(", ") || "no member state"} already
-          supplies it into the region.
-        </p>
-      ) : null}
 
       {/* ── The loop ────────────────────────────────────────────────────── */}
       <Card className="p-3 sm:p-4">
@@ -471,21 +419,76 @@ export function DashboardView() {
         </div>
       </Card>
 
-      {/* ── The gate ────────────────────────────────────────────────────── */}
-      {awaitingApproval && held ? (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-ng-warning-bd bg-ng-warning-bg px-4 py-3">
-            <Lock size={15} className="shrink-0 text-ng-warning-tx" aria-hidden />
-            <p className="text-ng-base font-semibold text-ng-warning-tx">
-              Pipeline paused — awaiting human approval
-            </p>
-            <p className="w-full text-ng-sm text-ng-warning-tx sm:w-auto sm:border-l sm:border-ng-warning-bd sm:pl-2">
-              The run continues the moment a decision is recorded below.
-            </p>
-          </div>
-          <ApprovalPanel recommendation={held} onDecide={decide} busy={resuming} />
+      {/* ── The sweep control, under the diagram it drives ──────────────
+             Above the diagram it read as a form to fill in before anything
+             happened. Below it, the button sits next to the flow it starts
+             and the checklist it advances, which is the order the page is
+             actually read in. */}
+      <Card className="flex flex-wrap items-center gap-3 p-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-ng-xs font-semibold uppercase tracking-[.6px] text-ng-secondary">
+            Coordination sweep
+          </p>
+          <p className="mt-0.5 truncate text-ng-sm text-ng-primary">
+            {gaps.length === 0
+              ? "Loading live trade data…"
+              : `${gaps.length} sourcing gap${gaps.length === 1 ? "" : "s"}`}
+          </p>
+        </div>
+
+        <label className="flex shrink-0 items-center gap-2 text-ng-xs text-ng-secondary">
+          <input
+            type="checkbox"
+            checked={requireApproval}
+            disabled={running || awaitingApproval}
+            onChange={(e) => setRequireApproval(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-ng-border text-ng-accent focus:ring-ng-accent"
+          />
+          Gate urgent plans
+        </label>
+
+        <Button
+          onClick={runAll}
+          disabled={running || awaitingApproval || gaps.length === 0}
+          className="shrink-0 rounded-full"
+        >
+          {running ? (
+            <>
+              <RotateCcw size={14} className="animate-spin" aria-hidden />
+              Running…
+            </>
+          ) : (
+            <>
+              <Play size={14} aria-hidden />
+              Run sweep
+            </>
+          )}
+        </Button>
+      </Card>
+
+      {/* ── The gate ────────────────────────────────────────────────────
+             Always on screen, inert until a run parks here. A control that
+             appears and vanishes reads as incidental, and this is the one
+             point in the loop where a run is not autonomous. */}
+      {awaitingApproval ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-ng-warning-bd bg-ng-warning-bg px-4 py-3">
+          <Lock size={15} className="shrink-0 text-ng-warning-tx" aria-hidden />
+          <p className="text-ng-base font-semibold text-ng-warning-tx">
+            Sweep paused — awaiting human approval
+          </p>
+          <p className="w-full text-ng-sm text-ng-warning-tx sm:w-auto sm:border-l sm:border-ng-warning-bd sm:pl-2">
+            The next gap starts the moment a decision is recorded.
+          </p>
         </div>
       ) : null}
+
+      <ApprovalPanel
+        recommendation={held}
+        onDecide={decide}
+        busy={resuming}
+        active={awaitingApproval && held !== null}
+        gateEnabled={requireApproval}
+      />
 
       {decided && !awaitingApproval ? (
         <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-ng-border bg-ng-surface px-4 py-2.5">
