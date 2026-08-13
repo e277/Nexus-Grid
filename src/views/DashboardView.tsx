@@ -4,6 +4,7 @@ import { Circle, CircleCheck, Lock, Play, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { api, streamWorkflow } from "../api";
+import { AnalysisSection, DispatchPanel } from "../components/analysis/AnalysisSection";
 import { FormError } from "../components/Fields";
 import { ApprovalPanel, type HeldRecommendation } from "../components/pipeline/ApprovalPanel";
 import { PipelineDiagram } from "../components/pipeline/PipelineDiagram";
@@ -18,7 +19,9 @@ import { RecommendationCard } from "../components/RecommendationCard";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
+import { Skeleton } from "../components/ui/skeleton";
 import { PillTabs, type PillOption } from "../components/ui/tabs";
+import { usePoll } from "../hooks";
 import { cn } from "../lib/utils";
 import { DASHBOARD_SOURCES } from "../source-map";
 import type {
@@ -138,6 +141,15 @@ export function DashboardView() {
   const [decided, setDecided] = useState<GateDecision | null>(null);
   const [finalState, setFinalState] = useState<FinalState | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  /**
+   * What the agents have concluded, polled independently of a sweep.
+   *
+   * These are model readings of five domains, not a byproduct of the run above
+   * — they exist before a sweep starts and outlive it, which is why they are
+   * on their own interval rather than derived from `finalState`.
+   */
+  const { data: analysis, error: analysisError } = usePoll(() => api.analysisOverview(), 30_000);
 
   const done = new Map(
     completed.map(({ gap, state }) => [`${gap.importer_iso3}-${gap.commodity_code}`, state])
@@ -596,6 +608,11 @@ export function DashboardView() {
         gateEnabled={requireApproval}
       />
 
+      {/* Beside the gate, not filed under the analysis: approving a plan into
+          a deployment with nowhere to send it is the failure this warns about,
+          and it has to be legible at the moment of the decision. */}
+      {analysis ? <DispatchPanel dispatch={analysis.dispatch} /> : null}
+
       {decided && !awaitingApproval ? (
         <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-ng-border bg-ng-surface px-4 py-2.5">
           <CircleCheck size={15} className="shrink-0 text-ng-accent" aria-hidden />
@@ -702,6 +719,37 @@ export function DashboardView() {
       {complete && finalState ? (
         <ResultsSection state={finalState} recommendation={recommendation} />
       ) : null}
+
+      {/* ── What the agents concluded ───────────────────────────────────
+             The Impact Metrics page, folded in. It was a second destination,
+             which asked an operator to leave the run in order to read what the
+             run produced. Everything below is model output — findings the
+             agents raised, the confidence they attached, how they scored
+             suppliers, and what humans answered at the gate. */}
+      <div className="border-t border-ng-border pt-5">
+        <h2 className="text-ng-xl font-bold tracking-tight text-ng-primary">
+          What the agents concluded
+        </h2>
+        <p className="mt-1 max-w-3xl text-ng-sm text-ng-secondary">
+          Every series below is the agents&rsquo; own output, not a publisher&rsquo;s figures
+          replotted. The numbers behind a finding sit in that finding&rsquo;s evidence, beside the
+          conclusion they support.
+        </p>
+      </div>
+
+      {analysisError ? (
+        <FormError message={`Failed to load the analysis: ${analysisError}`} />
+      ) : !analysis ? (
+        <div className="space-y-4">
+          <Skeleton className="h-16" />
+          <div className="grid gap-4 xl:grid-cols-2">
+            <Skeleton className="h-80" />
+            <Skeleton className="h-80" />
+          </div>
+        </div>
+      ) : (
+        <AnalysisSection data={analysis} />
+      )}
 
     </div>
   );

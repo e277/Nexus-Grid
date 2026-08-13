@@ -3,28 +3,25 @@
 import { Brain, Filter, Send, Sparkles, Target, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { api } from "../api";
 import {
   AgentDecisionChart,
   ConfidenceChart,
   FindingsByDomainChart,
   GateOutcomeChart,
   SupplierScoreChart,
-} from "../components/charts/AgentCharts";
-import { SEVERITY_COLOR } from "../components/charts/chart-kit";
-import { FindingMetrics } from "../components/charts/FindingMetrics";
+} from "../charts/AgentCharts";
+import { SEVERITY_COLOR } from "../charts/chart-kit";
+import { FindingMetrics } from "../charts/FindingMetrics";
 import {
   FindingsBoard,
   FindingsMatrix,
   type TaggedFinding,
-} from "../components/charts/FindingsBoard";
-import { Badge } from "../components/ui/badge";
-import { Card } from "../components/ui/card";
-import { Skeleton } from "../components/ui/skeleton";
-import { PillTabs, type PillOption } from "../components/ui/tabs";
-import { usePoll } from "../hooks";
-import { cn } from "../lib/utils";
-import type { DispatchReadiness, FindingSeverity } from "../types";
+} from "../charts/FindingsBoard";
+import { Badge } from "../ui/badge";
+import { Card } from "../ui/card";
+import { PillTabs, type PillOption } from "../ui/tabs";
+import { cn } from "../../lib/utils";
+import type { AnalysisOverview, DispatchReadiness, FindingSeverity } from "../../types";
 
 const DOMAIN_LABEL: Record<string, string> = {
   market: "Farm-to-Market",
@@ -51,7 +48,12 @@ const SEVERITY_VARIANT: Record<string, "danger" | "success" | "warning" | "muted
 type Severity = "all" | "critical" | "opportunity" | "watch" | "gap";
 
 /**
- * The analysis page: everything the agents concluded, as charts you can cut.
+ * Everything the agents concluded, as charts you can cut.
+ *
+ * This was a second page. It is a section of the dashboard now, because the
+ * split asked an operator to leave the run in order to see what the run
+ * produced — the findings, the supplier scores and the gate history are the
+ * output of the loop above them, not a separate subject.
  *
  * Every series here is agent output — findings the agents raised, the
  * confidence they attached, the scores they gave suppliers, the answers humans
@@ -66,9 +68,7 @@ type Severity = "all" | "critical" | "opportunity" | "watch" | "gap";
  * behind a disclosure, because a value a reader has to open is a value most
  * readers never see.
  */
-export function ImpactView() {
-  const { data, error } = usePoll(() => api.analysisOverview(), 30_000);
-
+export function AnalysisSection({ data }: { data: AnalysisOverview }) {
   const [domain, setDomain] = useState<string | null>(null);
   const [severity, setSeverity] = useState<Severity>("all");
   /** A cell picked in the severity-by-confidence matrix. */
@@ -97,26 +97,6 @@ export function ImpactView() {
 
   // A tile index only means anything against the list it was picked from.
   const detail = selectedFinding !== null ? (filtered[selectedFinding] ?? null) : null;
-
-  if (error) {
-    return (
-      <p className="rounded-md border border-ng-warning-bd bg-ng-warning-bg px-4 py-3 text-sm text-ng-warning-tx">
-        Failed to load the analysis: {error}
-      </p>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-16" />
-        <div className="grid gap-4 xl:grid-cols-2">
-          <Skeleton className="h-80" />
-          <Skeleton className="h-80" />
-        </div>
-      </div>
-    );
-  }
 
   const interpreted = data.analyses.filter((a) => a.source !== "rules").length;
   const criticals = allFindings.filter((f) => f.severity === "critical").length;
@@ -270,8 +250,6 @@ export function ImpactView() {
         <GateOutcomeChart gateDecisions={data.gate_decisions} />
       </div>
 
-      <DispatchPanel dispatch={data.dispatch} />
-
       {/* ── The findings, as a board rather than a document ───────────── */}
       <FindingsMatrix findings={filtered} onSelect={setCell} selected={cell} />
 
@@ -385,7 +363,7 @@ function FindingDetail({ finding }: { finding: TaggedFinding }) {
  * with the exact variables still unset rather than a general complaint that
  * something is unconfigured.
  */
-function DispatchPanel({ dispatch }: { dispatch: DispatchReadiness }) {
+export function DispatchPanel({ dispatch }: { dispatch: DispatchReadiness }) {
   const ready = dispatch.status === "ready";
 
   return (
