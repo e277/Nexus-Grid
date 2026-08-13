@@ -14,11 +14,12 @@ export const dynamic = "force-dynamic";
 export const GET = api(async () => {
   const bundle = await fetchAllSources(false);
   const picture = buildRegionalPicture(bundle);
-  const { lanes, ports, unobserved } = buildLanes(picture);
+  const { lanes, ports, matches, unobserved } = buildLanes(picture);
 
   return {
     lanes,
     ports,
+    matches,
     active_storms: picture.climate.active_storms,
     unobserved,
     sources: bundleProvenance(bundle),

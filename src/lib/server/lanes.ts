@@ -13,6 +13,7 @@
  * `unobserved` and the page prints that alongside the figures it does have.
  */
 
+import { matchAllGaps, type GapMatch } from "./matching";
 import type { RegionalPicture } from "./projection";
 import { getRoutingProvider } from "./sources/routing";
 
@@ -52,6 +53,8 @@ function laneStatus(a: Risk, b: Risk): Lane["status"] {
 export function buildLanes(picture: RegionalPicture): {
   lanes: Lane[];
   ports: PortExposure[];
+  /** Ranked suppliers per gap — which lane to open first, and why. */
+  matches: GapMatch[];
   unobserved: string[];
 } {
   const routing = getRoutingProvider();
@@ -116,6 +119,7 @@ export function buildLanes(picture: RegionalPicture): {
   return {
     lanes,
     ports,
+    matches: matchAllGaps(picture),
     unobserved: [
       "Berth congestion and queue length — no CARICOM port authority publishes a live feed.",
       "Vessel capacity and sailing schedules — no free inter-island freight API exists to query.",

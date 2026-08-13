@@ -20,6 +20,7 @@
 import { byIso3, byName } from "../sources/caricom";
 import type { RegionalPicture } from "../projection";
 import type { Lane, PortExposure } from "../lanes";
+import type { GapMatch } from "../matching";
 import { callModelJson, resolveProvider } from "./provider";
 
 export type AnalysisDomain = "market" | "soil" | "planting" | "logistics" | "impact";
@@ -65,6 +66,8 @@ export interface AnalysisInputs {
   picture: RegionalPicture;
   lanes?: Lane[];
   ports?: PortExposure[];
+  /** Ranked suppliers per gap, so the analyst can name a first choice. */
+  matches?: GapMatch[];
   /** Agent decisions, for the outcomes domain. */
   decisions?: { agent: string; action: string; confidence: number | null }[];
   gateOutcomes?: Record<string, number>;
@@ -97,7 +100,7 @@ Focus on: what the soil and climate at each state's main growing area actually p
 Focus on: where rain-fed windows overlap so states compete in the same weeks, where they differ so states could stagger and widen regional coverage, and which months the region has almost no one planting.`,
 
   logistics: `You analyse the routes a coordination plan would actually move over.
-Focus on: which supplier-to-importer lanes are viable, what the transit and weather exposure at each end imply, and which lanes are worth opening first. Transit figures are geometry estimates, not carrier quotes — say so if you rely on one.`,
+Focus on: which supplier-to-importer lanes are viable, what the transit and weather exposure at each end imply, and which lanes are worth opening first. A ranked shortlist is supplied for each gap — use it, say which supplier you would approach first and why, and disagree with the ranking only if the figures give you a reason. Transit figures are geometry estimates, not carrier quotes; price, vessel capacity and port throughput are not observed at all, so never rank on them.`,
 
   impact: `You analyse what the coordination layer is achieving.
 Focus on: the size of the addressable gap against the region's import bill, what the agents have actually decided so far and how confident they were, and whether the decisions taken are moving the region toward regional sourcing.`,
@@ -206,25 +209,40 @@ ${gaps}`;
   }
 
   if (domain === "logistics") {
-    const lanes = (inputs.lanes ?? [])
-      .slice(0, 25)
-      .map(
-        (l) =>
-          `${l.supplier} to ${l.importer} (${l.commodity}): ${l.distance_km ? `${Math.round(l.distance_km)} km` : "distance unknown"}, ` +
-          `~${l.transit_hours}h by ${l.mode} (${l.estimate_source}); climate risk ${l.supplier_climate_risk ?? "?"} at origin, ` +
-          `${l.importer_climate_risk ?? "?"} at destination; status ${l.status}; could displace ${usd(l.external_usd)}.`
-      )
+    // One ordering only. An earlier version passed the ranked shortlist and
+    // then the raw lane list — sorted by value — directly beneath it, and the
+    // analyst read the two as a single ranking and reported that the nearer
+    // supplier had been placed lower than the farther one, which it had not.
+    // The shortlist already carries transit, weather, value and a rationale
+    // per lane, so nothing is lost by giving that alone.
+    const shortlists = (inputs.matches ?? [])
+      .slice(0, 8)
+      .map((match) => {
+        const ranked = match.matches
+          .map((s) => `#${s.rank} ${s.supplier} (score ${s.score}/100) — ${s.rationale}`)
+          .join("\n    ");
+        return (
+          `${match.importer} needs ${match.commodity} ` +
+          `(${usd(match.external_usd)} bought externally, ${match.external_share_pct}%):\n    ${ranked}`
+        );
+      })
       .join("\n");
     const ports = (inputs.ports ?? [])
-      .map((p) => `${p.name}: ${p.lanes} lanes, climate risk ${p.climate_risk ?? "?"}, ${usd(p.food_imports_usd)} of food imports observed`)
+      .map(
+        (p) =>
+          `${p.name}: on ${p.lanes} lane(s), climate risk ${p.climate_risk ?? "no current reading"}, ` +
+          `${usd(p.food_imports_usd)} of food imports observed`
+      )
       .join("\n");
     const storms = picture.climate.active_storms
-      .map((s) => `${s.name} (${s.classification}), ${s.intensity_kt ?? "?"}kt`)
+      .map((s) => `${s.name} (${s.classification}), ${s.intensity_kt ?? "unknown"} knots`)
       .join("\n");
+
     return `${totals}
 
-LANES DERIVED FROM SOURCING GAPS
-${lanes || "No lanes derived."}
+RANKED SUPPLIER SHORTLIST — this is the ranking, already scored
+${inputs.lanes?.length ?? 0} candidate lane(s) were derived from the sourcing gaps and scored on transit, live weather at both ends, complementary planting windows, and established regional trade. Suppliers are listed best-first within each gap; #1 is the strongest match.
+${shortlists || "No shortlist could be built."}
 
 PORT EXPOSURE
 ${ports || "No ports on any lane."}
@@ -232,7 +250,7 @@ ${ports || "No ports on any lane."}
 ACTIVE STORMS
 ${storms || "None in the basin."}
 
-NOT OBSERVED: berth congestion, queue length, vessel capacity and sailing schedules are not published by any CARICOM port authority or free freight API. Transit figures are great-circle distance at a documented average sea speed plus fixed port handling.
+NOT OBSERVED: berth congestion, queue length, vessel capacity and sailing schedules are not published by any CARICOM port authority or free freight API, so they carry no weight in the scoring — never rank on them. Transit figures are great-circle distance at a documented average sea speed plus fixed port handling. Where a climate risk reads "no current reading", the weather station did not answer: that is missing data, not clear weather.
 
 ${gaps}`;
   }
@@ -372,7 +390,25 @@ function ruleFindings(domain: AnalysisDomain, inputs: AnalysisInputs): { summary
   }
 
   if (domain === "logistics") {
-    for (const l of (inputs.lanes ?? []).slice(0, 3)) {
+    // Prefer the ranked shortlist: "approach Suriname first, here is why" is
+    // a usable answer where "here are three lanes" is not.
+    for (const m of (inputs.matches ?? []).slice(0, 3)) {
+      const best = m.matches[0];
+      if (!best) continue;
+      findings.push({
+        title: `${best.supplier} is the strongest match for ${m.importer}'s ${m.commodity.toLowerCase()}`,
+        finding:
+          `${best.rationale} It scores ${best.score} out of 100 against ${m.matches.length} candidate supplier(s) ` +
+          `on transit, weather at both ends, complementary planting and established regional trade.`,
+        recommendation: `Approach ${best.supplier} first on ${usd(m.external_usd)} of ${m.commodity.toLowerCase()} currently bought outside the region.`,
+        evidence: best.factors.map((f) => `${f.label}: ${f.detail} (${f.points} points)`),
+        severity: "opportunity",
+        confidence: "medium",
+        states: [best.supplier, m.importer],
+      });
+    }
+
+    for (const l of (inputs.lanes ?? []).slice(0, 2)) {
       findings.push({
         title: `${l.supplier} to ${l.importer}`,
         finding: `A ${l.mode} lane of about ${l.transit_hours}h${l.distance_km ? ` over ${Math.round(l.distance_km)} km` : ""}, currently ${l.status.replace("_", " ")}.`,

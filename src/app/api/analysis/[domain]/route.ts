@@ -1,3 +1,4 @@
+import { actionLabel, agentTitle } from "@/lib/server/agents/labels";
 import { api, boolQuery, HttpError } from "@/lib/server/http";
 import {
   analyseCached,
@@ -34,15 +35,18 @@ export const GET = api<{ domain: string }>(async ({ params, query }) => {
 
   // Only the domains that need them pay for the extra derivations.
   if (domain === "logistics") {
-    const { lanes, ports } = buildLanes(picture);
+    const { lanes, ports, matches } = buildLanes(picture);
     inputs.lanes = lanes;
     inputs.ports = ports;
+    inputs.matches = matches;
   }
 
   if (domain === "impact") {
+    // Readable names, not identifiers: this goes into a prompt, and an
+    // analyst handed `supply_intelligence: no_material_gap` quotes it back.
     inputs.decisions = listAgentActivities({ limit: 200 }).map((a) => ({
-      agent: a.agent_name,
-      action: a.action,
+      agent: agentTitle(a.agent_name),
+      action: actionLabel(a.action),
       confidence: a.confidence ?? null,
     }));
     inputs.gateOutcomes = listAuditLogs({ limit: 200 })
