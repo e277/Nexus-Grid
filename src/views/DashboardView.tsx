@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleCheck, Lock, Play, RotateCcw } from "lucide-react";
+import { Circle, CircleCheck, Lock, Play, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { api, streamWorkflow } from "../api";
@@ -115,15 +115,14 @@ export function DashboardView() {
       );
   }, []);
 
-  const [gapKey, setGapKey] = useState("");
+  /** The sweep: every observed gap, run one after another. */
+  const gapsRef = useRef<SubstitutionOpportunity[]>([]);
+  const [queueIndex, setQueueIndex] = useState<number | null>(null);
+  const [completed, setCompleted] = useState<{ gap: SubstitutionOpportunity; state: FinalState }[]>([]);
   const [requireApproval, setRequireApproval] = useState(true);
   const [focus, setFocus] = useState<PhaseId | "all">("all");
 
-  useEffect(() => {
-    if (gaps.length && !gapKey) setGapKey(`${gaps[0].importer_iso3}-${gaps[0].commodity_code}`);
-  }, [gaps, gapKey]);
 
-  const selected = gaps.find((g) => `${g.importer_iso3}-${g.commodity_code}` === gapKey) ?? null;
 
   const [nodes, setNodes] = useState<Record<string, NodeState>>(buildInitialNodes());
   const [trace, setTrace] = useState<string[]>([]);
@@ -137,6 +136,11 @@ export function DashboardView() {
   const [decided, setDecided] = useState<GateDecision | null>(null);
   const [finalState, setFinalState] = useState<FinalState | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  const current = queueIndex !== null ? (gapsRef.current[queueIndex] ?? null) : null;
+  const done = new Map(
+    completed.map(({ gap, state }) => [`${gap.importer_iso3}-${gap.commodity_code}`, state])
+  );
 
   // A run in flight is a live HTTP stream; leaving the page must end it.
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -191,13 +195,23 @@ export function DashboardView() {
           // than leaving the node looking untouched.
           setNodes((prev) => ({ ...prev, hold: { ...prev.hold, status: "running" } }));
         } else {
-          setRunning(false);
           setNodes((prev) => {
             const next = { ...prev };
             for (const key of Object.keys(next)) {
               if (next[key].status !== "done") next[key] = { ...next[key], status: "skipped" };
             }
             return next;
+          });
+          // Bank this gap's outcome, then continue the sweep.
+          setQueueIndex((index) => {
+            if (index === null) {
+              setRunning(false);
+              return null;
+            }
+            const gap = gapsRef.current[index];
+            setCompleted((done) => [...done, { gap, state: (data.value ?? {}) as FinalState }]);
+            void runFrom(index + 1);
+            return index;
           });
         }
         continue;
@@ -210,12 +224,34 @@ export function DashboardView() {
     }
   }
 
-  async function run() {
-    if (!selected || running) return;
+  /**
+   * Run one gap, then the next.
+   *
+   * Every observed gap goes through the loop rather than one an operator
+   * picked: choosing which to run made the console ask a question it had no
+   * basis to answer — the ranking of what matters is the agents' job, and a
+   * dropdown quietly limited a sweep to whatever was selected.
+   *
+   * Sequential, not parallel. A gap that reaches the approval gate stops the
+   * queue where it is, because the whole point of the gate is that a human
+   * decides before anything downstream happens; firing twelve runs at once
+   * would produce twelve simultaneous gates and no way to answer them in
+   * order. `decide()` restarts the queue at the next gap.
+   */
+  async function runFrom(index: number) {
+    const queue = gapsRef.current;
+    if (index >= queue.length) {
+      setRunning(false);
+      setQueueIndex(null);
+      return;
+    }
+
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
+    const gap = queue[index];
+    setQueueIndex(index);
     setRunning(true);
     setRunError(null);
     setAwaitingApproval(false);
@@ -231,13 +267,13 @@ export function DashboardView() {
       await consume(
         {
           event: "substitution_gap",
-          commodity: selected.commodity,
-          importer: selected.importer,
-          importer_iso3: selected.importer_iso3,
-          external_usd: selected.external_usd,
-          external_share_pct: Math.round(selected.external_share_pct),
-          regional_suppliers: selected.regional_suppliers,
-          climate_risk: climateByIso3[selected.importer_iso3] ?? "low",
+          commodity: gap.commodity,
+          importer: gap.importer,
+          importer_iso3: gap.importer_iso3,
+          external_usd: gap.external_usd,
+          external_share_pct: Math.round(gap.external_share_pct),
+          regional_suppliers: gap.regional_suppliers,
+          climate_risk: climateByIso3[gap.importer_iso3] ?? "low",
           require_approval: requireApproval,
         },
         controller.signal
@@ -247,6 +283,13 @@ export function DashboardView() {
       setRunning(false);
       setRunError(err instanceof Error ? err.message : "Workflow trigger failed");
     }
+  }
+
+  function runAll() {
+    if (running || gaps.length === 0) return;
+    gapsRef.current = gaps;
+    setCompleted([]);
+    void runFrom(0);
   }
 
   /** The one point a run does not proceed on its own. */
@@ -322,29 +365,20 @@ export function DashboardView() {
 
   return (
     <div className="space-y-4">
-      {/* ── Control row: what to run it against, the phase filter, the run
-             button. One row above everything it scopes. ─────────────────── */}
+      {/* ── Control row: the sweep, and how far through it is ────────── */}
       <Card className="flex flex-wrap items-center gap-3 p-3">
-        {/* Full width on a phone, then shares the row from `sm` up — inside a
-            wrapping flex row a `flex-1` select collapses to nothing once the
-            row is narrower than its siblings. */}
-        <label className="flex w-full min-w-0 items-center gap-2 text-ng-xs font-semibold uppercase tracking-[.6px] text-ng-secondary sm:w-auto sm:flex-1">
-          <span className="shrink-0">Sourcing gap</span>
-          <select
-            value={gapKey}
-            onChange={(e) => setGapKey(e.target.value)}
-            disabled={running || awaitingApproval}
-            className="w-full min-w-0 flex-1 rounded-md border border-ng-border bg-ng-bg px-2.5 py-1.5 text-ng-sm font-normal normal-case tracking-normal text-ng-primary focus:outline-none focus-visible:border-ng-accent focus-visible:ring-2 focus-visible:ring-ng-accent disabled:opacity-60"
-          >
-            {gaps.length === 0 ? <option value="">Loading live trade data…</option> : null}
-            {gaps.map((g) => (
-              <option key={`${g.importer_iso3}-${g.commodity_code}`} value={`${g.importer_iso3}-${g.commodity_code}`}>
-                {g.importer} · {g.commodity} · {usd(g.external_usd)} external (
-                {g.external_share_pct}%)
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="min-w-0 flex-1">
+          <p className="text-ng-xs font-semibold uppercase tracking-[.6px] text-ng-secondary">
+            Coordination sweep
+          </p>
+          <p className="mt-0.5 truncate text-ng-sm text-ng-primary">
+            {gaps.length === 0
+              ? "Loading live trade data…"
+              : current
+                ? `Run ${(queueIndex ?? 0) + 1} of ${gaps.length} — ${current.importer} · ${current.commodity} · ${usd(current.external_usd)} external`
+                : `${gaps.length} sourcing gap${gaps.length === 1 ? "" : "s"} ready to run`}
+          </p>
+        </div>
 
         <label className="flex shrink-0 items-center gap-2 text-ng-xs text-ng-secondary">
           <input
@@ -357,16 +391,20 @@ export function DashboardView() {
           Gate urgent plans
         </label>
 
-        <Button onClick={run} disabled={running || awaitingApproval || !selected} className="shrink-0 rounded-full">
+        <Button
+          onClick={runAll}
+          disabled={running || awaitingApproval || gaps.length === 0}
+          className="shrink-0 rounded-full"
+        >
           {running ? (
             <>
               <RotateCcw size={14} className="animate-spin" aria-hidden />
-              Running…
+              Running {(queueIndex ?? 0) + 1} of {gaps.length}…
             </>
           ) : (
             <>
               <Play size={14} aria-hidden />
-              Run Cycle
+              Run all {gaps.length || ""} gaps
             </>
           )}
         </Button>
@@ -382,12 +420,12 @@ export function DashboardView() {
       {loadError ? <FormError message={loadError} /> : null}
       {runError ? <FormError message={runError} /> : null}
 
-      {selected ? (
+      {current ? (
         <p className="text-ng-sm leading-relaxed text-ng-secondary">
-          <span className="font-semibold text-ng-primary">{selected.importer}</span> buys{" "}
-          {usd(selected.external_usd)} of {selected.commodity.toLowerCase()} outside CARICOM (
-          {selected.external_share_pct}% of its imports of that commodity), while{" "}
-          {selected.regional_suppliers.slice(0, 3).join(", ") || "no member state"} already
+          <span className="font-semibold text-ng-primary">{current.importer}</span> buys{" "}
+          {usd(current.external_usd)} of {current.commodity.toLowerCase()} outside CARICOM (
+          {current.external_share_pct}% of its imports of that commodity), while{" "}
+          {current.regional_suppliers.slice(0, 3).join(", ") || "no member state"} already
           supplies it into the region.
         </p>
       ) : null}
@@ -455,6 +493,98 @@ export function DashboardView() {
           <span className="text-ng-sm text-ng-secondary">Gate decision recorded:</span>
           <Badge variant={DECISION_COPY[decided].tone}>{DECISION_COPY[decided].label}</Badge>
         </div>
+      ) : null}
+
+      {/* ── The sweep, as a checklist ────────────────────────────────────
+             Every gap is listed from the start and ticks off as it finishes.
+             Showing only the completed ones hid the shape of the work: a
+             reader could not tell whether two done meant two of three or two
+             of twelve, and the gap currently in the diagram had no place in
+             the list it came from. */}
+      {gaps.length > 0 ? (
+        <Card className="overflow-hidden p-0">
+          <div className="flex flex-wrap items-center gap-2 border-b border-ng-border px-4 py-2.5">
+            <h2 className="text-ng-base font-semibold text-ng-primary">Sourcing gaps</h2>
+            <span className="text-ng-2xs text-ng-secondary">
+              {done.size} of {gaps.length} swept
+            </span>
+            <span className="ml-auto h-1.5 w-32 overflow-hidden rounded-full bg-ng-muted">
+              <span
+                className="block h-full rounded-full bg-ng-accent transition-[width] duration-300"
+                style={{ width: `${(done.size / gaps.length) * 100}%` }}
+              />
+            </span>
+          </div>
+
+          <ul className="divide-y divide-ng-border">
+            {gaps.map((gap, index) => {
+              const key = `${gap.importer_iso3}-${gap.commodity_code}`;
+              const outcome = done.get(key) ?? null;
+              const active = queueIndex === index && running;
+
+              return (
+                <li key={key} className="flex flex-wrap items-center gap-2 px-4 py-2">
+                  {/* State is a glyph, not just a colour: done, running, or
+                      not yet reached. */}
+                  {outcome ? (
+                    <CircleCheck size={14} className="shrink-0 text-ng-success" aria-label="Swept" />
+                  ) : active ? (
+                    <RotateCcw
+                      size={14}
+                      className="shrink-0 animate-spin text-ng-accent"
+                      aria-label="Running"
+                    />
+                  ) : (
+                    <Circle size={14} className="shrink-0 text-ng-disabled" aria-label="Waiting" />
+                  )}
+
+                  <span
+                    className={cn(
+                      "text-ng-sm font-medium",
+                      outcome || active ? "text-ng-primary" : "text-ng-secondary"
+                    )}
+                  >
+                    {gap.importer} · {gap.commodity}
+                  </span>
+                  <span className="text-ng-2xs tabular-nums text-ng-secondary">
+                    {usd(gap.external_usd)} external
+                  </span>
+
+                  {outcome?.gap_severity ? (
+                    <Badge
+                      size="sm"
+                      variant={
+                        outcome.gap_severity === "critical"
+                          ? "danger"
+                          : outcome.gap_severity === "material"
+                            ? "warning"
+                            : "muted"
+                      }
+                    >
+                      {outcome.gap_severity}
+                    </Badge>
+                  ) : null}
+                  {outcome?.gate_decision ? (
+                    <Badge size="sm" variant={DECISION_COPY[outcome.gate_decision].tone}>
+                      {DECISION_COPY[outcome.gate_decision].label}
+                    </Badge>
+                  ) : null}
+
+                  <span className="ml-auto truncate text-ng-2xs text-ng-secondary">
+                    {outcome
+                      ? String(outcome.recovery?.next_step ?? "—").replace(/_/g, " ") +
+                        (outcome.execution?.dispatch_status
+                          ? ` · dispatch ${outcome.execution.dispatch_status}`
+                          : "")
+                      : active
+                        ? "running…"
+                        : "waiting"}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
       ) : null}
 
       {/* ── Results: only once the run has actually finished ────────────── */}

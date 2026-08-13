@@ -13,13 +13,18 @@ import {
 } from "../components/charts/AgentCharts";
 import { SEVERITY_COLOR } from "../components/charts/chart-kit";
 import { FindingMetrics } from "../components/charts/FindingMetrics";
+import {
+  FindingsBoard,
+  FindingsMatrix,
+  type TaggedFinding,
+} from "../components/charts/FindingsBoard";
 import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { PillTabs, type PillOption } from "../components/ui/tabs";
 import { usePoll } from "../hooks";
 import { cn } from "../lib/utils";
-import type { DispatchReadiness, Finding } from "../types";
+import type { DispatchReadiness, FindingSeverity } from "../types";
 
 const DOMAIN_LABEL: Record<string, string> = {
   market: "Farm-to-Market",
@@ -45,11 +50,6 @@ const SEVERITY_VARIANT: Record<string, "danger" | "success" | "warning" | "muted
 
 type Severity = "all" | "critical" | "opportunity" | "watch" | "gap";
 
-/** A finding tagged with the domain whose agent raised it. */
-interface TaggedFinding extends Finding {
-  domain: string;
-}
-
 /**
  * The analysis page: everything the agents concluded, as charts you can cut.
  *
@@ -71,6 +71,9 @@ export function ImpactView() {
 
   const [domain, setDomain] = useState<string | null>(null);
   const [severity, setSeverity] = useState<Severity>("all");
+  /** A cell picked in the severity-by-confidence matrix. */
+  const [cell, setCell] = useState<{ severity: FindingSeverity; confidence: string } | null>(null);
+  const [selectedFinding, setSelectedFinding] = useState<number | null>(null);
 
   const allFindings: TaggedFinding[] = useMemo(
     () =>
@@ -85,10 +88,15 @@ export function ImpactView() {
       allFindings.filter(
         (finding) =>
           (domain === null || finding.domain === domain) &&
-          (severity === "all" || finding.severity === severity)
+          (severity === "all" || finding.severity === severity) &&
+          (cell === null ||
+            (finding.severity === cell.severity && finding.confidence === cell.confidence))
       ),
-    [allFindings, domain, severity]
+    [allFindings, domain, severity, cell]
   );
+
+  // A tile index only means anything against the list it was picked from.
+  const detail = selectedFinding !== null ? (filtered[selectedFinding] ?? null) : null;
 
   if (error) {
     return (
@@ -138,7 +146,7 @@ export function ImpactView() {
     })),
   ];
 
-  const filtersActive = domain !== null || severity !== "all";
+  const filtersActive = domain !== null || severity !== "all" || cell !== null;
 
   return (
     <div className="space-y-5">
@@ -207,6 +215,8 @@ export function ImpactView() {
               onClick={() => {
                 setDomain(null);
                 setSeverity("all");
+                setCell(null);
+                setSelectedFinding(null);
               }}
               className="inline-flex items-center gap-1 rounded-full border border-ng-border px-2.5 py-1 text-ng-2xs font-semibold text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent"
             >
@@ -262,97 +272,106 @@ export function ImpactView() {
 
       <DispatchPanel dispatch={data.dispatch} />
 
-      {/* ── The findings the charts above are counting ──────────────────── */}
+      {/* ── The findings, as a board rather than a document ───────────── */}
+      <FindingsMatrix findings={filtered} onSelect={setCell} selected={cell} />
+
       <div>
         <h2 className="text-ng-lg font-bold tracking-tight text-ng-primary">
           {filtered.length} finding{filtered.length === 1 ? "" : "s"}
           {filtersActive ? " matching the filters" : ""}
         </h2>
         <p className="mt-0.5 text-ng-sm text-ng-secondary">
-          Every conclusion behind the charts above, with the figures it rests on.
+          Each tile leads with the figure the agent attached to it. Select one for the reasoning
+          and the evidence behind it.
         </p>
       </div>
 
       {filtered.length === 0 ? (
         <Card className="p-6">
-          <p className="text-sm text-ng-secondary">
-            No finding matches these filters.
-          </p>
+          <p className="text-sm text-ng-secondary">No finding matches these filters.</p>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {filtered.map((finding, index) => (
-            <Card key={`${finding.domain}-${finding.title}-${index}`} className="p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="muted" size="sm">
-                  {DOMAIN_LABEL[finding.domain] ?? finding.domain}
-                </Badge>
-                <h3 className="text-ng-base font-semibold leading-snug text-ng-primary">
-                  {finding.title}
-                </h3>
-                <Badge variant={SEVERITY_VARIANT[finding.severity]} size="sm">
-                  {SEVERITY_LABEL[finding.severity]}
-                </Badge>
-                <Badge
-                  variant={
-                    finding.confidence === "high"
-                      ? "success"
-                      : finding.confidence === "medium"
-                        ? "warning"
-                        : "muted"
-                  }
-                  size="sm"
-                  className="ml-auto"
-                >
-                  {finding.confidence} confidence
-                </Badge>
-              </div>
-
-              {/* The agent's own figures, drawn. These lead because they are
-                  the finding — the sentences below say what they mean. */}
-              <FindingMetrics metrics={finding.metrics} />
-
-              <p className="mt-3 max-w-4xl text-ng-sm leading-relaxed text-ng-primary">
-                {finding.finding}
-              </p>
-              {finding.recommendation ? (
-                <p className="mt-2 max-w-4xl border-l-2 border-ng-accent pl-3 text-ng-sm leading-relaxed text-ng-secondary">
-                  {finding.recommendation}
-                </p>
-              ) : null}
-
-              {/* Evidence is shown, not folded away. It is the figures the
-                  claim rests on, and a conclusion whose grounds take a click
-                  to reach is a conclusion most readers take on trust. */}
-              {finding.evidence.length > 0 ? (
-                <div className="mt-2.5 rounded-md border border-ng-border bg-ng-bg px-3 py-2">
-                  <p className="text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary">
-                    Evidence
-                  </p>
-                  <ul className="mt-1 space-y-1">
-                    {finding.evidence.map((item, i) => (
-                      <li key={i} className="font-mono text-ng-xs leading-snug text-ng-secondary">
-                        · {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
-              {finding.states.length > 0 ? (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {finding.states.map((state) => (
-                    <Badge key={state} variant="muted" size="sm">
-                      {state}
-                    </Badge>
-                  ))}
-                </div>
-              ) : null}
-            </Card>
-          ))}
-        </div>
+        <>
+          <FindingsBoard
+            findings={filtered}
+            selectedIndex={selectedFinding}
+            onSelect={setSelectedFinding}
+          />
+          {detail ? <FindingDetail finding={detail} /> : null}
+        </>
       )}
     </div>
+  );
+}
+
+/**
+ * One finding in full: the agent's figures, its reasoning, and the evidence.
+ *
+ * Shown for the selected tile only. Twenty-four of these at once was the
+ * document this page stopped being.
+ */
+function FindingDetail({ finding }: { finding: TaggedFinding }) {
+  return (
+    <Card className="border-ng-accent p-4 sm:p-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="muted" size="sm">
+          {DOMAIN_LABEL[finding.domain] ?? finding.domain}
+        </Badge>
+        <h3 className="text-ng-lg font-semibold leading-snug text-ng-primary">{finding.title}</h3>
+        <Badge variant={SEVERITY_VARIANT[finding.severity]} size="sm">
+          {SEVERITY_LABEL[finding.severity]}
+        </Badge>
+        <Badge
+          variant={
+            finding.confidence === "high"
+              ? "success"
+              : finding.confidence === "medium"
+                ? "warning"
+                : "muted"
+          }
+          size="sm"
+          className="ml-auto"
+        >
+          {finding.confidence} confidence
+        </Badge>
+      </div>
+
+      <FindingMetrics metrics={finding.metrics} />
+
+      <p className="mt-3 max-w-4xl text-ng-sm leading-relaxed text-ng-primary">
+        {finding.finding}
+      </p>
+      {finding.recommendation ? (
+        <p className="mt-2 max-w-4xl border-l-2 border-ng-accent pl-3 text-ng-sm leading-relaxed text-ng-secondary">
+          {finding.recommendation}
+        </p>
+      ) : null}
+
+      {finding.evidence.length > 0 ? (
+        <div className="mt-3 rounded-md border border-ng-border bg-ng-bg px-3 py-2">
+          <p className="text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary">
+            Evidence
+          </p>
+          <ul className="mt-1 space-y-1">
+            {finding.evidence.map((item, i) => (
+              <li key={i} className="font-mono text-ng-xs leading-snug text-ng-secondary">
+                · {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {finding.states.length > 0 ? (
+        <div className="mt-2.5 flex flex-wrap gap-1">
+          {finding.states.map((state) => (
+            <Badge key={state} variant="muted" size="sm">
+              {state}
+            </Badge>
+          ))}
+        </div>
+      ) : null}
+    </Card>
   );
 }
 
