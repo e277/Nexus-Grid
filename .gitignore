@@ -26,3 +26,6 @@ Thumbs.db
 
 # Workflow checkpointer
 .nexus-grid/
+
+# OpenClaw gateway state and its generated token
+openclaw/.env

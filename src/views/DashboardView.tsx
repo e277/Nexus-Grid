@@ -138,6 +138,8 @@ export function DashboardView() {
   const [decided, setDecided] = useState<GateDecision | null>(null);
   const [finalState, setFinalState] = useState<FinalState | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  /** Mirrors `finalState` so the parallel sweep can bank it after awaiting. */
+  const finalStateRef = useRef<FinalState | null>(null);
 
   const done = new Map(
     completed.map(({ gap, state }) => [`${gap.importer_iso3}-${gap.commodity_code}`, state])
@@ -156,9 +158,25 @@ export function DashboardView() {
    * went. The alternative is guessing, and a diagram that guesses is the
    * animation this replaced.
    */
-  async function consume(body: Record<string, unknown>, signal: AbortSignal) {
+  async function consume(
+    body: Record<string, unknown>,
+    signal: AbortSignal,
+    /**
+     * Whether this run drives the diagram.
+     *
+     * In a parallel sweep only one does. The diagram shows a single graph
+     * traversal, and twelve runs writing to it would render a composite of
+     * twelve different positions — a picture of no run in particular.
+     */
+    options: { drivesDiagram: boolean; gap: SubstitutionOpportunity | null } = {
+      drivesDiagram: true,
+      gap: null,
+    }
+  ) {
+    const { drivesDiagram, gap } = options;
     for await (const { event, data } of streamWorkflow(body, signal)) {
       if (event === "started") {
+        if (!drivesDiagram) continue;
         setThreadId(String(data.thread_id));
         setNodes((prev) => ({ ...prev, perceive: { ...prev.perceive, status: "running" } }));
         continue;
@@ -167,7 +185,7 @@ export function DashboardView() {
       if (event === "node") {
         const id = String(data.node);
         const update = (data.update ?? {}) as Record<string, unknown>;
-        if (!PIPELINE_NODES.some((n) => n.id === id)) continue;
+        if (!drivesDiagram || !PIPELINE_NODES.some((n) => n.id === id)) continue;
 
         setTrace((prev) => [...prev, id]);
         setNodes((prev) => {
@@ -183,11 +201,21 @@ export function DashboardView() {
         });
 
         if (id === "recommend") setRecommendation(update.recommendation);
-        setFinalState((data.value ?? null) as FinalState | null);
+        finalStateRef.current = (data.value ?? null) as FinalState | null;
+        setFinalState(finalStateRef.current);
         continue;
       }
 
       if (event === "finished") {
+        // A parallel run banks its own outcome and nothing else; the sweep is
+        // finished when every promise settles, not when one of them does.
+        if (!drivesDiagram) {
+          if (gap) {
+            setCompleted((done) => [...done, { gap, state: (data.value ?? {}) as FinalState }]);
+          }
+          continue;
+        }
+
         if (data.status === "awaiting_approval") {
           setRunning(false);
           setAwaitingApproval(true);
@@ -219,7 +247,7 @@ export function DashboardView() {
       }
 
       if (event === "failed") {
-        setRunning(false);
+        if (drivesDiagram) setRunning(false);
         setRunError(String(data.detail ?? "The run failed."));
       }
     }
@@ -286,11 +314,81 @@ export function DashboardView() {
     }
   }
 
-  function runAll() {
+  /**
+   * Every gap, in parallel when nothing can stop to ask.
+   *
+   * Sequential exists only because of the approval gate: twelve concurrent
+   * runs that each hold an urgent plan would raise twelve simultaneous gates,
+   * with no order to answer them in and a diagram that can only show one — an
+   * operator would be approving plans whose reasoning is not on screen.
+   *
+   * With the gate off nothing pauses, so that objection disappears and the
+   * sweep runs concurrently. The diagram follows the first run; the checklist
+   * is what shows all of them, and it is the honest view of a parallel sweep.
+   */
+  async function runAll() {
     if (running || gaps.length === 0) return;
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     gapsRef.current = gaps;
     setCompleted([]);
-    void runFrom(0);
+    setRunError(null);
+
+    if (requireApproval) {
+      void runFrom(0);
+      return;
+    }
+
+    setRunning(true);
+    setQueueIndex(0);
+    setAwaitingApproval(false);
+    setInterruptPayload(null);
+    setThreadId(null);
+    setRecommendation(null);
+    setDecided(null);
+    setFinalState(null);
+    setNodes(buildInitialNodes());
+    setTrace([]);
+
+    const body = (gap: SubstitutionOpportunity) => ({
+      event: "substitution_gap",
+      commodity: gap.commodity,
+      importer: gap.importer,
+      importer_iso3: gap.importer_iso3,
+      external_usd: gap.external_usd,
+      external_share_pct: Math.round(gap.external_share_pct),
+      regional_suppliers: gap.regional_suppliers,
+      climate_risk: climateByIso3[gap.importer_iso3] ?? "low",
+      require_approval: false,
+    });
+
+    const outcomes = await Promise.allSettled(
+      gaps.map((gap, index) =>
+        consume(body(gap), controller.signal, { drivesDiagram: index === 0, gap })
+      )
+    );
+
+    if (controller.signal.aborted) return;
+
+    // The first run drives the diagram but banks nothing, so bank it here.
+    const first = gaps[0];
+    if (first) {
+      setCompleted((done) =>
+        done.some((d) => d.gap.commodity_code === first.commodity_code && d.gap.importer_iso3 === first.importer_iso3)
+          ? done
+          : [...done, { gap: first, state: (finalStateRef.current ?? {}) as FinalState }]
+      );
+    }
+
+    const failed = outcomes.filter((o) => o.status === "rejected").length;
+    if (failed > 0) {
+      setRunError(`${failed} of ${gaps.length} runs failed. The rest completed.`);
+    }
+    setRunning(false);
+    setQueueIndex(null);
   }
 
   /** The one point a run does not proceed on its own. */
@@ -446,6 +544,12 @@ export function DashboardView() {
           />
           Gate urgent plans
         </label>
+
+        <span className="shrink-0 text-ng-2xs text-ng-secondary">
+          {requireApproval
+            ? "runs one at a time so each gate can be answered in turn"
+            : "runs all gaps at once — nothing pauses"}
+        </span>
 
         <Button
           onClick={runAll}

@@ -1,0 +1,52 @@
+# The OpenClaw gateway, run as its own container.
+#
+# Nexus-Grid talks to this over HTTP; it does not embed it. The npm package is
+# the gateway itself — 56 direct dependencies, a CLI, an onboarding wizard —
+# and it declares a Node engine range this machine does not satisfy. A
+# container sidesteps both: the gateway brings its own runtime, and the app's
+# toolchain is untouched.
+#
+# Start:   docker compose -f openclaw/docker-compose.yml up -d
+# Pair:    docker compose -f openclaw/docker-compose.yml run --rm cli channels login
+# Health:  curl http://127.0.0.1:18789/healthz
+services:
+  gateway:
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    container_name: nexus-grid-openclaw
+    restart: unless-stopped
+    environment:
+      # The shared secret Nexus-Grid presents as a bearer token. This endpoint
+      # is full operator access on the gateway, which is why the port below is
+      # bound to loopback only.
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?set OPENCLAW_GATEWAY_TOKEN in openclaw/.env}
+    ports:
+      # 127.0.0.1 deliberately, not 0.0.0.0: OpenClaw's own security note says
+      # to keep this surface on loopback or a private ingress, never exposed.
+      - "127.0.0.1:18789:18789"
+    volumes:
+      # openclaw.json, auth profiles, and the paired channel sessions. Without
+      # these a restart loses the WhatsApp pairing and you scan the QR again.
+      - openclaw-state:/home/node/.openclaw
+      - openclaw-keys:/home/node/.config/openclaw
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18789/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # One-shot CLI against the same state, for onboarding and channel pairing.
+  # Run with `--rm`; it is not a long-lived service.
+  cli:
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    profiles: ["cli"]
+    entrypoint: ["openclaw"]
+    environment:
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-}
+    volumes:
+      - openclaw-state:/home/node/.openclaw
+      - openclaw-keys:/home/node/.config/openclaw
+
+volumes:
+  openclaw-state:
+  openclaw-keys:
