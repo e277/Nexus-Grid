@@ -1,6 +1,6 @@
 "use client";
 
-import { Brain, Filter, Sparkles, Target, X } from "lucide-react";
+import { Brain, Filter, Send, Sparkles, Target, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { api } from "../api";
@@ -11,14 +11,14 @@ import {
   GateOutcomeChart,
   SupplierScoreChart,
 } from "../components/charts/AgentCharts";
-import { SEVERITY_COLOR, compact } from "../components/charts/chart-kit";
+import { SEVERITY_COLOR } from "../components/charts/chart-kit";
 import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { PillTabs, type PillOption } from "../components/ui/tabs";
 import { usePoll } from "../hooks";
 import { cn } from "../lib/utils";
-import type { Finding } from "../types";
+import type { DispatchReadiness, Finding } from "../types";
 
 const DOMAIN_LABEL: Record<string, string> = {
   market: "Farm-to-Market",
@@ -60,15 +60,16 @@ interface TaggedFinding extends Finding {
  *
  * One filter row scopes everything below it, and the charts cross-filter: a
  * domain picked here, or a bar clicked in the chart, narrows every other chart
- * and the findings list together. Each chart also ships a table view, so no
- * value is reachable only by hovering.
+ * and the findings list together. Every chart prints its numbers as a table
+ * beneath it and every finding prints its evidence — shown rather than folded
+ * behind a disclosure, because a value a reader has to open is a value most
+ * readers never see.
  */
 export function ImpactView() {
   const { data, error } = usePoll(() => api.analysisOverview(), 30_000);
 
   const [domain, setDomain] = useState<string | null>(null);
   const [severity, setSeverity] = useState<Severity>("all");
-  const [gapKey, setGapKey] = useState<string | null>(null);
 
   const allFindings: TaggedFinding[] = useMemo(
     () =>
@@ -116,10 +117,6 @@ export function ImpactView() {
       ? Math.round((scored.reduce((sum, d) => sum + (d.confidence ?? 0), 0) / scored.length) * 100)
       : null;
 
-  const selectedGap =
-    data.matches.find((m) => `${m.importer_iso3}-${m.commodity_code}` === gapKey) ??
-    data.matches[0] ??
-    null;
 
   const domainOptions: PillOption<string>[] = [
     { value: "all", label: "All domains", count: allFindings.length },
@@ -228,35 +225,32 @@ export function ImpactView() {
         <ConfidenceChart findings={filtered} />
       </div>
 
-      {/* ── The ranking the logistics agent works from ──────────────────── */}
+      {/* ── The ranking the logistics agent works from ────────────────────
+             Every gap, largest first, rather than one chosen from a dropdown.
+             A picker made the reader ask for each answer one at a time and
+             hid how many gaps there were; the point of the page is that they
+             can be read against each other. */}
       {data.matches.length > 0 ? (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary">
-              Sourcing gap
-            </span>
-            <select
-              value={gapKey ?? `${data.matches[0].importer_iso3}-${data.matches[0].commodity_code}`}
-              onChange={(event) => setGapKey(event.target.value)}
-              className="min-w-0 max-w-full rounded-md border border-ng-border bg-ng-bg px-2.5 py-1.5 text-ng-sm text-ng-primary focus:outline-none focus-visible:border-ng-accent focus-visible:ring-2 focus-visible:ring-ng-accent"
-            >
-              {data.matches.map((match) => (
-                <option
-                  key={`${match.importer_iso3}-${match.commodity_code}`}
-                  value={`${match.importer_iso3}-${match.commodity_code}`}
-                >
-                  {match.importer} · {match.commodity} · {compact(match.external_usd)} external
-                </option>
-              ))}
-            </select>
-          </div>
-          <SupplierScoreChart match={selectedGap} />
-          {selectedGap ? (
-            <p className="text-ng-xs leading-relaxed text-ng-secondary">
-              <span className="font-semibold text-ng-primary">Not scored:</span>{" "}
-              {selectedGap.not_scored.join(" ")}
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-ng-lg font-bold tracking-tight text-ng-primary">
+              Supplier ranking — {data.matches.length} sourcing gap
+              {data.matches.length === 1 ? "" : "s"}
+            </h2>
+            <p className="mt-0.5 max-w-3xl text-ng-sm text-ng-secondary">
+              Every gap the agents found a regional supplier for, largest first. Each supplier is
+              scored out of 100 on four observed factors.{" "}
+              <span className="text-ng-primary">Not scored:</span>{" "}
+              {data.matches[0].not_scored.join(" ")}
             </p>
-          ) : null}
+          </div>
+
+          {data.matches.map((match) => (
+            <SupplierScoreChart
+              key={`${match.importer_iso3}-${match.commodity_code}`}
+              match={match}
+            />
+          ))}
         </div>
       ) : null}
 
@@ -264,6 +258,8 @@ export function ImpactView() {
         <AgentDecisionChart decisions={data.decisions} />
         <GateOutcomeChart gateDecisions={data.gate_decisions} />
       </div>
+
+      <DispatchPanel dispatch={data.dispatch} />
 
       {/* ── The findings the charts above are counting ──────────────────── */}
       <div>
@@ -320,19 +316,22 @@ export function ImpactView() {
                 </p>
               ) : null}
 
+              {/* Evidence is shown, not folded away. It is the figures the
+                  claim rests on, and a conclusion whose grounds take a click
+                  to reach is a conclusion most readers take on trust. */}
               {finding.evidence.length > 0 ? (
-                <details className="mt-2.5">
-                  <summary className="cursor-pointer text-ng-2xs font-semibold uppercase tracking-[.6px] text-ng-secondary hover:text-ng-primary">
-                    Evidence ({finding.evidence.length})
-                  </summary>
-                  <ul className="mt-1.5 space-y-1 rounded-md border border-ng-border bg-ng-bg px-3 py-2">
+                <div className="mt-2.5 rounded-md border border-ng-border bg-ng-bg px-3 py-2">
+                  <p className="text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary">
+                    Evidence
+                  </p>
+                  <ul className="mt-1 space-y-1">
                     {finding.evidence.map((item, i) => (
                       <li key={i} className="font-mono text-ng-xs leading-snug text-ng-secondary">
                         · {item}
                       </li>
                     ))}
                   </ul>
-                </details>
+                </div>
               ) : null}
 
               {finding.states.length > 0 ? (
@@ -349,6 +348,70 @@ export function ImpactView() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Whether an approved plan has anywhere to go.
+ *
+ * The gate is the point of the whole loop, and a plan approved into a
+ * deployment with no delivery channel goes nowhere — the run reports
+ * `simulated` and the console previously said so only in the run's own result
+ * panel, one page away and only after a run. Named here as a standing status,
+ * with the exact variables still unset rather than a general complaint that
+ * something is unconfigured.
+ */
+function DispatchPanel({ dispatch }: { dispatch: DispatchReadiness }) {
+  const ready = dispatch.status === "ready";
+
+  return (
+    <Card
+      className={cn(
+        "p-4",
+        ready
+          ? "border-ng-success-bd/70 bg-gradient-to-br from-ng-success-bg to-ng-surface"
+          : "border-ng-warning-bd/70 bg-gradient-to-br from-ng-warning-bg to-ng-surface"
+      )}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <Send size={14} className="shrink-0 text-ng-secondary" aria-hidden />
+        <h3 className="text-ng-base font-semibold text-ng-primary">Plan delivery</h3>
+        <Badge variant={ready ? "success" : "warning"} size="sm">
+          {ready ? "Ready" : "Not configured"}
+        </Badge>
+        {ready && dispatch.target ? (
+          <span className="text-ng-xs text-ng-secondary">
+            approved plans go to{" "}
+            <span className="font-mono text-ng-primary">{dispatch.target}</span> via agent{" "}
+            <span className="font-mono text-ng-primary">{dispatch.agent_id}</span>
+          </span>
+        ) : null}
+      </div>
+
+      {ready ? (
+        <p className="mt-2 max-w-3xl text-ng-sm leading-relaxed text-ng-secondary">
+          An approved or amended plan is delivered to a running OpenClaw gateway. Rejected and
+          escalated plans are never sent — they are decisions not to act.
+        </p>
+      ) : (
+        <>
+          <p className="mt-2 max-w-3xl text-ng-sm leading-relaxed text-ng-secondary">
+            Approved plans have nowhere to go, so the execute step reports its dispatch as
+            simulated rather than claiming a delivery. Set these on the server and restart — a
+            value added to <span className="font-mono">.env</span> after a build is not picked up
+            by <span className="font-mono">next start</span>.
+          </p>
+          <ul className="mt-2.5 space-y-1.5">
+            {dispatch.missing.map((setting) => (
+              <li key={setting.key} className="text-ng-sm leading-snug">
+                <span className="font-mono font-semibold text-ng-warning-tx">{setting.key}</span>
+                <span className="text-ng-secondary"> — {setting.describes}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Card>
   );
 }
 

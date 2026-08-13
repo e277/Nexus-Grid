@@ -5,6 +5,7 @@ import {
   ANALYSIS_DOMAINS,
   type AnalysisInputs,
 } from "@/lib/server/interpretation/analysis";
+import { dispatchReadiness } from "@/lib/server/dispatch/openclaw";
 import { buildLanes } from "@/lib/server/lanes";
 import { listAgentActivities, listAuditLogs } from "@/lib/server/observability/activity";
 import { buildRegionalPicture } from "@/lib/server/projection";
@@ -75,6 +76,8 @@ export const GET = api(async () => {
       })),
     /** Ranked supplier shortlists — agent-derived scores worth charting. */
     matches,
+    /** Whether an approved plan has anywhere to go, and what is missing. */
+    dispatch: dispatchReadiness(),
     sources: bundleProvenance(bundle),
     generated_at: utcnowIso(),
   };

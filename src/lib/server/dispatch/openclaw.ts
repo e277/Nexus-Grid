@@ -43,10 +43,61 @@ export interface DispatchResult {
  * showing a plan as delivered.
  */
 export function dispatchStatus(): DispatchStatus {
+  return missingDispatchSettings().length === 0 ? "ready" : "unconfigured";
+}
+
+/** The environment variables required before a plan can be delivered. */
+export const DISPATCH_SETTINGS = [
+  {
+    key: "OPENCLAW_GATEWAY_URL",
+    describes: "Where the gateway is reachable, e.g. http://127.0.0.1:8080",
+  },
+  {
+    key: "OPENCLAW_GATEWAY_TOKEN",
+    describes: "The gateway's shared secret — full operator access, keep it out of source control",
+  },
+  {
+    key: "OPENCLAW_TARGET",
+    describes: "The channel a plan is delivered to, e.g. a Slack channel id or a phone number",
+  },
+] as const;
+
+/**
+ * Which of them are still unset.
+ *
+ * Returned rather than folded into a boolean so the console can name the
+ * missing value instead of telling an operator that something, somewhere, is
+ * not configured.
+ */
+export function missingDispatchSettings(): string[] {
   const settings = getSettings();
-  if (!settings.openclawGatewayUrl || !settings.openclawGatewayToken) return "unconfigured";
-  if (!settings.openclawTarget) return "unconfigured";
-  return "ready";
+  const present: Record<string, string> = {
+    OPENCLAW_GATEWAY_URL: settings.openclawGatewayUrl,
+    OPENCLAW_GATEWAY_TOKEN: settings.openclawGatewayToken,
+    OPENCLAW_TARGET: settings.openclawTarget,
+  };
+  return DISPATCH_SETTINGS.map((setting) => setting.key).filter((key) => !present[key]);
+}
+
+/** Everything the console needs to show the delivery channel's state. */
+export function dispatchReadiness(): {
+  status: DispatchStatus;
+  target: string | null;
+  agent_id: string;
+  missing: { key: string; describes: string }[];
+} {
+  const settings = getSettings();
+  const missing = missingDispatchSettings();
+  return {
+    status: missing.length === 0 ? "ready" : "unconfigured",
+    // Never echo the token; the target is the useful half to confirm.
+    target: settings.openclawTarget || null,
+    agent_id: settings.openclawAgentId,
+    missing: DISPATCH_SETTINGS.filter((setting) => missing.includes(setting.key)).map((s) => ({
+      key: s.key,
+      describes: s.describes,
+    })),
+  };
 }
 
 /** The message a desk receives — plain text, because every channel renders it. */

@@ -113,8 +113,18 @@ export interface GateDecisionRecord {
   created_at: string | null;
 }
 
+/** Whether an approved plan has anywhere to be delivered. */
+export interface DispatchReadiness {
+  status: "ready" | "unconfigured" | "unavailable";
+  target: string | null;
+  agent_id: string;
+  /** The environment variables still unset, each with what it is for. */
+  missing: { key: string; describes: string }[];
+}
+
 /** Everything the analysis page charts — all of it agent output. */
 export interface AnalysisOverview {
+  dispatch: DispatchReadiness;
   analyses: AnalysisResult[];
   decisions: AgentDecision[];
   gate_decisions: GateDecisionRecord[];

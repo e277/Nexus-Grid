@@ -161,13 +161,16 @@ export function ChartFrame({
         {subtitle ? <p className="mt-0.5 text-ng-xs text-ng-secondary">{subtitle}</p> : null}
       </div>
       <div className="p-4">{children}</div>
+      {/* The table is shown, not tucked behind a disclosure. It is the
+          WCAG-clean twin of the chart above it, and a value a reader has to
+          find and open is a value most readers never see. */}
       {table ? (
-        <details className="border-t border-ng-border">
-          <summary className="cursor-pointer px-4 py-2 text-ng-2xs font-semibold uppercase tracking-[.6px] text-ng-secondary hover:text-ng-primary">
-            Table view
-          </summary>
-          <div className="overflow-x-auto px-4 pb-3">{table}</div>
-        </details>
+        <div className="border-t border-ng-border px-4 py-3">
+          <p className="mb-1.5 text-ng-2xs font-semibold uppercase tracking-[.6px] text-ng-secondary">
+            The same numbers
+          </p>
+          <div className="overflow-x-auto">{table}</div>
+        </div>
       ) : null}
     </section>
   );
