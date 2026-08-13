@@ -121,7 +121,7 @@ export const EDGES: EdgeSpec[] = [
   { from: "recommend", to: "plan", source: "Model output" },
   { from: "plan", to: "hold", source: "Approval rule", label: "needs approval" },
   { from: "plan", to: "execute", source: "Auto-dispatch", label: "auto" },
-  { from: "hold", to: "recover", source: "Operator call" },
+  { from: "hold", to: "execute", source: "Operator call", label: "approved" },
   { from: "execute", to: "monitor", source: "Open-Meteo" },
   { from: "monitor", to: "recover", source: "Climate check" },
   { from: "monitor", to: "assess", source: "Disruption", label: "re-plan", loop: true },

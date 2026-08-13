@@ -41,7 +41,7 @@ const SOLE_SUCCESSOR: Record<string, string | undefined> = {
   perceive: "assess",
   assess: "recommend",
   recommend: "plan",
-  hold: "recover",
+  hold: "execute",
   execute: "monitor",
 };
 

@@ -266,7 +266,11 @@ export async function execute(state: SupplyState): Promise<SupplyUpdate> {
 
   const task: Record<string, unknown> = {
     task: planData.action ?? "monitor",
-    status: "scheduled",
+    // What execution did, which is not what the human said: the gate's answer
+    // is `gate_decision` and stays there. A plan the gate refused was never
+    // scheduled, and calling it "scheduled" because it passed through this
+    // node would be the one status an operator must not misread.
+    status: deliverable ? "scheduled" : "not_executed",
     details: planData,
     // Honest, not decorative: says whether a real gateway took this, or
     // whether there was nowhere to send it.
@@ -308,7 +312,11 @@ export function routeAfterMonitor(state: SupplyState): string {
 
 export function recover(state: SupplyState): SupplyUpdate {
   const decision = state.decision ?? "monitor";
-  const executionStatus = state.execution?.status;
+  // The gate's own channel, not `execution.status`. They were the same field
+  // while `hold` ran last and wrote the decision into the execution record;
+  // now that an approved plan goes on to `execute`, that record describes the
+  // dispatch and the gate's answer lives only here.
+  const gate = state.gate_decision ?? null;
 
   const recovery: Record<string, unknown> = {
     recovery_action: decision === "monitor" ? "continue_monitoring" : "activate_followup",
@@ -317,19 +325,19 @@ export function recover(state: SupplyState): SupplyUpdate {
     replans_used: state.replan_count ?? 0,
   };
 
-  if (executionStatus === "rejected") {
+  if (gate === "rejected") {
     recovery.recovery_action = "plan_rejected";
     recovery.next_step = "await_revised_plan";
-  } else if (executionStatus === "escalated") {
+  } else if (gate === "escalated") {
     // Not a refusal — the decision was referred to someone with the standing
     // to make it, so the plan stays open rather than closing either way.
     recovery.recovery_action = "escalated_for_decision";
     recovery.next_step = "await_higher_authority";
-  } else if (executionStatus === "modified") {
+  } else if (gate === "modified") {
     recovery.recovery_action = "activate_followup";
     recovery.next_step = "notify_supply_chain_ops";
     if (state.gate_note) recovery.operator_amendment = state.gate_note;
-  } else if (executionStatus === "approved") {
+  } else if (gate === "approved") {
     recovery.recovery_action = "activate_followup";
     recovery.next_step = "notify_supply_chain_ops";
   } else if (decision !== "monitor") {
@@ -362,7 +370,7 @@ export function buildGraph() {
     .addEdge("assess", "recommend")
     .addEdge("recommend", "plan")
     .addConditionalEdges("plan", needsApproval, { execute: "execute", hold: "hold" })
-    .addEdge("hold", "recover")
+    .addEdge("hold", "execute")
     .addEdge("execute", "monitor")
     .addConditionalEdges("monitor", routeAfterMonitor, { assess: "assess", recover: "recover" })
     .addEdge("recover", END);

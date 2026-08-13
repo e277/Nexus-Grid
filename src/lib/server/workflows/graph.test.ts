@@ -112,15 +112,17 @@ describe("supply-chain graph", () => {
 
       expect(out.gate_decision).toBe(decision);
       expect(out.gate_note).toBe("because");
-      expect(out.execution?.status).toBe(decision);
       expect(out.recovery?.recovery_action).toBe(recoveryAction);
       expect(out.recovery?.next_step).toBe(nextStep);
       expect((await app.getState(cfg)).next).toEqual([]);
 
-      // Hold routes straight to recover, so nothing is dispatched from the
-      // gate itself — a rejected plan must never reach a ministry desk.
-      expect(dispatchPlan).not.toHaveBeenCalled();
-      expect(delivers || out.recovery?.recovery_action !== "activate_followup").toBeTruthy();
+      // The gate decides whether the plan is delivered, and `execute` is what
+      // delivers it — so an approved plan goes through that node and out, and
+      // a refused one goes through it and no further. Routing the gate
+      // straight to recovery instead skipped delivery for every answer, which
+      // made approving a plan indistinguishable from rejecting it.
+      expect(dispatchPlan).toHaveBeenCalledTimes(delivers ? 1 : 0);
+      expect(out.execution?.status).toBe(delivers ? "scheduled" : "not_executed");
     }
   );
 
