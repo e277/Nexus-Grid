@@ -23,13 +23,7 @@ import { Skeleton } from "../components/ui/skeleton";
 import { PillTabs, type PillOption } from "../components/ui/tabs";
 import { usePoll } from "../hooks";
 import { cn } from "../lib/utils";
-import { DASHBOARD_SOURCES } from "../source-map";
-import type {
-  GateDecision,
-  SourceProvenance,
-  SourceSlot,
-  SubstitutionOpportunity,
-} from "../types";
+import type { GateDecision, SubstitutionOpportunity } from "../types";
 
 /**
  * Nodes with exactly one outgoing edge, so the graph's position is known the
@@ -54,27 +48,12 @@ const PHASE_OPTIONS: PillOption<PhaseId | "all">[] = [
   })),
 ];
 
-const SOURCE_DOT: Record<SourceProvenance["status"], string> = {
-  live: "bg-ng-success",
-  cached: "bg-ng-info",
-  empty: "bg-ng-muted-bd",
-  pending: "bg-ng-info animate-pulse",
-  unauthorized: "bg-ng-warning",
-  unavailable: "bg-ng-danger",
-};
-
 const DECISION_COPY: Record<GateDecision, { label: string; tone: "success" | "info" | "danger" | "warning" }> = {
   approved: { label: "Approved", tone: "success" },
   modified: { label: "Approved with amendment", tone: "info" },
   rejected: { label: "Rejected", tone: "danger" },
   escalated: { label: "Escalated", tone: "warning" },
 };
-
-function usd(value: number): string {
-  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`;
-  if (value >= 1_000_000) return `$${Math.round(value / 1_000_000)}M`;
-  return `$${value.toLocaleString()}`;
-}
 
 interface FinalState {
   decision?: string;
@@ -100,7 +79,6 @@ interface FinalState {
 export function DashboardView() {
   const [gaps, setGaps] = useState<SubstitutionOpportunity[]>([]);
   const [climateByIso3, setClimateByIso3] = useState<Record<string, string>>({});
-  const [sources, setSources] = useState<SourceProvenance[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -113,7 +91,6 @@ export function DashboardView() {
         setClimateByIso3(
           Object.fromEntries(data.picture.states.map((s) => [s.iso3, s.climate_risk ?? "low"]))
         );
-        setSources(data.sources);
       })
       .catch((err) =>
         setLoadError(err instanceof Error ? err.message : "Failed to load the regional picture")
@@ -426,15 +403,6 @@ export function DashboardView() {
   }
 
   // ── Derived view models ─────────────────────────────────────────────────
-  // Only the slots a run actually reads, paired with what each contributes.
-  const runSources = DASHBOARD_SOURCES.map((use) => ({
-    ...use,
-    source: sources.find((s) => s.slot === use.slot),
-  })).filter(
-    (row): row is { slot: SourceSlot; contributes: string; source: SourceProvenance } =>
-      row.source !== undefined
-  );
-
   const heldExecution = interruptPayload?.execution as
     | { task?: string; details?: Record<string, unknown> }
     | undefined;
@@ -508,35 +476,6 @@ export function DashboardView() {
           modelSource={modelSource === "minimax" ? "MiniMax" : modelSource ? "Rule-based" : null}
         />
 
-        {/* Data source legend — the two publishers a run actually reads, not
-            all six. The per-edge badges on the diagram say where each one
-            enters the loop; this row says whether it is answering. */}
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-ng-border pt-3">
-          <span className="text-ng-2xs font-bold uppercase tracking-[.7px] text-ng-secondary">
-            Data behind a run
-          </span>
-          {runSources.length === 0 ? (
-            <span className="text-ng-2xs text-ng-secondary">Loading…</span>
-          ) : (
-            runSources.map(({ source, contributes }) => (
-              <span
-                key={source.slot}
-                className="flex items-center gap-1.5 text-ng-2xs text-ng-secondary"
-                title={`${source.publisher} — ${source.status}, ${source.records.toLocaleString()} records.\n${contributes}`}
-              >
-                <span
-                  aria-hidden
-                  className={cn("h-1.5 w-1.5 shrink-0 rounded-full", SOURCE_DOT[source.status])}
-                />
-                {source.publisher}
-                <span className="text-ng-disabled">({source.status})</span>
-              </span>
-            ))
-          )}
-          <span className="text-ng-2xs text-ng-secondary">
-            · the recommendation step additionally calls the configured model
-          </span>
-        </div>
       </Card>
 
       {/* ── The gate ────────────────────────────────────────────────────
@@ -667,10 +606,6 @@ export function DashboardView() {
                   >
                     {gap.importer} · {gap.commodity}
                   </span>
-                  <span className="text-ng-2xs tabular-nums text-ng-secondary">
-                    {usd(gap.external_usd)} external
-                  </span>
-
                   {outcome?.gap_severity ? (
                     <Badge
                       size="sm"

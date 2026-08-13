@@ -2,7 +2,6 @@
 
 import type { ReactNode } from "react";
 
-import { cn } from "../../lib/utils";
 
 /**
  * Shared chart chrome, so every chart on the analysis page reads as one system.
@@ -143,18 +142,27 @@ export function ChartLegend({ items }: { items: { label: string; color: string }
   );
 }
 
-/** A chart with its title, and a table view so no value is gated behind hover. */
+/**
+ * A chart with its title, at the full width of its column.
+ *
+ * Every chart used to ship a table twin beside it, taking a fixed 22rem of a
+ * two-column grid — so the chart, the thing a reader came for, was rendered in
+ * whatever was left. The twin existed to keep values off the hover layer,
+ * which is a real requirement and is now met the direct way: every mark
+ * carries its own number, so there is nothing to open a table to find.
+ *
+ * The counts these charts plot are small and few — five domains, three
+ * confidence levels, four gate outcomes — which is exactly the case where
+ * labelling every mark is legible rather than noise.
+ */
 export function ChartFrame({
   title,
   subtitle,
   children,
-  table,
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
-  /** The same numbers as rows. Every chart here has one. */
-  table?: ReactNode;
 }) {
   return (
     <section className="overflow-hidden rounded-[10px] border border-ng-border bg-ng-surface">
@@ -162,64 +170,23 @@ export function ChartFrame({
         <h3 className="text-ng-base font-semibold text-ng-primary">{title}</h3>
         {subtitle ? <p className="mt-0.5 text-ng-xs text-ng-secondary">{subtitle}</p> : null}
       </div>
-      {/* Chart and table side by side from `xl`, stacked below it. The table
-          is the chart's WCAG-clean twin, not an appendix to it — reading a
-          value off the rows while looking at the shape is the point, and that
-          only works when both are in view at once. */}
-      <div className={cn("gap-4 p-4", table ? "xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]" : "")}>
-        <div className="min-w-0">{children}</div>
-        {table ? (
-          <div className="mt-4 min-w-0 border-t border-ng-border pt-3 xl:mt-0 xl:border-l xl:border-t-0 xl:pl-4 xl:pt-0">
-            <p className="mb-1.5 text-ng-2xs font-semibold uppercase tracking-[.6px] text-ng-secondary">
-              The same numbers
-            </p>
-            <div className="overflow-x-auto">{table}</div>
-          </div>
-        ) : null}
-      </div>
+      <div className="p-4">{children}</div>
     </section>
   );
 }
 
-/** The table twin every chart ships with. */
-export function SimpleTable({
-  columns,
-  rows,
-}: {
-  columns: string[];
-  rows: (string | number)[][];
-}) {
-  return (
-    <table className="w-full text-left text-ng-xs">
-      <thead>
-        <tr className="border-b border-ng-border">
-          {columns.map((column, i) => (
-            <th
-              key={column}
-              className={`py-1.5 pr-3 font-semibold uppercase tracking-[.5px] text-ng-secondary ${i > 0 ? "text-right" : ""}`}
-            >
-              {column}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row, i) => (
-          <tr key={i} className="border-b border-ng-border last:border-0">
-            {row.map((cell, j) => (
-              <td
-                key={j}
-                className={`py-1.5 pr-3 text-ng-primary ${j > 0 ? "text-right tabular-nums" : ""}`}
-              >
-                {cell}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
+/**
+ * The label a mark wears, in ink rather than in the series colour.
+ *
+ * Recharts defaults a label to its bar's fill, which puts a categorical hue on
+ * text — light enough to fail contrast on the card, and a second encoding of
+ * an identity the mark already carries.
+ */
+export const VALUE_LABEL = {
+  fill: INK.secondary,
+  fontSize: 11,
+  fontWeight: 600,
+} as const;
 
 export function compact(value: number): string {
   const abs = Math.abs(value);

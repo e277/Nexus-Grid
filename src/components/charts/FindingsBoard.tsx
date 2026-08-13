@@ -4,7 +4,7 @@ import { AlertTriangle, CircleHelp, Eye, TrendingUp } from "lucide-react";
 
 import { cn } from "../../lib/utils";
 import type { Finding, FindingSeverity } from "../../types";
-import { ChartFrame, SEVERITY_COLOR, SimpleTable } from "./chart-kit";
+import { ChartFrame, SEVERITY_COLOR } from "./chart-kit";
 import { formatMetric } from "./FindingMetrics";
 
 const SEVERITY_ORDER: FindingSeverity[] = ["critical", "opportunity", "watch", "gap"];
@@ -58,22 +58,12 @@ export function FindingsMatrix({
   );
 
   return (
+    // No table twin: this *is* the table. Every cell already prints its count
+    // as text, and the shading is a second reading of a number that is
+    // there — so a table beside it would have restated the same grid.
     <ChartFrame
       title="Severity against confidence"
       subtitle="Where the agents' conclusions sit — click a cell to filter"
-      table={
-        <SimpleTable
-          columns={["Severity", ...CONFIDENCE_ORDER.map((c) => c[0].toUpperCase() + c.slice(1))]}
-          rows={SEVERITY_ORDER.map((severity) => [
-            SEVERITY_LABEL[severity],
-            ...CONFIDENCE_ORDER.map(
-              (confidence) =>
-                findings.filter((f) => f.severity === severity && f.confidence === confidence)
-                  .length
-            ),
-          ])}
-        />
-      }
     >
       <div className="overflow-x-auto">
         <table className="w-full min-w-[420px] border-separate border-spacing-1">

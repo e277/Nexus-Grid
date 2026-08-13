@@ -5,6 +5,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -21,9 +22,9 @@ import {
   INK,
   SERIES,
   SEVERITY_COLOR,
-  SimpleTable,
   TooltipRow,
   TooltipShell,
+  VALUE_LABEL,
   compact,
 } from "./chart-kit";
 
@@ -69,6 +70,9 @@ export function FindingsByDomainChart({
     for (const severity of SEVERITY_ORDER) {
       row[severity] = analysis.findings.filter((f) => f.severity === severity).length;
     }
+    // Printed above the stack: a stacked bar shows the split well and the
+    // total badly, because reading it means adding four segments by eye.
+    row.total = SEVERITY_ORDER.reduce((sum, sev) => sum + (row[sev] as number), 0);
     return row;
   });
 
@@ -113,15 +117,6 @@ export function FindingsByDomainChart({
     <ChartFrame
       title="Findings by domain"
       subtitle={`How many conclusions each agent raised, stacked by how serious it judged them. ${total} finding${total === 1 ? "" : "s"} across ${rows.length} agents — click a bar to filter`}
-      table={
-        <SimpleTable
-          columns={["Domain", ...SEVERITY_ORDER.map((s) => SEVERITY_LABEL[s])]}
-          rows={rows.map((row) => [
-            String(row.domain),
-            ...SEVERITY_ORDER.map((s) => row[s] as number),
-          ])}
-        />
-      }
     >
       <ChartLegend
         items={SEVERITY_ORDER.map((severity) => ({
@@ -172,6 +167,9 @@ export function FindingsByDomainChart({
                     fillOpacity={selected && selected !== row.key ? 0.32 : 1}
                   />
                 ))}
+                {index === SEVERITY_ORDER.length - 1 ? (
+                  <LabelList dataKey="total" position="top" {...VALUE_LABEL} />
+                ) : null}
               </Bar>
             ))}
           </BarChart>
@@ -189,11 +187,17 @@ export function FindingsByDomainChart({
  * per bucket means no legend; the axis is the key.
  */
 export function ConfidenceChart({ findings }: { findings: Finding[] }) {
-  const buckets = (["low", "medium", "high"] as const).map((level, index) => ({
-    level: level[0].toUpperCase() + level.slice(1),
-    count: findings.filter((f) => f.confidence === level).length,
-    fill: `color-mix(in oklab, var(--color-accent) ${32 + index * 26}%, var(--color-surface))`,
-  }));
+  const buckets = (["low", "medium", "high"] as const).map((level, index) => {
+    const count = findings.filter((f) => f.confidence === level).length;
+    return {
+      level: level[0].toUpperCase() + level.slice(1),
+      count,
+      // The count answers "how many"; the share answers "how much of the
+      // whole", which is the question a three-bucket chart is actually asked.
+      label: findings.length > 0 ? `${count}  (${Math.round((count / findings.length) * 100)}%)` : "0",
+      fill: `color-mix(in oklab, var(--color-accent) ${32 + index * 26}%, var(--color-surface))`,
+    };
+  });
 
   if (findings.length === 0) {
     return (
@@ -220,7 +224,6 @@ export function ConfidenceChart({ findings }: { findings: Finding[] }) {
     <ChartFrame
       title="Confidence across findings"
       subtitle="How many findings sit at each confidence level. Low confidence is not wrong — it means the agent wants the figure checked before it is acted on"
-      table={<SimpleTable columns={["Confidence", "Findings"]} rows={buckets.map((b) => [b.level, b.count])} />}
     >
       <div className="h-[240px] w-full">
         <ResponsiveContainer width="100%" height="100%">
@@ -258,11 +261,11 @@ export function ConfidenceChart({ findings }: { findings: Finding[] }) {
               maxBarSize={56}
               stroke={INK.surface}
               strokeWidth={2}
-              label={{ position: "top", fill: INK.secondary, fontSize: 11 }}
             >
               {buckets.map((bucket) => (
                 <Cell key={bucket.level} fill={bucket.fill} />
               ))}
+              <LabelList dataKey="label" position="top" {...VALUE_LABEL} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
@@ -335,16 +338,6 @@ export function SupplierScoreChart({ match }: { match: GapMatch | null }) {
     <ChartFrame
       title={`Supplier ranking — ${match.importer} needs ${match.commodity.toLowerCase()}`}
       subtitle={`${compact(match.external_usd)} bought outside the region · scored on four observed factors, best first`}
-      table={
-        <SimpleTable
-          columns={["Supplier", ...FACTOR_KEYS, "Score"]}
-          rows={rows.map((row) => [
-            String(row.supplier),
-            ...FACTOR_KEYS.map((f) => row[f] as number),
-            row.score as number,
-          ])}
-        />
-      }
     >
       <ChartLegend
         items={FACTOR_KEYS.map((factor, index) => ({ label: factor, color: SERIES[index] }))}
@@ -382,7 +375,13 @@ export function SupplierScoreChart({ match }: { match: GapMatch | null }) {
                 strokeWidth={2}
                 maxBarSize={22}
                 radius={index === FACTOR_KEYS.length - 1 ? [0, 4, 4, 0] : undefined}
-              />
+              >
+                {/* The total, once, at the end of the stack — the four
+                    segments are the breakdown and the tooltip names each. */}
+                {index === FACTOR_KEYS.length - 1 ? (
+                  <LabelList dataKey="score" position="right" {...VALUE_LABEL} />
+                ) : null}
+              </Bar>
             ))}
           </BarChart>
         </ResponsiveContainer>
@@ -454,16 +453,6 @@ export function AgentDecisionChart({
     <ChartFrame
       title="Decisions by agent"
       subtitle="How many decisions each specialist recorded, and how confident it was on average. These are the platform's own records, not a publisher's data"
-      table={
-        <SimpleTable
-          columns={["Agent", "Decisions", "Mean confidence"]}
-          rows={byAgent.map((row) => [
-            row.agent,
-            row.decisions,
-            row.meanConfidence === null ? "unscored" : `${row.meanConfidence}%`,
-          ])}
-        />
-      }
     >
       <div className="w-full" style={{ height: byAgent.length * 40 + 48 }}>
         <ResponsiveContainer width="100%" height="100%">
@@ -495,8 +484,9 @@ export function AgentDecisionChart({
               maxBarSize={20}
               stroke={INK.surface}
               strokeWidth={2}
-              label={{ position: "right", fill: INK.secondary, fontSize: 11 }}
-            />
+            >
+              <LabelList dataKey="decisions" position="right" {...VALUE_LABEL} />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -526,7 +516,6 @@ export function GateOutcomeChart({
           ? "No run has been decided yet — the gate is the one point a run is not autonomous"
           : `${total} decision${total === 1 ? "" : "s"} recorded. Approved and modified plans are delivered; rejected and escalated ones are decisions not to act`
       }
-      table={<SimpleTable columns={["Decision", "Count"]} rows={rows.map((r) => [r.decision, r.count])} />}
     >
       {total === 0 ? (
         <p className="py-6 text-center text-ng-sm text-ng-secondary">
@@ -572,11 +561,11 @@ export function GateOutcomeChart({
                 maxBarSize={56}
                 stroke={INK.surface}
                 strokeWidth={2}
-                label={{ position: "top", fill: INK.secondary, fontSize: 11 }}
               >
                 {rows.map((row) => (
                   <Cell key={row.key} fill={DECISION_COLOR[row.key]} />
                 ))}
+                <LabelList dataKey="count" position="top" {...VALUE_LABEL} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
