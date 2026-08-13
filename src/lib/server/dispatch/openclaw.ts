@@ -58,7 +58,9 @@ export const DISPATCH_SETTINGS = [
   },
   {
     key: "OPENCLAW_TARGET",
-    describes: "The channel a plan is delivered to, e.g. a Slack channel id or a phone number",
+    describes:
+      "Where a plan is delivered. For WhatsApp this is the recipient's number in " +
+      "international form, digits only after the plus — for example +18685550123",
   },
 ] as const;
 

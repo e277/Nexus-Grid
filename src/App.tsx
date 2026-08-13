@@ -64,7 +64,7 @@ export default function App() {
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar page={page} health={health} onOpenMenu={() => setMenuOpen(true)} />
+        <TopBar page={page} onOpenMenu={() => setMenuOpen(true)} />
 
         <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
           {/* Page heading: what this screen is, before any numbers. */}

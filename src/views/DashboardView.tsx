@@ -4,9 +4,7 @@ import { CircleCheck, Lock, Play, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { api, streamWorkflow } from "../api";
-import { AnalysisView } from "../components/AnalysisView";
 import { FormError } from "../components/Fields";
-import { SourceBar, type SourceUse } from "../components/SourceBar";
 import { ApprovalPanel, type HeldRecommendation } from "../components/pipeline/ApprovalPanel";
 import { PipelineDiagram } from "../components/pipeline/PipelineDiagram";
 import {
@@ -21,17 +19,9 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { PillTabs, type PillOption } from "../components/ui/tabs";
-import { usePoll } from "../hooks";
 import { cn } from "../lib/utils";
-import {
-  DASHBOARD_SOURCES,
-  FARM_TO_MARKET_SOURCES,
-  LOGISTICS_SOURCES,
-  PLANTING_SOURCES,
-  SOIL_SOURCES,
-} from "../source-map";
+import { DASHBOARD_SOURCES } from "../source-map";
 import type {
-  AnalysisDomain,
   GateDecision,
   SourceProvenance,
   SourceSlot,
@@ -472,84 +462,6 @@ export function DashboardView() {
         <ResultsSection state={finalState} recommendation={recommendation} />
       ) : null}
 
-      {/* ── Intelligence ─────────────────────────────────────────────────
-          The four domain readings, under the loop that acts on them. They
-          were four pages, which put the reasoning a navigation step away from
-          the run it justifies: an operator deciding at the gate wants the
-          market and weather readings on the same screen as the decision. */}
-      <IntelligenceSection />
-    </div>
-  );
-}
-
-const DOMAIN_TABS: PillOption<AnalysisDomain>[] = [
-  { value: "market", label: "Farm-to-Market" },
-  { value: "soil", label: "Soil & Crop Intel" },
-  { value: "planting", label: "Planting Coordination" },
-  { value: "logistics", label: "Port & Logistics" },
-];
-
-const DOMAIN_SOURCES: Record<string, SourceUse[]> = {
-  market: FARM_TO_MARKET_SOURCES,
-  soil: SOIL_SOURCES,
-  planting: PLANTING_SOURCES,
-  logistics: LOGISTICS_SOURCES,
-};
-
-/**
- * The four domain readings, one at a time.
- *
- * A switcher rather than four stacked sections: each reading is a summary plus
- * three to five findings with evidence, and rendering all four at once buries
- * the loop above them under several screens of text. The tabs keep every
- * domain one click away without making the page a scroll.
- */
-function IntelligenceSection() {
-  const [domain, setDomain] = useState<AnalysisDomain>("market");
-  const { data, error } = usePoll(() => api.analysis(domain), 20_000, [domain]);
-  const [rereading, setRereading] = useState(false);
-
-  async function reread() {
-    setRereading(true);
-    try {
-      await api.analysis(domain, true);
-    } catch {
-      // The panel keeps the last reading; the poll retries.
-    } finally {
-      setRereading(false);
-    }
-  }
-
-  return (
-    <div className="space-y-4 border-t border-ng-border pt-5">
-      <div>
-        <h2 className="text-ng-lg font-bold tracking-tight text-ng-primary">Regional intelligence</h2>
-        <p className="mt-0.5 max-w-3xl text-ng-sm text-ng-secondary">
-          What the agents read across the region — the reasoning a coordination run acts on.
-        </p>
-      </div>
-
-      <PillTabs
-        label="Choose an intelligence domain"
-        options={DOMAIN_TABS}
-        value={domain}
-        onChange={setDomain}
-      />
-
-      {error ? (
-        <p className="rounded-md border border-ng-warning-bd bg-ng-warning-bg px-4 py-3 text-sm text-ng-warning-tx">
-          Failed to load the {domain} analysis: {error}
-        </p>
-      ) : (
-        <>
-          {data ? <SourceBar sources={data.sources} uses={DOMAIN_SOURCES[domain] ?? []} /> : null}
-          <AnalysisView
-            analysis={data?.analysis ?? null}
-            onRefresh={reread}
-            refreshing={rereading}
-          />
-        </>
-      )}
     </div>
   );
 }

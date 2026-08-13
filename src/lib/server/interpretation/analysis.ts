@@ -48,6 +48,24 @@ export interface Finding {
   confidence: "low" | "medium" | "high";
   /** Full names of the member states involved — never codes. */
   states: string[];
+  /**
+   * The figures that make this finding visual, authored by the agent.
+   *
+   * The console charts these rather than parsing them back out of the prose.
+   * Asking the model for numbers as numbers is the difference between a page
+   * that can draw a bar and one that regex-scrapes its own paragraphs.
+   */
+  metrics: FindingMetric[];
+}
+
+export type MetricUnit = "usd" | "percent" | "count" | "months" | "hours" | "km";
+
+export interface FindingMetric {
+  label: string;
+  value: number;
+  unit: MetricUnit;
+  /** The whole this value is part of, when it is a part. */
+  of: number | null;
 }
 
 export interface AnalysisResult {
@@ -83,9 +101,11 @@ const BASE_RULES = `Rules:
 - Prefer findings that span two or more member states.
 
 - Write names out in full everywhere — "Trinidad and Tobago", not "TTO"; "United States", not a country code. Never abbreviate a member state, a partner or a commodity.
+- Keep "finding" to one or two sentences and "recommendation" to one. The console draws the numbers; the prose only has to say what they mean.
+- Attach 1 to 3 "metrics" to every finding: the figures a chart should show. Each is {"label","value","unit","of"}. "value" is a bare number, never a formatted string. "unit" is one of: usd, percent, count, months, hours, km. "of" is the whole when the value is part of one (e.g. value 190369647, of 190369647 total imports of that commodity), otherwise null. Use only numbers present in the input.
 
 Return ONLY a JSON object of this exact shape, no markdown fence and no prose:
-{"summary":"one paragraph an operator reads first","findings":[{"title":"short headline","finding":"what was observed","recommendation":"what should change and who acts","evidence":["figure with unit and source"],"severity":"critical|opportunity|watch|gap","confidence":"low|medium|high","states":["full member state name"]}]}
+{"summary":"two or three sentences an operator reads first","findings":[{"title":"short headline","finding":"one or two sentences","recommendation":"one sentence: what changes and who acts","evidence":["figure with unit and source"],"metrics":[{"label":"short label","value":123,"unit":"usd","of":456}],"severity":"critical|opportunity|watch|gap","confidence":"low|medium|high","states":["full member state name"]}]}
 
 Return between 3 and 5 findings, most consequential first.`;
 
@@ -289,6 +309,31 @@ ${gaps}`;
 // ── Coercion ──────────────────────────────────────────────────────────────
 
 const SEVERITIES: FindingSeverity[] = ["critical", "opportunity", "watch", "gap"];
+const UNITS: MetricUnit[] = ["usd", "percent", "count", "months", "hours", "km"];
+
+/** Keep only metrics that are actually chartable — a real number and a known unit. */
+function coerceMetrics(raw: unknown): FindingMetric[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((entry) => entry as Record<string, unknown>)
+    .filter(
+      (entry) =>
+        typeof entry.label === "string" &&
+        typeof entry.value === "number" &&
+        Number.isFinite(entry.value) &&
+        UNITS.includes(entry.unit as MetricUnit)
+    )
+    .slice(0, 3)
+    .map((entry) => ({
+      label: String(entry.label),
+      value: entry.value as number,
+      unit: entry.unit as MetricUnit,
+      of:
+        typeof entry.of === "number" && Number.isFinite(entry.of) && entry.of > 0
+          ? entry.of
+          : null,
+    }));
+}
 
 /**
  * Resolve whatever the model named a state as to its full name.
@@ -327,6 +372,7 @@ function coerce(parsed: unknown): { summary: string; findings: Finding[] } {
       states: Array.isArray(entry.states)
         ? [...new Set(entry.states.map(String).map(fullStateName).filter(Boolean))]
         : [],
+      metrics: coerceMetrics(entry.metrics),
     }));
 
   return { summary: typeof root.summary === "string" ? root.summary : "", findings };
@@ -351,6 +397,10 @@ function ruleFindings(domain: AnalysisDomain, inputs: AnalysisInputs): { summary
         severity: o.external_share_pct > 90 ? "critical" : "opportunity",
         confidence: "medium",
         states: [fullStateName(o.importer_iso3)],
+        metrics: [
+          { label: `Bought outside CARICOM`, value: o.external_usd, unit: "usd", of: o.external_usd + o.intra_usd },
+          { label: `External share`, value: o.external_share_pct, unit: "percent", of: 100 },
+        ],
       });
     }
   }
@@ -368,6 +418,14 @@ function ruleFindings(domain: AnalysisDomain, inputs: AnalysisInputs): { summary
         severity: "watch",
         confidence: "medium",
         states: [fullStateName(s.iso3)],
+        metrics: [
+          ...(s.soil?.ph !== null && s.soil?.ph !== undefined
+            ? [{ label: "Soil pH", value: s.soil.ph, unit: "count" as const, of: 14 }]
+            : []),
+          ...(s.arable_land_pct !== null
+            ? [{ label: "Arable land", value: s.arable_land_pct, unit: "percent" as const, of: 100 }]
+            : []),
+        ],
       });
     }
   }
@@ -385,6 +443,10 @@ function ruleFindings(domain: AnalysisDomain, inputs: AnalysisInputs): { summary
         severity: "opportunity",
         confidence: "medium",
         states: [a.supplier, a.importer],
+        metrics: [
+          { label: "Months the supplier can plant and the importer cannot", value: a.complementary_months.length, unit: "months", of: 12 },
+          { label: "Bought outside the region on this commodity", value: a.external_usd, unit: "usd", of: null },
+        ],
       });
     }
   }
@@ -405,6 +467,11 @@ function ruleFindings(domain: AnalysisDomain, inputs: AnalysisInputs): { summary
         severity: "opportunity",
         confidence: "medium",
         states: [best.supplier, m.importer],
+        metrics: [
+          { label: `${best.supplier} match score`, value: best.score, unit: "count", of: 100 },
+          { label: "Transit", value: best.transit_hours, unit: "hours", of: null },
+          { label: "Could displace", value: m.external_usd, unit: "usd", of: null },
+        ],
       });
     }
 
@@ -423,6 +490,12 @@ function ruleFindings(domain: AnalysisDomain, inputs: AnalysisInputs): { summary
         severity: l.status === "at_risk" ? "watch" : "opportunity",
         confidence: "medium",
         states: [l.supplier, l.importer],
+        metrics: [
+          { label: "Transit", value: l.transit_hours, unit: "hours", of: null },
+          ...(l.distance_km !== null
+            ? [{ label: "Distance", value: Math.round(l.distance_km), unit: "km" as const, of: null }]
+            : []),
+        ],
       });
     }
   }
@@ -441,6 +514,10 @@ function ruleFindings(domain: AnalysisDomain, inputs: AnalysisInputs): { summary
       severity: "opportunity",
       confidence: "high",
       states: [],
+      metrics: [
+        { label: "Addressable by substitution", value: addressable, unit: "usd", of: picture.totals.food_imports_usd },
+        { label: "Currently sourced regionally", value: picture.totals.intra_caricom_share_pct ?? 0, unit: "percent", of: 100 },
+      ],
     });
   }
 
@@ -453,6 +530,7 @@ function ruleFindings(domain: AnalysisDomain, inputs: AnalysisInputs): { summary
       severity: "gap",
       confidence: "high",
       states: [],
+      metrics: [],
     });
   }
 

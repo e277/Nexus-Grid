@@ -12,6 +12,7 @@ import {
   SupplierScoreChart,
 } from "../components/charts/AgentCharts";
 import { SEVERITY_COLOR } from "../components/charts/chart-kit";
+import { FindingMetrics } from "../components/charts/FindingMetrics";
 import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
@@ -307,7 +308,11 @@ export function ImpactView() {
                 </Badge>
               </div>
 
-              <p className="mt-2 max-w-4xl text-ng-sm leading-relaxed text-ng-primary">
+              {/* The agent's own figures, drawn. These lead because they are
+                  the finding — the sentences below say what they mean. */}
+              <FindingMetrics metrics={finding.metrics} />
+
+              <p className="mt-3 max-w-4xl text-ng-sm leading-relaxed text-ng-primary">
                 {finding.finding}
               </p>
               {finding.recommendation ? (

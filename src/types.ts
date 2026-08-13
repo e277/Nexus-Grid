@@ -33,6 +33,17 @@ export type AnalysisDomain = "market" | "soil" | "planting" | "logistics" | "imp
 
 export type FindingSeverity = "critical" | "opportunity" | "watch" | "gap";
 
+export type MetricUnit = "usd" | "percent" | "count" | "months" | "hours" | "km";
+
+/** A figure the agent attached to its own finding, for the console to draw. */
+export interface FindingMetric {
+  label: string;
+  value: number;
+  unit: MetricUnit;
+  /** The whole this value is part of, when it is a part. */
+  of: number | null;
+}
+
 /** One conclusion an agent reached, with the figures it rests on. */
 export interface Finding {
   title: string;
@@ -42,6 +53,7 @@ export interface Finding {
   severity: FindingSeverity;
   confidence: "low" | "medium" | "high";
   states: string[];
+  metrics: FindingMetric[];
 }
 
 export interface AnalysisResult {

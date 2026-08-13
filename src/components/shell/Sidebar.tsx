@@ -56,6 +56,73 @@ export function Sidebar({
         )}
       </div>
 
+      {/* Runtime status and the rail toggle share one row. The dot pulses only
+          while the runtime is actually answering, so a dead backend reads as a
+          still, grey dot rather than a reassuring animation. The toggle is an
+          icon with a label only for screen readers — its meaning is in the
+          glyph, and a "Collapse" caption spent a whole row saying it again. */}
+      <div
+        className={cn(
+          "flex shrink-0 items-center border-b border-ng-border px-2 py-2.5",
+          collapsed ? "justify-center" : "gap-2"
+        )}
+      >
+        <span
+          className={cn("flex min-w-0 items-center", collapsed ? "" : "flex-1 gap-2 px-1")}
+          title={
+            health
+              ? `System online · ${health.app} ${health.version} · ${health.environment}`
+              : "Connecting to the runtime…"
+          }
+        >
+          <span className="relative flex h-2 w-2 shrink-0">
+            {health ? (
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ng-success opacity-60" />
+            ) : null}
+            <span
+              className={cn(
+                "relative inline-flex h-2 w-2 rounded-full",
+                health ? "bg-ng-success" : "bg-ng-muted-bd"
+              )}
+            />
+          </span>
+          {collapsed ? null : (
+            <span className="min-w-0">
+              <span className="block truncate text-ng-xs font-semibold text-ng-primary">
+                {health ? "System Online" : "Connecting…"}
+              </span>
+              <span className="block truncate text-ng-2xs capitalize text-ng-secondary">
+                {health ? `${health.version} · ${health.environment}` : "—"}
+              </span>
+            </span>
+          )}
+        </span>
+
+        {collapsed ? null : (
+          <button
+            onClick={onToggleCollapsed}
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent"
+          >
+            <PanelLeftClose size={15} />
+          </button>
+        )}
+      </div>
+
+      {/* Collapsed, the toggle is the only way back, so it gets its own row
+          rather than competing with the status dot for 60px. */}
+      {collapsed ? (
+        <button
+          onClick={onToggleCollapsed}
+          aria-label="Expand sidebar"
+          title="Expand sidebar"
+          className="flex h-8 shrink-0 items-center justify-center border-b border-ng-border text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent"
+        >
+          <PanelLeftOpen size={15} />
+        </button>
+      ) : null}
+
       <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
         {NAV_GROUPS.map((group) => (
           <div key={group.label} className="space-y-0.5">
@@ -99,53 +166,6 @@ export function Sidebar({
         ))}
       </nav>
 
-      <div className="shrink-0 space-y-2 border-t border-ng-border px-2 py-3">
-        {/* System Online: the dot pulses only while the runtime is actually
-            answering, so a dead backend reads as a still, grey dot rather
-            than a reassuring animation. */}
-        <div
-          className={cn("flex items-center", collapsed ? "justify-center" : "gap-2 px-2")}
-          title={
-            health
-              ? `System online · ${health.app} ${health.version} · ${health.environment}`
-              : "Connecting to the runtime…"
-          }
-        >
-          <span className="relative flex h-2 w-2 shrink-0">
-            {health ? (
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ng-success opacity-60" />
-            ) : null}
-            <span
-              className={cn(
-                "relative inline-flex h-2 w-2 rounded-full",
-                health ? "bg-ng-success" : "bg-ng-muted-bd"
-              )}
-            />
-          </span>
-          {collapsed ? null : (
-            <div className="min-w-0">
-              <p className="truncate text-ng-xs font-semibold text-ng-primary">
-                {health ? "System Online" : "Connecting…"}
-              </p>
-              <p className="truncate text-ng-2xs capitalize text-ng-secondary">
-                {health ? `${health.version} · ${health.environment}` : "—"}
-              </p>
-            </div>
-          )}
-        </div>
-
-        <button
-          onClick={onToggleCollapsed}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className={cn(
-            "flex h-8 items-center rounded-md text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent",
-            collapsed ? "w-full justify-center" : "w-full gap-2 px-2.5 text-ng-xs font-medium"
-          )}
-        >
-          {collapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
-          {collapsed ? null : "Collapse"}
-        </button>
-      </div>
     </aside>
   );
 }

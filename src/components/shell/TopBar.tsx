@@ -3,17 +3,14 @@
 import { ChevronRight, Menu } from "lucide-react";
 
 import { findPage, groupOf, type PageId } from "../../navigation";
-import type { Health } from "../../types";
 import { ThemeToggle } from "../ThemeToggle";
-import { Badge } from "../ui/badge";
 
 interface TopBarProps {
   page: PageId;
-  health: Health | null;
   onOpenMenu: () => void;
 }
 
-export function TopBar({ page, health, onOpenMenu }: TopBarProps) {
+export function TopBar({ page, onOpenMenu }: TopBarProps) {
   const active = findPage(page);
 
   return (
@@ -38,16 +35,11 @@ export function TopBar({ page, health, onOpenMenu }: TopBarProps) {
         </span>
       </nav>
 
+      {/* Runtime health lives in the rail, next to the version and
+          environment it qualifies. Saying it twice on one screen made two
+          indicators that could disagree and neither of which was the one to
+          trust. */}
       <div className="flex shrink-0 items-center gap-2">
-        {health ? (
-          <Badge variant="success" className="hidden sm:inline-flex">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-ng-success" />
-            {health.status === "ok" ? "All systems operational" : health.status}
-          </Badge>
-        ) : (
-          <span className="hidden text-ng-xs text-ng-secondary sm:inline">Connecting…</span>
-        )}
-
         <ThemeToggle />
       </div>
     </header>
