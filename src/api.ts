@@ -1,6 +1,7 @@
 import type {
   AgentActivity,
   AnalysisDomain,
+  AnalysisOverview,
   AnalysisResponse,
   AuditLog,
   GateDecision,
@@ -141,6 +142,9 @@ export const api = {
   /** One agent's reading of one domain — what every intelligence page renders. */
   analysis: (domain: AnalysisDomain, refresh = false) =>
     get<AnalysisResponse>(`/analysis/${domain}${refresh ? "?refresh=true" : ""}`),
+
+  /** Every domain at once, plus the decision record — what the charts plot. */
+  analysisOverview: () => get<AnalysisOverview>("/analysis"),
 
   // Orchestration & observability
   workflowStatus: () => get<{ workflow: string; status: string }>("/workflow/status"),

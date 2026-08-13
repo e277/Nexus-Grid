@@ -9,14 +9,8 @@ import { Sidebar } from "./components/shell/Sidebar";
 import { TopBar } from "./components/shell/TopBar";
 import { usePoll } from "./hooks";
 import { findPage, type PageId } from "./navigation";
-import {
-  FARM_TO_MARKET_SOURCES,
-  LOGISTICS_SOURCES,
-  PLANTING_SOURCES,
-  SOIL_SOURCES,
-} from "./source-map";
 import { DashboardView } from "./views/DashboardView";
-import { IntelligenceView } from "./views/IntelligenceView";
+import { ImpactView } from "./views/ImpactView";
 
 const COLLAPSE_KEY = "nexus_grid_sidebar_collapsed";
 
@@ -82,16 +76,7 @@ export default function App() {
           </div>
 
           {page === "dashboard" && <DashboardView />}
-          {page === "farm-to-market" && (
-            <IntelligenceView domain="market" uses={FARM_TO_MARKET_SOURCES} />
-          )}
-          {page === "soil" && <IntelligenceView domain="soil" uses={SOIL_SOURCES} />}
-          {page === "planting" && (
-            <IntelligenceView domain="planting" uses={PLANTING_SOURCES} />
-          )}
-          {page === "logistics" && (
-            <IntelligenceView domain="logistics" uses={LOGISTICS_SOURCES} />
-          )}
+          {page === "impact" && <ImpactView />}
         </main>
 
         <MobileNav page={page} onNavigate={setPage} />

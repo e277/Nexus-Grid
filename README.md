@@ -39,8 +39,9 @@ src/
   components/
     shell/          # Sidebar, TopBar, MobileNav, NavSheet
     pipeline/       # Node model, phase/canvas geometry, SVG diagram, approval panel
+    charts/         # chart-kit and the charts over agent output
     ui/             # shadcn-style primitives (Radix + CVA)
-  views/            # Dashboard (loop + outcomes) and IntelligenceView (one per domain)
+  views/            # Dashboard (loop + the four domain readings) and ImpactView (the charts)
   api.ts            # Typed client for /api/*
   types.ts          # Shared response types
   index.css         # Design tokens — dark on bare :root, light under [data-theme]
@@ -124,6 +125,7 @@ trail. Every route is rate-limited and records Prometheus metrics.
 - `GET /api/picture` — the derived regional read model (`?refresh=true` to refetch)
 - `GET /api/signals` — the interpreted coordination signals
 - `GET /api/analysis/{domain}` — one agent's reading of `market`, `soil`, `planting`, `logistics` or `impact` (`?refresh=true` to re-read)
+- `GET /api/analysis` — all five readings plus the decision record and supplier rankings, which the analysis page charts
 - `GET /api/lanes` — supplier→importer lanes, a ranked supplier shortlist per gap, port exposure, and what is *not* observed
 - `GET /api/workflow/status`, `POST /api/workflow/trigger`, `POST /api/workflow/{threadId}/resume`
 - `POST /api/workflow/stream` — run or resume, streaming each node as it completes (SSE)

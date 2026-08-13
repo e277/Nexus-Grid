@@ -1,13 +1,6 @@
-import {
-  CalendarRange,
-  LayoutDashboard,
-  Ship,
-  Sprout,
-  TrendingUp,
-  type LucideIcon,
-} from "lucide-react";
+import { LayoutDashboard, Target, type LucideIcon } from "lucide-react";
 
-export type PageId = "dashboard" | "farm-to-market" | "soil" | "planting" | "logistics";
+export type PageId = "dashboard" | "impact";
 
 export interface Page {
   id: PageId;
@@ -25,19 +18,22 @@ export interface NavGroup {
 }
 
 /**
- * Navigation grouped by what each section is *for*: what the platform does,
- * what it knows, and what came of it. The group label doubles as the first
- * breadcrumb segment, so the header never needs its own copy of the tree.
+ * Two pages: what the platform is doing, and what it has concluded.
  *
- * There is deliberately no "Data Sources" page. Provenance is not a subject in
- * its own right — it is a property of a figure, and it means something only
- * beside the figure it produced. Every page therefore carries its own source
- * panel naming just the publishers behind *its* numbers and what each one
- * contributed; see `src/source-map.ts`.
+ * It was seven. Farm-to-Market, Soil & Crop Intel, Planting Coordination and
+ * Port & Logistics were each one agent's reading of one domain, and splitting
+ * them across four destinations put the reasoning a navigation step away from
+ * the run it justifies — an operator deciding at the approval gate wants the
+ * market and weather readings on the same screen as the decision. They are now
+ * a switcher under the loop.
+ *
+ * Provenance never earned a page of its own either: it is a property of a
+ * figure, so each reading carries its own source panel naming just the
+ * publishers behind it. See `src/source-map.ts`.
  */
 export const NAV_GROUPS: NavGroup[] = [
   {
-    label: "Overview",
+    label: "Operations",
     pages: [
       {
         id: "dashboard",
@@ -45,44 +41,20 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: LayoutDashboard,
         title: "AI Agent Pipeline",
         description:
-          "The coordination loop end to end — autonomous at every step except the approval gate — and what its decisions have added up to.",
+          "The coordination loop end to end — autonomous at every step except the approval gate — and the regional intelligence it acts on.",
       },
     ],
   },
   {
-    label: "Intelligence",
+    label: "Analysis",
     pages: [
       {
-        id: "farm-to-market",
-        label: "Farm-to-Market",
-        icon: TrendingUp,
-        title: "Farm-to-Market",
+        id: "impact",
+        label: "Impact Metrics",
+        icon: Target,
+        title: "Impact Metrics",
         description:
-          "What the agent reads in the region's trade flows: where the money leaves, and which gaps a member state could close.",
-      },
-      {
-        id: "soil",
-        label: "Soil & Crop Intel",
-        icon: Sprout,
-        title: "Soil & Crop Intel",
-        description:
-          "What the agent reads in the region's growing conditions: which states can physically supply what the region imports, and what constrains them.",
-      },
-      {
-        id: "planting",
-        label: "Planting Coordination",
-        icon: CalendarRange,
-        title: "Planting Coordination",
-        description:
-          "What the agent reads in the region's planting calendars: where states compete in the same weeks, and where they could stagger instead.",
-      },
-      {
-        id: "logistics",
-        label: "Port & Logistics",
-        icon: Ship,
-        title: "Port & Logistics",
-        description:
-          "What the agent reads in the routes a plan would move over: which lanes are viable now, and what the weather at each end implies.",
+          "Everything the agents concluded, as charts you can cut: findings by domain and severity, the confidence behind them, how suppliers scored, and every decision taken.",
       },
     ],
   },
@@ -99,9 +71,8 @@ export function groupOf(id: PageId): string {
   return NAV_GROUPS.find((g) => g.pages.some((p) => p.id === id))?.label ?? "";
 }
 
-/** The three destinations worth a thumb on a phone. */
+/** Both destinations fit the bottom bar on a phone. */
 export const MOBILE_TABS: { id: PageId; label: string }[] = [
-  { id: "dashboard", label: "Home" },
-  { id: "farm-to-market", label: "Intel" },
-  { id: "logistics", label: "Ports" },
+  { id: "dashboard", label: "Pipeline" },
+  { id: "impact", label: "Analysis" },
 ];

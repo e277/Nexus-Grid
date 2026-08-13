@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, streamWorkflow } from "../api";
 import { AnalysisView } from "../components/AnalysisView";
 import { FormError } from "../components/Fields";
+import { SourceBar, type SourceUse } from "../components/SourceBar";
 import { ApprovalPanel, type HeldRecommendation } from "../components/pipeline/ApprovalPanel";
 import { PipelineDiagram } from "../components/pipeline/PipelineDiagram";
 import {
@@ -22,8 +23,15 @@ import { Card } from "../components/ui/card";
 import { PillTabs, type PillOption } from "../components/ui/tabs";
 import { usePoll } from "../hooks";
 import { cn } from "../lib/utils";
-import { DASHBOARD_SOURCES } from "../source-map";
+import {
+  DASHBOARD_SOURCES,
+  FARM_TO_MARKET_SOURCES,
+  LOGISTICS_SOURCES,
+  PLANTING_SOURCES,
+  SOIL_SOURCES,
+} from "../source-map";
 import type {
+  AnalysisDomain,
   GateDecision,
   SourceProvenance,
   SourceSlot,
@@ -464,78 +472,84 @@ export function DashboardView() {
         <ResultsSection state={finalState} recommendation={recommendation} />
       ) : null}
 
-      {/* ── Outcomes ─────────────────────────────────────────────────────
-          What the loop above has added up to. This was its own page, which
-          put the decisions one navigation step away from the thing that makes
-          them — a run finishes here and its consequence was somewhere else. */}
-      <OutcomesSection />
+      {/* ── Intelligence ─────────────────────────────────────────────────
+          The four domain readings, under the loop that acts on them. They
+          were four pages, which put the reasoning a navigation step away from
+          the run it justifies: an operator deciding at the gate wants the
+          market and weather readings on the same screen as the decision. */}
+      <IntelligenceSection />
     </div>
   );
 }
 
+const DOMAIN_TABS: PillOption<AnalysisDomain>[] = [
+  { value: "market", label: "Farm-to-Market" },
+  { value: "soil", label: "Soil & Crop Intel" },
+  { value: "planting", label: "Planting Coordination" },
+  { value: "logistics", label: "Port & Logistics" },
+];
+
+const DOMAIN_SOURCES: Record<string, SourceUse[]> = {
+  market: FARM_TO_MARKET_SOURCES,
+  soil: SOIL_SOURCES,
+  planting: PLANTING_SOURCES,
+  logistics: LOGISTICS_SOURCES,
+};
+
 /**
- * The agent's reading of what the coordination layer is achieving, plus the
- * decisions it has actually taken.
+ * The four domain readings, one at a time.
  *
- * Both halves are agent output rather than a projection of source data: the
- * analysis is a model reading, and the decision counts are the platform's own
- * record of what its agents and its operators did.
+ * A switcher rather than four stacked sections: each reading is a summary plus
+ * three to five findings with evidence, and rendering all four at once buries
+ * the loop above them under several screens of text. The tabs keep every
+ * domain one click away without making the page a scroll.
  */
-function OutcomesSection() {
-  const { data } = usePoll(() => api.analysis("impact"), 30_000);
-  const { data: decisions } = usePoll(
-    () => api.agentActivities({ limit: 200 }).catch(() => []),
-    30_000
-  );
-  const { data: audits } = usePoll(() => api.auditLogs({ limit: 200 }).catch(() => []), 30_000);
+function IntelligenceSection() {
+  const [domain, setDomain] = useState<AnalysisDomain>("market");
+  const { data, error } = usePoll(() => api.analysis(domain), 20_000, [domain]);
+  const [rereading, setRereading] = useState(false);
 
-  const gate = (audits ?? [])
-    .filter((log) => log.action.startsWith("workflow.gate_"))
-    .reduce<Record<string, number>>((acc, log) => {
-      const decision = log.action.replace("workflow.gate_", "");
-      acc[decision] = (acc[decision] ?? 0) + 1;
-      return acc;
-    }, {});
-
-  const scored = (decisions ?? []).filter((d) => typeof d.confidence === "number");
-  const meanConfidence =
-    scored.length > 0
-      ? scored.reduce((sum, d) => sum + (d.confidence ?? 0), 0) / scored.length
-      : null;
-
-  const gateTotal = Object.values(gate).reduce((sum, n) => sum + n, 0);
+  async function reread() {
+    setRereading(true);
+    try {
+      await api.analysis(domain, true);
+    } catch {
+      // The panel keeps the last reading; the poll retries.
+    } finally {
+      setRereading(false);
+    }
+  }
 
   return (
     <div className="space-y-4 border-t border-ng-border pt-5">
       <div>
-        <h2 className="text-ng-lg font-bold tracking-tight text-ng-primary">Outcomes</h2>
+        <h2 className="text-ng-lg font-bold tracking-tight text-ng-primary">Regional intelligence</h2>
         <p className="mt-0.5 max-w-3xl text-ng-sm text-ng-secondary">
-          What the loop above is adding up to, and every decision taken to get there.
+          What the agents read across the region — the reasoning a coordination run acts on.
         </p>
       </div>
 
-      {/* The platform's own record: not a publisher's data, its agents' and
-          its operators' actual decisions. */}
-      <div className="flex flex-wrap gap-2">
-        <Badge variant="ai">{decisions?.length ?? 0} agent decisions</Badge>
-        {meanConfidence !== null ? (
-          <Badge variant="muted">mean confidence {Math.round(meanConfidence * 100)}%</Badge>
-        ) : null}
-        {gateTotal > 0 ? (
-          Object.entries(gate).map(([decision, count]) => (
-            <Badge
-              key={decision}
-              variant={DECISION_COPY[decision as GateDecision]?.tone ?? "muted"}
-            >
-              {count} {DECISION_COPY[decision as GateDecision]?.label.toLowerCase() ?? decision}
-            </Badge>
-          ))
-        ) : (
-          <Badge variant="muted">no gate decisions recorded yet</Badge>
-        )}
-      </div>
+      <PillTabs
+        label="Choose an intelligence domain"
+        options={DOMAIN_TABS}
+        value={domain}
+        onChange={setDomain}
+      />
 
-      <AnalysisView analysis={data?.analysis ?? null} />
+      {error ? (
+        <p className="rounded-md border border-ng-warning-bd bg-ng-warning-bg px-4 py-3 text-sm text-ng-warning-tx">
+          Failed to load the {domain} analysis: {error}
+        </p>
+      ) : (
+        <>
+          {data ? <SourceBar sources={data.sources} uses={DOMAIN_SOURCES[domain] ?? []} /> : null}
+          <AnalysisView
+            analysis={data?.analysis ?? null}
+            onRefresh={reread}
+            refreshing={rereading}
+          />
+        </>
+      )}
     </div>
   );
 }

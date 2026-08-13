@@ -6,8 +6,19 @@ interface PollState<T> {
   refresh: () => void;
 }
 
-/** Load data now and refresh on an interval. */
-export function usePoll<T>(loader: () => Promise<T>, intervalMs = 10_000): PollState<T> {
+/**
+ * Load data now and refresh on an interval.
+ *
+ * `deps` re-runs the loader when something it closes over changes — a domain
+ * switcher, say. Without it the effect only re-ran on the tick, so a caller
+ * that changed what it was asking for kept the previous answer until the next
+ * interval, which reads as a tab that does not respond.
+ */
+export function usePoll<T>(
+  loader: () => Promise<T>,
+  intervalMs = 10_000,
+  deps: unknown[] = []
+): PollState<T> {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
@@ -38,7 +49,7 @@ export function usePoll<T>(loader: () => Promise<T>, intervalMs = 10_000): PollS
       clearInterval(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick, intervalMs]);
+  }, [tick, intervalMs, ...deps]);
 
   return { data, error, refresh };
 }

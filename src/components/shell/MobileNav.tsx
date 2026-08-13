@@ -22,7 +22,7 @@ export function MobileNav({
   return (
     <nav
       aria-label="Primary"
-      className="sticky bottom-0 z-20 grid shrink-0 grid-cols-3 border-t border-ng-border bg-ng-surface/95 backdrop-blur-md lg:hidden"
+      className="sticky bottom-0 z-20 grid shrink-0 grid-cols-2 border-t border-ng-border bg-ng-surface/95 backdrop-blur-md lg:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       {MOBILE_TABS.map((tab) => {

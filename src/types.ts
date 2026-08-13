@@ -59,6 +59,70 @@ export interface AnalysisResponse {
   sources: SourceProvenance[];
 }
 
+/** One factor's contribution to a supplier's score. */
+export interface MatchFactor {
+  label: string;
+  score: number;
+  points: number;
+  detail: string;
+}
+
+export interface SupplierMatch {
+  supplier: string;
+  supplier_iso3: string;
+  /** 0..100, comparable only between suppliers for the same gap. */
+  score: number;
+  rank: number;
+  transit_hours: number;
+  distance_km: number | null;
+  supplier_climate_risk: "low" | "medium" | "high" | null;
+  importer_climate_risk: "low" | "medium" | "high" | null;
+  complementary_months: string[];
+  already_supplies_region: boolean;
+  factors: MatchFactor[];
+  rationale: string;
+}
+
+/** A sourcing gap with its ranked suppliers. */
+export interface GapMatch {
+  commodity: string;
+  commodity_code: string;
+  importer: string;
+  importer_iso3: string;
+  external_usd: number;
+  external_share_pct: number;
+  matches: SupplierMatch[];
+  /** What the ranking deliberately did not weigh. */
+  not_scored: string[];
+}
+
+/** One agent decision, in readable form. */
+export interface AgentDecision {
+  id: number;
+  agent: string;
+  action: string;
+  confidence: number | null;
+  created_at: string | null;
+}
+
+export interface GateDecisionRecord {
+  id: number;
+  decision: string;
+  note: string | null;
+  actor: string;
+  created_at: string | null;
+}
+
+/** Everything the analysis page charts — all of it agent output. */
+export interface AnalysisOverview {
+  analyses: AnalysisResult[];
+  decisions: AgentDecision[];
+  gate_decisions: GateDecisionRecord[];
+  matches: GapMatch[];
+  sources: SourceProvenance[];
+  generated_at: string;
+}
+
 export interface WorkflowResult {
   status: string;
   result: {
