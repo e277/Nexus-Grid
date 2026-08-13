@@ -71,6 +71,7 @@ export function fetchClimate(force = false): Promise<Snapshot<ClimateSignal>> {
       // batches — still quick, and it actually comes back complete.
       const records: ClimateSignal[] = [];
       let failed = 0;
+      let firstFailure: string | null = null;
 
       for (let i = 0; i < CARICOM_STATES.length; i += BATCH_SIZE) {
         if (i > 0) await sleep(BATCH_GAP_MS);
@@ -128,8 +129,17 @@ export function fetchClimate(force = false): Promise<Snapshot<ClimateSignal>> {
         );
 
         for (const result of results) {
-          if (result.status === "fulfilled") records.push(result.value);
-          else failed += 1;
+          if (result.status === "fulfilled") {
+            records.push(result.value);
+          } else {
+            failed += 1;
+            // Keep the first cause. Counting failures and discarding why left
+            // an operator — and the analyst reading this provenance — with
+            // "15 island(s) did not respond" and no way to tell an upstream
+            // outage from this deployment being rate limited.
+            firstFailure ??=
+              result.reason instanceof Error ? result.reason.message : String(result.reason);
+          }
         }
       }
 
@@ -142,7 +152,11 @@ export function fetchClimate(force = false): Promise<Snapshot<ClimateSignal>> {
           records.length > 0 ? "live" : "unavailable",
           {
             covers: "next 7 days · risk from first 3",
-            note: failed > 0 ? `${failed} island(s) did not respond.` : undefined,
+            note:
+              failed > 0
+                ? `${failed} island(s) did not respond` +
+                  (firstFailure ? ` — first failure: ${firstFailure}` : ".")
+                : undefined,
           }
         ),
       };
