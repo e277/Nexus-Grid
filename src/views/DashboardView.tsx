@@ -4,7 +4,7 @@ import { Circle, CircleCheck, Play, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { api, streamWorkflow } from "../api";
-import { AnalysisSection, DispatchPanel } from "../components/analysis/AnalysisSection";
+import { DispatchPanel } from "../components/analysis/AnalysisSection";
 import { FormError } from "../components/Fields";
 import { ApprovalPanel, type HeldRecommendation } from "../components/pipeline/ApprovalPanel";
 import { PipelineDiagram } from "../components/pipeline/PipelineDiagram";
@@ -19,7 +19,6 @@ import { RecommendationCard } from "../components/RecommendationCard";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
-import { Skeleton } from "../components/ui/skeleton";
 import { PillTabs, type PillOption } from "../components/ui/tabs";
 import { usePoll } from "../hooks";
 import { cn } from "../lib/utils";
@@ -119,13 +118,12 @@ export function DashboardView() {
   const abortRef = useRef<AbortController | null>(null);
 
   /**
-   * What the agents have concluded, polled independently of a sweep.
-   *
-   * These are model readings of five domains, not a byproduct of the run above
-   * — they exist before a sweep starts and outlive it, which is why they are
-   * on their own interval rather than derived from `finalState`.
+   * Polled here for one thing only: whether an approved plan has anywhere to
+   * go. The conclusions themselves belong to the Intelligence pages and to
+   * Impact Metrics; what this page needs from them is the delivery status,
+   * which has to be legible at the gate rather than a page away.
    */
-  const { data: analysis, error: analysisError } = usePoll(() => api.analysisOverview(), 30_000);
+  const { data: analysis } = usePoll(() => api.analysisOverview(), 30_000);
 
   const done = new Map(
     completed.map(({ gap, state }) => [`${gap.importer_iso3}-${gap.commodity_code}`, state])
@@ -438,18 +436,6 @@ export function DashboardView() {
     : null;
 
   const complete = finalState !== null && !running;
-  /**
-   * Whether the agents have actually produced anything on this visit.
-   *
-   * Counted in finished gaps, not in `running` or `finalState`. Both of those
-   * turn true the moment the first node of the first gap lands — a second
-   * after the button is pressed — which would put the findings on screen
-   * while the run that is supposed to produce them is still in `perceive`.
-   *
-   * One finished gap is enough: the findings fill in as the sweep proceeds
-   * rather than waiting for all twelve.
-   */
-  const swept = completed.length > 0;
   const activePhase = focus === "all" ? null : focus;
 
   return (
@@ -645,46 +631,6 @@ export function DashboardView() {
       {/* ── Results: only once the run has actually finished ────────────── */}
       {complete && finalState ? (
         <ResultsSection state={finalState} recommendation={recommendation} />
-      ) : null}
-
-      {/* ── What the agents concluded ───────────────────────────────────
-             The Impact Metrics page, folded in. It was a second destination,
-             which asked an operator to leave the run in order to read what the
-             run produced. Everything below is model output — findings the
-             agents raised, the confidence they attached, how they scored
-             suppliers, and what humans answered at the gate.
-
-             It appears once a sweep has produced something, not on page load.
-             Charts standing ready before any agent has run invite the reader
-             to take them for the state of the region, when they are the state
-             of a run that has not happened yet. */}
-      {swept ? (
-        <>
-      <div className="border-t border-ng-border pt-5">
-        <h2 className="text-ng-xl font-bold tracking-tight text-ng-primary">
-          What the agents concluded
-        </h2>
-        <p className="mt-1 max-w-3xl text-ng-sm text-ng-secondary">
-          Every series below is the agents&rsquo; own output, not a publisher&rsquo;s figures
-          replotted. The numbers behind a finding sit in that finding&rsquo;s evidence, beside the
-          conclusion they support.
-        </p>
-      </div>
-
-      {analysisError ? (
-        <FormError message={`Failed to load the analysis: ${analysisError}`} />
-      ) : !analysis ? (
-        <div className="space-y-4">
-          <Skeleton className="h-16" />
-          <div className="grid gap-4 xl:grid-cols-2">
-            <Skeleton className="h-80" />
-            <Skeleton className="h-80" />
-          </div>
-        </div>
-      ) : (
-        <AnalysisSection data={analysis} />
-      )}
-        </>
       ) : null}
 
     </div>
