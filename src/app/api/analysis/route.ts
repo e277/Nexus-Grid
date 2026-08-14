@@ -6,6 +6,7 @@ import {
   type AnalysisInputs,
 } from "@/lib/server/interpretation/analysis";
 import { dispatchReadiness } from "@/lib/server/dispatch/openclaw";
+import { recentCoordination } from "@/lib/server/observability/coordination";
 import { buildLanes } from "@/lib/server/lanes";
 import { listAgentActivities, listAuditLogs } from "@/lib/server/observability/activity";
 import { buildRegionalPicture } from "@/lib/server/projection";
@@ -33,6 +34,9 @@ export const GET = api(async () => {
   const audits = listAuditLogs({ limit: 500 });
 
   const inputs: AnalysisInputs = {
+    // What the loop has concluded, so a reading builds on the decisions
+    // already taken rather than describing a gap as untouched.
+    coordination: recentCoordination(),
     picture,
     lanes,
     ports,

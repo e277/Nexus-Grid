@@ -49,9 +49,47 @@ export function extractJson(text: string): string {
   const withoutThinking = text.replace(/<think>[\s\S]*?<\/think>/gi, "");
   const fenced = withoutThinking.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidate = (fenced ? fenced[1] : withoutThinking).trim();
+
   const start = candidate.indexOf("{");
-  const end = candidate.lastIndexOf("}");
-  return start !== -1 && end > start ? candidate.slice(start, end + 1) : candidate;
+  if (start === -1) return candidate;
+
+  // Scan to the brace that closes the first object, rather than to the last
+  // brace in the text. Models routinely answer with the object and then keep
+  // talking, and a span from the first "{" to the final "}" swallows that
+  // trailing prose — one stray brace in it and the whole reading is discarded
+  // for a page that had a perfectly good answer at the top.
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < candidate.length; i += 1) {
+    const char = candidate[i];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\" && inString) {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    // Braces inside a string are text, not structure.
+    if (inString) continue;
+
+    if (char === "{") depth += 1;
+    else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return candidate.slice(start, i + 1);
+    }
+  }
+
+  // Unbalanced: hand back what was found and let the caller report the parse
+  // failure, rather than inventing a closing brace.
+  return candidate.slice(start);
 }
 
 /** One completion, returned as parsed JSON. Throws on anything unusable. */

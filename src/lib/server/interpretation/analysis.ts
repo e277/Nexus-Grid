@@ -19,6 +19,7 @@
 
 import { byIso3, byName } from "../sources/caricom";
 import type { RegionalPicture } from "../projection";
+import type { CoordinationOutcome } from "../observability/coordination";
 import type { Lane, PortExposure } from "../lanes";
 import type { GapMatch } from "../matching";
 import { callModelJson, resolveProvider } from "./provider";
@@ -89,6 +90,13 @@ export interface AnalysisInputs {
   /** Agent decisions, for the outcomes domain. */
   decisions?: { agent: string; action: string; confidence: number | null }[];
   gateOutcomes?: Record<string, number>;
+  /**
+   * What the coordination loop has already concluded about specific gaps.
+   *
+   * A reading that describes a gap the operator resolved an hour ago, as
+   * though nothing had been decided, is stale in the way that matters most.
+   */
+  coordination?: CoordinationOutcome[];
 }
 
 // ── Prompts ───────────────────────────────────────────────────────────────
@@ -148,6 +156,36 @@ Sourced from inside CARICOM: ${usd(picture.totals.intra_caricom_usd)} (${picture
 
   const gaps = `DATA GAPS\n${picture.gaps.join("\n") || "None — every publisher answered."}`;
 
+  /**
+   * What the loop has already concluded, so a reading can build on it rather
+   * than describe a gap as untouched after an operator has acted on it.
+   *
+   * Written as decisions taken, not as instructions: the analyst is told what
+   * happened and left to judge what it means.
+   */
+  const coordination = (inputs.coordination ?? []).length
+    ? "COORDINATION ALREADY TAKEN\n" +
+      (inputs.coordination ?? [])
+        .map((c) => {
+          const gate = c.gate_decision
+            ? `a human ${c.gate_decision} it`
+            : "no human decision was required";
+          const sent =
+            c.dispatch_status === "delivered"
+              ? "and it was delivered to the desk"
+              : c.dispatch_status === "failed"
+                ? "and delivery failed"
+                : "and nothing was delivered";
+          return (
+            `${c.importer} / ${c.commodity} (${usd(c.external_usd)} external): the loop chose ` +
+            `${c.decision.replace(/_/g, " ")}, planned to ${c.action.replace(/_/g, " ")} ` +
+            `at ${c.priority} priority; ${gate} ${sent}.` +
+            (c.gate_note ? ` Operator note: ${c.gate_note}` : "")
+          );
+        })
+        .join("\n")
+    : "COORDINATION ALREADY TAKEN\nNo coordination run has concluded yet.";
+
   if (domain === "market") {
     const opportunities = picture.substitution_opportunities
       .map(
@@ -161,6 +199,8 @@ Sourced from inside CARICOM: ${usd(picture.totals.intra_caricom_usd)} (${picture
 
 IMPORT SUBSTITUTION CANDIDATES
 ${opportunities || "No substitution candidates in the trade data."}
+
+${coordination}
 
 ${gaps}`;
   }
@@ -225,6 +265,8 @@ ${calendars || "No planting calendars available."}
 COMPLEMENTARY PAIRS ALREADY IDENTIFIED
 ${alignment || "No complementary pairs found."}
 
+${coordination}
+
 ${gaps}`;
   }
 
@@ -272,6 +314,8 @@ ${storms || "None in the basin."}
 
 NOT OBSERVED: berth congestion, queue length, vessel capacity and sailing schedules are not published by any CARICOM port authority or free freight API, so they carry no weight in the scoring — never rank on them. Transit figures are great-circle distance at a documented average sea speed plus fixed port handling. Where a climate risk reads "no current reading", the weather station did not answer: that is missing data, not clear weather.
 
+${coordination}
+
 ${gaps}`;
   }
 
@@ -302,6 +346,8 @@ ${decisions || "No agent decisions recorded yet."}
 
 HUMAN DECISIONS AT THE APPROVAL GATE
 ${outcomes || "None recorded yet."}
+
+${coordination}
 
 ${gaps}`;
 }
@@ -548,6 +594,23 @@ function ruleFindings(domain: AnalysisDomain, inputs: AnalysisInputs): { summary
 // ── Cache ─────────────────────────────────────────────────────────────────
 
 const ANALYSIS_TTL_MS = 15 * 60 * 1000;
+/** One retry: the malformation that causes a failure here rarely repeats. */
+const ANALYSIS_ATTEMPTS = 2;
+const ANALYSIS_RETRY_MS = 600;
+
+/**
+ * Drop the cached readings for the given domains.
+ *
+ * Fifteen minutes is the right cadence for a picture that changes slowly and
+ * the wrong one for a decision an operator just took, so a finished
+ * coordination run expires the domains it bears on and the next read rebuilds
+ * them with it.
+ */
+export function expireAnalysis(domains: AnalysisDomain[]): void {
+  const cache = globalAnalysis.__nexusGridAnalysis;
+  if (!cache) return;
+  for (const domain of domains) delete cache[domain];
+}
 
 const globalAnalysis = globalThis as typeof globalThis & {
   __nexusGridAnalysis?: Partial<Record<AnalysisDomain, { result: AnalysisResult; expiresAt: number }>>;
@@ -587,16 +650,37 @@ export async function analyse(
     };
   }
 
-  try {
-    const parsed = await callModelJson(
-      provider,
-      systemPrompt(domain),
-      buildUserPrompt(domain, inputs)
-    );
-    const { summary, findings } = coerce(parsed);
-    if (findings.length === 0) throw new Error("model returned no usable findings");
-    return { domain, source: provider.name, summary, findings, generated_at };
-  } catch (error) {
+  /**
+   * Two attempts, because the failure is usually the model and not the input.
+   *
+   * What goes wrong here is a malformed object — an unquoted key, a trailing
+   * comma — and it is intermittent: the same domain that fails once answers
+   * cleanly on the next call. One retry converts most of those into a real
+   * reading. Deliberately not a lenient parser: repairing broken JSON would
+   * turn a visible failure into a quiet guess about what the model meant, and
+   * every figure on these pages is supposed to be checkable.
+   */
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= ANALYSIS_ATTEMPTS; attempt += 1) {
+    try {
+      const parsed = await callModelJson(
+        provider,
+        systemPrompt(domain),
+        buildUserPrompt(domain, inputs)
+      );
+      const { summary, findings } = coerce(parsed);
+      if (findings.length === 0) throw new Error("model returned no usable findings");
+      return { domain, source: provider.name, summary, findings, generated_at };
+    } catch (error) {
+      lastError = error;
+      if (attempt < ANALYSIS_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, ANALYSIS_RETRY_MS));
+      }
+    }
+  }
+
+  {
+    const error = lastError;
     console.error(`Analysis failed for ${domain}`, error);
     const { summary, findings } = ruleFindings(domain, inputs);
     return {

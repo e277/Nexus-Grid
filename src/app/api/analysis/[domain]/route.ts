@@ -1,4 +1,5 @@
 import { actionLabel, agentTitle } from "@/lib/server/agents/labels";
+import { recentCoordination } from "@/lib/server/observability/coordination";
 import { api, boolQuery, HttpError } from "@/lib/server/http";
 import {
   analyseCached,
@@ -31,7 +32,7 @@ export const GET = api<{ domain: string }>(async ({ params, query }) => {
   const bundle = await fetchAllSources(false);
   const picture = buildRegionalPicture(bundle);
 
-  const inputs: AnalysisInputs = { picture };
+  const inputs: AnalysisInputs = { picture, coordination: recentCoordination() };
 
   // Only the domains that need them pay for the extra derivations.
   if (domain === "logistics") {

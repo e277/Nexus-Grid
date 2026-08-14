@@ -6,6 +6,9 @@ import { GATE_DECISIONS } from "@/lib/server/workflows/supply-chain-graph";
 import { optionalBool, optionalInt, optionalString } from "@/lib/server/validation";
 import { Command } from "@langchain/langgraph";
 
+import { expireAnalysis } from "@/lib/server/interpretation/analysis";
+import { recordCoordination } from "@/lib/server/observability/coordination";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -88,11 +91,23 @@ export async function POST(request: Request): Promise<Response> {
       try {
         send("started", { thread_id: threadId, started_at: new Date().toISOString() });
 
+        let last: Record<string, unknown> = {};
         for await (const item of streamRun(input, threadId)) {
+          if (item.value && typeof item.value === "object") {
+            last = item.value as Record<string, unknown>;
+          }
           send("node", { node: item.node, update: item.update, value: item.value });
         }
 
         const paused = await threadStatus(threadId);
+
+        // A run that reached the end has concluded something about a gap, and
+        // the domain readings are entitled to know it. A run parked at the
+        // gate has not: the decision it is waiting for is the conclusion.
+        if (!paused.paused) {
+          recordRunOutcome(threadId, last);
+        }
+
         send("finished", {
           thread_id: threadId,
           status: paused.paused ? "awaiting_approval" : "completed",
@@ -119,4 +134,41 @@ export async function POST(request: Request): Promise<Response> {
       "X-Accel-Buffering": "no",
     },
   });
+}
+
+/**
+ * File a finished run where the domain readings can see it.
+ *
+ * Failing to record must not fail the run: the operator's plan was decided and
+ * possibly delivered, and losing a line of context for a later reading is not
+ * worth throwing that away.
+ */
+function recordRunOutcome(threadId: string, value: Record<string, unknown>) {
+  try {
+    const plan = (value.plan_data ?? {}) as Record<string, unknown>;
+    const execution = (value.execution ?? {}) as Record<string, unknown>;
+
+    recordCoordination({
+      thread_id: threadId,
+      commodity: String(value.commodity ?? "unspecified commodity"),
+      importer: String(value.importer ?? "unspecified state"),
+      importer_iso3: String(value.importer_iso3 ?? ""),
+      decision: String(value.decision ?? "monitor"),
+      action: String(plan.action ?? "monitor"),
+      priority: String(plan.priority ?? "normal"),
+      gate_decision: (value.gate_decision as string | undefined) ?? null,
+      gate_note: (value.gate_note as string | undefined) ?? null,
+      dispatch_status: (execution.dispatch_status as string | undefined) ?? null,
+      external_usd: Number(value.external_usd ?? 0),
+      concluded_at: new Date().toISOString(),
+    });
+
+    // The readings are cached for fifteen minutes, which is the right cadence
+    // for a picture that changes slowly and the wrong one for a decision an
+    // operator just took. Expiring the domains this bears on makes the next
+    // page read include it.
+    expireAnalysis(["market", "planting", "logistics", "impact"]);
+  } catch (error) {
+    console.error("Could not record the coordination outcome", error);
+  }
 }
