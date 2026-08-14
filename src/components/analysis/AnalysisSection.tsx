@@ -17,6 +17,7 @@ import {
   FindingsMatrix,
   type TaggedFinding,
 } from "../charts/FindingsBoard";
+import { LiveIndicator } from "../LiveIndicator";
 import { SourceBar } from "../SourceBar";
 import { Kpi, KpiStrip } from "./KpiStrip";
 import { Badge } from "../ui/badge";
@@ -64,7 +65,14 @@ type Severity = "all" | "critical" | "opportunity" | "watch" | "gap";
  * behind a disclosure, because a value a reader has to open is a value most
  * readers never see.
  */
-export function AnalysisSection({ data }: { data: AnalysisOverview }) {
+export function AnalysisSection({
+  data,
+  live,
+}: {
+  data: AnalysisOverview;
+  /** Freshness of the poll behind `data`, when a page owns one. */
+  live?: { updatedAt: number | null; refreshing: boolean; intervalMs: number };
+}) {
   const [domain, setDomain] = useState<string | null>(null);
   const [severity, setSeverity] = useState<Severity>("all");
   /** A cell picked in the severity-by-confidence matrix. */
@@ -188,7 +196,14 @@ export function AnalysisSection({ data }: { data: AnalysisOverview }) {
       {/* Who produced these readings, said once and up front — a rule-derived
           fallback is not a model's judgement, and the difference belongs
           beside the numbers rather than buried per chart. */}
-      <p className="text-ng-2xs text-ng-secondary">
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-ng-2xs text-ng-secondary">
+        {live ? (
+          <LiveIndicator
+            updatedAt={live.updatedAt}
+            refreshing={live.refreshing}
+            intervalMs={live.intervalMs}
+          />
+        ) : null}
         {allModelRead
           ? `All ${data.analyses.length} domain readings below came from a model.`
           : `${interpreted} of ${data.analyses.length} domain readings came from a model; the rest are rule-derived fallbacks.`}

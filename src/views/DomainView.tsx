@@ -10,6 +10,7 @@ import {
   FindingsMatrix,
   type TaggedFinding,
 } from "../components/charts/FindingsBoard";
+import { LiveIndicator } from "../components/LiveIndicator";
 import { SourceBar } from "../components/SourceBar";
 import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
@@ -40,7 +41,11 @@ export function DomainView({
   domain: AnalysisDomain;
   title: string;
 }) {
-  const { data, error } = usePoll(() => api.analysis(domain), 30_000, [domain]);
+  const { data, error, updatedAt, refreshing, intervalMs } = usePoll(
+    () => api.analysis(domain),
+    30_000,
+    [domain]
+  );
 
   const [cell, setCell] = useState<{ severity: FindingSeverity; confidence: string } | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
@@ -88,8 +93,15 @@ export function DomainView({
           <Badge variant={byModel ? "ai" : "muted"} size="sm">
             {byModel ? analysis.source : "rule-derived fallback"}
           </Badge>
-          <span className="ml-auto text-ng-2xs text-ng-secondary">
-            {findings.length} finding{findings.length === 1 ? "" : "s"}
+          <span className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="text-ng-2xs text-ng-secondary">
+              {findings.length} finding{findings.length === 1 ? "" : "s"}
+            </span>
+            <LiveIndicator
+              updatedAt={updatedAt}
+              refreshing={refreshing}
+              intervalMs={intervalMs}
+            />
           </span>
         </div>
         <p className="mt-2 max-w-4xl text-ng-base leading-relaxed text-ng-primary">

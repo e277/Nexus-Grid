@@ -1,5 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
+import { cn } from "../../lib/utils";
+
 import {
   Activity,
   ClipboardList,
@@ -152,6 +156,33 @@ export function PipelineDiagram({
   awaitingApproval,
   modelSource,
 }: PipelineDiagramProps) {
+  /**
+   * How long the step in flight has been running.
+   *
+   * Measured because the run is not evenly paced and pretending otherwise is
+   * what made it look broken: perceive and assess land in under 100ms, then
+   * `recommend` holds for twenty-odd seconds on the model call, then the last
+   * four nodes finish in single milliseconds. Without a clock that pause is
+   * indistinguishable from a hang, and the four instant steps flash past
+   * before the eye can follow them.
+   *
+   * The timer restarts when the running node changes, so it always reads as
+   * "this step has taken N", never as a total.
+   */
+  const runningId = Object.keys(nodes).find((id) => nodes[id]?.status === "running") ?? null;
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (runningId === null) {
+      setElapsed(0);
+      return;
+    }
+    setElapsed(0);
+    const startedAt = Date.now();
+    const timer = setInterval(() => setElapsed(Math.round((Date.now() - startedAt) / 1000)), 500);
+    return () => clearInterval(timer);
+  }, [runningId]);
+
   const steps = new Map<string, number[]>();
   trace.forEach((id, index) => steps.set(id, [...(steps.get(id) ?? []), index + 1]));
 
@@ -168,7 +199,43 @@ export function PipelineDiagram({
 
   const dim = (id: PhaseId) => (focus !== null && focus !== id ? 0.28 : 1);
 
+  const runningNode = runningId ? nodes[runningId] : null;
+
   return (
+    <>
+    {/* Named, timed, and explained. The slow step is always the model call,
+        and saying so turns a twenty-second wait from a stall into the one
+        part of the run that is actually thinking. */}
+    <div
+      className={cn(
+        "mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border px-3 py-2 text-ng-xs transition-colors",
+        runningNode
+          ? "border-ng-accent-bd bg-ng-accent-lit text-ng-primary"
+          : "border-ng-border bg-ng-bg text-ng-secondary"
+      )}
+      aria-live="polite"
+    >
+      {runningNode ? (
+        <>
+          <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden>
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ng-accent opacity-70" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-ng-accent" />
+          </span>
+          <span className="font-semibold">{runningNode.label}</span>
+          <span className="text-ng-secondary">{runningNode.desc}</span>
+          <span className="ml-auto shrink-0 tabular-nums font-semibold text-ng-accent">
+            {elapsed}s
+          </span>
+        </>
+      ) : (
+        <span>
+          {trace.length > 0
+            ? "Run complete — every step below is where the loop actually went."
+            : "Idle. Start a sweep to watch the loop run."}
+        </span>
+      )}
+    </div>
+
     <div className="-mx-1 overflow-x-auto px-1 pb-1">
       <svg
         viewBox={`0 0 ${CANVAS.width} ${CANVAS.height}`}
@@ -478,5 +545,6 @@ export function PipelineDiagram({
         })}
       </svg>
     </div>
+    </>
   );
 }

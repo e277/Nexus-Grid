@@ -18,7 +18,10 @@ import { usePoll } from "../hooks";
  * and a reader who navigated here should not be sent elsewhere first.
  */
 export function ImpactView() {
-  const { data, error } = usePoll(() => api.analysisOverview(), 30_000);
+  const { data, error, updatedAt, refreshing, intervalMs } = usePoll(
+    () => api.analysisOverview(),
+    30_000
+  );
 
   if (error) {
     return (
@@ -40,5 +43,10 @@ export function ImpactView() {
     );
   }
 
-  return <AnalysisSection data={data} />;
+  return (
+    <AnalysisSection
+      data={data}
+      live={{ updatedAt, refreshing, intervalMs }}
+    />
+  );
 }
