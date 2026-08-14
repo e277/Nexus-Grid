@@ -231,21 +231,21 @@ export function AnalysisSection({ data }: { data: AnalysisOverview }) {
              rather than an even half. The two that answer "what did the
              agents find" lead; the three that answer "what was done about
              it" sit under them at a third each. */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <div className="xl:col-span-7">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <div className="lg:col-span-7">
           <FindingsByDomainChart analyses={data.analyses} selected={domain} onSelect={setDomain} />
         </div>
-        <div className="xl:col-span-5">
+        <div className="lg:col-span-5">
           <FindingsMatrix findings={filtered} onSelect={setCell} selected={cell} />
         </div>
 
-        <div className="xl:col-span-4">
+        <div className="lg:col-span-4">
           <ConfidenceChart findings={filtered} />
         </div>
-        <div className="xl:col-span-4">
+        <div className="lg:col-span-4">
           <AgentDecisionChart decisions={data.decisions} />
         </div>
-        <div className="xl:col-span-4">
+        <div className="lg:col-span-4">
           <GateOutcomeChart gateDecisions={data.gate_decisions} />
         </div>
 
@@ -254,12 +254,12 @@ export function AnalysisSection({ data }: { data: AnalysisOverview }) {
             they were each answering separately is a single question, and
             scrolling between them was the only way to ask it. */}
         {coverage.length > 0 ? (
-          <div className="xl:col-span-7">
+          <div className="lg:col-span-7">
             <SupplierCoverageChart matches={data.matches} selected={gapKey} onSelect={setGapKey} />
           </div>
         ) : null}
         {coverage.length > 0 ? (
-          <div className="xl:col-span-5">
+          <div className="lg:col-span-5">
             <SupplierScoreChart match={openGap ?? coverage[0]} />
           </div>
         ) : null}

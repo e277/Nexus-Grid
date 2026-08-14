@@ -449,16 +449,18 @@ export function DashboardView() {
             </p>
           ) : null}
 
-          <ul className="divide-y divide-ng-border">
+          {/* Columns, not a single stack. Twelve gaps down one column is
+              twelve rows of mostly empty line — the text is short and the
+              status is a glyph, so three of them fit across a desktop and the
+              card stops growing with the region's gap count. */}
+          <ul className="grid grid-cols-1 gap-px bg-ng-border sm:grid-cols-2 2xl:grid-cols-3">
             {gaps.map((gap, index) => {
               const key = `${gap.importer_iso3}-${gap.commodity_code}`;
               const outcome = done.get(key) ?? null;
-              // queueIndex is null throughout a parallel sweep, where every
-              // gap that has not landed yet is in flight.
-              const active = running && !outcome && (queueIndex === null || queueIndex === index);
+              const active = running && !outcome && queueIndex === index;
 
               return (
-                <li key={key} className="flex flex-wrap items-center gap-2 px-4 py-2">
+                <li key={key} className="flex items-center gap-2 bg-ng-surface px-3 py-2">
                   {/* State is a glyph, not just a colour: done, running, or
                       not yet reached. */}
                   {outcome ? (
@@ -475,9 +477,10 @@ export function DashboardView() {
 
                   <span
                     className={cn(
-                      "text-ng-sm font-medium",
+                      "min-w-0 flex-1 truncate text-ng-xs font-medium",
                       outcome || active ? "text-ng-primary" : "text-ng-secondary"
                     )}
+                    title={`${gap.importer} · ${gap.commodity}`}
                   >
                     {gap.importer} · {gap.commodity}
                   </span>
@@ -501,16 +504,23 @@ export function DashboardView() {
                     </Badge>
                   ) : null}
 
-                  <span className="ml-auto truncate text-ng-2xs text-ng-secondary">
-                    {outcome
-                      ? String(outcome.recovery?.next_step ?? "—").replace(/_/g, " ") +
+                  {!outcome ? (
+                    <span className="shrink-0 text-ng-2xs text-ng-secondary">
+                      {active ? "running…" : "waiting"}
+                    </span>
+                  ) : (
+                    <span
+                      className="shrink-0 text-ng-2xs text-ng-secondary"
+                      title={
+                        String(outcome.recovery?.next_step ?? "—").replace(/_/g, " ") +
                         (outcome.execution?.dispatch_status
                           ? ` · dispatch ${outcome.execution.dispatch_status}`
                           : "")
-                      : active
-                        ? "running…"
-                        : "waiting"}
-                  </span>
+                      }
+                    >
+                      {String(outcome.recovery?.next_step ?? "—").replace(/_/g, " ").split(" ")[0]}
+                    </span>
+                  )}
                 </li>
               );
             })}

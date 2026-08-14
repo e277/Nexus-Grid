@@ -58,12 +58,17 @@ export default function App() {
         <TopBar page={page} />
 
         <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
-          {/* Page heading: what this screen is, before any numbers. */}
-          <div className="mb-5">
-            <h1 className="text-ng-2xl font-bold tracking-tight text-ng-primary">
+          {/* Page heading: what this screen is, before any numbers. The
+              standfirst stays — it is what tells a first-time reader what
+              they are looking at — but heading and body sit on one tighter
+              block, because this cost ~90px at the top of every page. */}
+          <div className="mb-4">
+            <h1 className="text-ng-xl font-bold leading-tight tracking-tight text-ng-primary">
               {active.title}
             </h1>
-            <p className="mt-1 max-w-3xl text-sm text-ng-secondary">{active.description}</p>
+            <p className="mt-0.5 max-w-4xl text-ng-sm leading-snug text-ng-secondary">
+              {active.description}
+            </p>
           </div>
 
           {page === "dashboard" ? <DashboardView /> : null}

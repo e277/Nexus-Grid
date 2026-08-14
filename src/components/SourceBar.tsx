@@ -126,9 +126,12 @@ export function SourceBar({
         </span>
       </div>
 
-      <ul className="divide-y divide-ng-border">
+      {/* Two columns from `lg`: six publishers down one column is six
+          wrapped sentences, and this sits at the foot of a page that is
+          already long. */}
+      <ul className="grid grid-cols-1 gap-px bg-ng-border lg:grid-cols-2">
         {rows.map(({ use, source }) => (
-          <li key={use.slot} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-4 py-2">
+          <li key={use.slot} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 bg-ng-surface px-4 py-2">
             <span
               aria-hidden
               className={cn(
@@ -166,13 +169,15 @@ export function SourceBar({
               {STATUS_LABEL[source.status]}
             </span>
 
-            <span className="text-ng-sm leading-relaxed text-ng-secondary">
-              {use.contributes}
+            <span className="ml-auto shrink-0 text-ng-2xs tabular-nums text-ng-secondary">
+              {source.records.toLocaleString()} records · {agoInWords(source.fetched_at)}
             </span>
 
-            <span className="ml-auto shrink-0 text-ng-2xs tabular-nums text-ng-secondary">
-              {source.records.toLocaleString()} records
-              {source.covers ? ` · ${source.covers}` : ""} · {agoInWords(source.fetched_at)}
+            {/* What it contributed here, on its own line under the publisher:
+                it is the reason the citation is worth reading, so it stays
+                visible rather than moving into a title. */}
+            <span className="w-full text-ng-xs leading-snug text-ng-secondary">
+              {use.contributes}
             </span>
           </li>
         ))}

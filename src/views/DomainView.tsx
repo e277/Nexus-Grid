@@ -76,7 +76,7 @@ export function DomainView({
   const byModel = analysis.source !== "rules";
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* The agent's own summary, in its own words, before any chart of it. */}
       <Card className="border-ng-ai-bd/70 bg-gradient-to-br from-ng-ai-bg to-ng-surface p-4 sm:p-5">
         <div className="flex flex-wrap items-center gap-2">
@@ -110,7 +110,7 @@ export function DomainView({
         </Card>
       ) : (
         <>
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             <FindingsMatrix findings={findings} onSelect={setCell} selected={cell} />
             <ConfidenceChart findings={filtered} />
           </div>
