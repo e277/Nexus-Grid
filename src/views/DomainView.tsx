@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { api } from "../api";
 import { ConfidenceChart } from "../components/charts/AgentCharts";
+import { PlantingCoverageChart } from "../components/charts/PlantingCoverageChart";
 import {
   FindingsBoard,
   FindingsMatrix,
@@ -113,6 +114,11 @@ export function DomainView({
           </p>
         ) : null}
       </Card>
+
+      {/* The planting agent reasons over the region's calendar, so the
+          calendar itself belongs on its page — and it is the one view here
+          that looks forward rather than reporting the present. */}
+      {domain === "planting" ? <PlantingCoverageChart /> : null}
 
       {findings.length === 0 ? (
         <Card className="p-6">
