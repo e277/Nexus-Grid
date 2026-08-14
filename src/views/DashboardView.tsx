@@ -16,7 +16,6 @@ import {
   type NodeState,
 } from "../components/pipeline/model";
 import { PHASES, type PhaseId } from "../components/pipeline/phases";
-import { RecommendationCard } from "../components/RecommendationCard";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
@@ -31,13 +30,37 @@ import type { GateDecision, SubstitutionOpportunity } from "../types";
  * both branch, and until the next event arrives there is no honest answer to
  * where the run is.
  */
-const SOLE_SUCCESSOR: Record<string, string | undefined> = {
-  perceive: "assess",
-  assess: "recommend",
-  recommend: "plan",
-  hold: "execute",
-  execute: "monitor",
-};
+/**
+ * Where the graph goes after a node finishes, so the diagram can mark the next
+ * step as running before its event arrives.
+ *
+ * `plan` and `monitor` branch, and both branches are knowable: `plan` goes to
+ * the gate when the operator armed it and straight to `execute` when they did
+ * not, and `monitor` goes to `recover` unless it forces a re-plan, which it can
+ * do at most once. Leaving them out meant the Execute and Recover phases never
+ * showed as running at all — every node in them completes in about a
+ * millisecond, so their only chance to appear active is the moment before.
+ */
+function successorOf(id: string, gated: boolean): string | undefined {
+  switch (id) {
+    case "perceive":
+      return "assess";
+    case "assess":
+      return "recommend";
+    case "recommend":
+      return "plan";
+    case "plan":
+      return gated ? "hold" : "execute";
+    case "hold":
+      return "execute";
+    case "execute":
+      return "monitor";
+    case "monitor":
+      return "recover";
+    default:
+      return undefined;
+  }
+}
 
 const PHASE_OPTIONS: PillOption<PhaseId | "all">[] = [
   { value: "all", label: "All" },
@@ -54,6 +77,14 @@ const DECISION_COPY: Record<GateDecision, { label: string; tone: "success" | "in
   rejected: { label: "Rejected", tone: "danger" },
   escalated: { label: "Escalated", tone: "warning" },
 };
+
+export interface ActingAgent {
+  name: string;
+  title: string;
+  action: string;
+  confidence: number;
+  rationale: string;
+}
 
 interface FinalState {
   decision?: string;
@@ -132,6 +163,14 @@ export function DashboardView() {
 
 
   const [nodes, setNodes] = useState<Record<string, NodeState>>(buildInitialNodes());
+  /**
+   * Which specialist acted at each step, as each step reports.
+   *
+   * Read from the run rather than assumed: a node names its agent only once
+   * that agent has actually answered, so a step that ran without one — the
+   * model call, the dispatch — stays unattributed instead of borrowing a name.
+   */
+  const [agentByNode, setAgentByNode] = useState<Record<string, ActingAgent>>({});
   const [trace, setTrace] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
   const [resuming, setResuming] = useState(false);
@@ -140,7 +179,6 @@ export function DashboardView() {
   const [awaitingApproval, setAwaitingApproval] = useState(false);
   const [interruptPayload, setInterruptPayload] = useState<Record<string, unknown> | null>(null);
   const [recommendation, setRecommendation] = useState<unknown>(null);
-  const [finalState, setFinalState] = useState<FinalState | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   /**
@@ -190,15 +228,17 @@ export function DashboardView() {
             ...prev,
             [id]: { ...prev[id], status: "done" as const, summary: summarizeUpdate(id, update) },
           };
-          const successor = SOLE_SUCCESSOR[id];
+          const successor = successorOf(id, requireApproval);
           if (successor && next[successor]?.status !== "done") {
             next[successor] = { ...next[successor], status: "running" };
           }
           return next;
         });
 
+        const acting = (update as { acting_agent?: ActingAgent }).acting_agent;
+        if (acting) setAgentByNode((prev) => ({ ...prev, [id]: acting }));
+
         if (id === "recommend") setRecommendation(update.recommendation);
-        setFinalState((data.value ?? null) as FinalState | null);
         continue;
       }
 
@@ -274,8 +314,8 @@ export function DashboardView() {
     setInterruptPayload(null);
     setThreadId(null);
     setRecommendation(null);
-    setFinalState(null);
     setNodes(buildInitialNodes());
+    setAgentByNode({});
     setTrace([]);
 
     try {
@@ -378,7 +418,6 @@ export function DashboardView() {
       }
     : null;
 
-  const complete = finalState !== null && !running;
   const activePhase = focus === "all" ? null : focus;
 
   return (
@@ -403,6 +442,19 @@ export function DashboardView() {
           focus={activePhase}
           awaitingApproval={awaitingApproval}
           modelSource={modelSource === "minimax" ? "MiniMax" : modelSource ? "Rule-based" : null}
+          agentByNode={agentByNode}
+          // Which gap this traversal belongs to. Without it the diagram and
+          // the checklist are two views of a sweep with nothing tying them
+          // together, and a reader cannot tell which run they are watching.
+          subject={
+            queueIndex !== null && sweepGaps[queueIndex]
+              ? {
+                  label: `${sweepGaps[queueIndex].importer} · ${sweepGaps[queueIndex].commodity}`,
+                  position: queueIndex + 1,
+                  total: sweepGaps.length,
+                }
+              : null
+          }
         />
 
       </Card>
@@ -607,122 +659,7 @@ export function DashboardView() {
         </div>
       ) : null}
 
-      {/* ── Results: only once the run has actually finished ────────────── */}
-      {complete && finalState ? (
-        <ResultsSection state={finalState} recommendation={recommendation} />
-      ) : null}
-
     </div>
   );
 }
 
-function ResultsSection({
-  state,
-  recommendation,
-}: {
-  state: FinalState;
-  recommendation: unknown;
-}) {
-  const severity = state.gap_severity ?? "—";
-  const severityTone =
-    severity === "critical" ? "danger" : severity === "material" ? "warning" : "muted";
-  const disrupted = state.monitor_result?.disruption_detected ?? false;
-  const replanned = state.monitor_result?.will_replan ?? false;
-
-  const dispatch = state.execution?.dispatch_status ?? null;
-  const dispatchCopy: Record<string, { label: string; tone: "success" | "warning" | "danger" }> = {
-    delivered: { label: "Delivered to the desk", tone: "success" },
-    skipped: { label: "Not delivered", tone: "warning" },
-    failed: { label: "Delivery failed", tone: "danger" },
-  };
-
-  const actions = [
-    state.decision ? `Assessed as: ${state.decision.replace(/_/g, " ")}` : null,
-    state.execution?.task ? `Planned action: ${String(state.execution.task).replace(/_/g, " ")}` : null,
-    state.execution?.status ? `Execution status: ${state.execution.status}` : null,
-    state.execution?.dispatch_detail ? `Dispatch: ${state.execution.dispatch_detail}` : null,
-    state.recovery?.recovery_action
-      ? `Follow-up: ${String(state.recovery.recovery_action).replace(/_/g, " ")} → ${String(state.recovery.next_step ?? "—").replace(/_/g, " ")}`
-      : null,
-    state.gate_note ? `Operator note: ${state.gate_note}` : null,
-  ].filter((entry): entry is string => entry !== null);
-
-  const affected = (state.execution?.details?.target as string | undefined) ?? null;
-
-  return (
-    <Card>
-      <div className="border-b border-ng-border px-4 py-3">
-        <h2 className="text-ng-base font-semibold text-ng-primary">Run outcome</h2>
-        <p className="mt-0.5 text-ng-xs text-ng-secondary">
-          What the loop concluded, and the state it left behind.
-        </p>
-      </div>
-
-      <div className="grid gap-4 p-4 lg:grid-cols-3">
-        <div className="space-y-3 lg:col-span-1">
-          <div>
-            <p className="text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary">
-              Gap severity
-            </p>
-            <Badge variant={severityTone} className="mt-1 capitalize">
-              {severity}
-            </Badge>
-          </div>
-          <div>
-            <p className="text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary">
-              Disruption
-            </p>
-            <Badge variant={disrupted ? "warning" : "success"} className="mt-1">
-              {disrupted ? (replanned ? "Detected — re-planned once" : "Detected") : "None detected"}
-            </Badge>
-          </div>
-          {affected ? (
-            <div>
-              <p className="text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary">
-                Directed at
-              </p>
-              <p className="mt-1 text-ng-sm text-ng-primary">{affected}</p>
-            </div>
-          ) : null}
-          {/* Whether the plan actually reached anyone. Without a gateway
-              configured this reads "not delivered", never "done". */}
-          {dispatch ? (
-            <div>
-              <p className="text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary">
-                Dispatch
-              </p>
-              <Badge variant={dispatchCopy[dispatch]?.tone ?? "muted"} className="mt-1">
-                {dispatchCopy[dispatch]?.label ?? dispatch}
-              </Badge>
-              {state.execution?.dispatch_target ? (
-                <p className="mt-1 text-ng-2xs text-ng-secondary">
-                  via OpenClaw → {state.execution.dispatch_target}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="lg:col-span-2">
-          <p className="text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary">
-            What happened
-          </p>
-          <ul className="mt-1.5 space-y-1.5">
-            {actions.map((action) => (
-              <li key={action} className="flex gap-2 text-ng-sm leading-relaxed text-ng-primary">
-                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-ng-accent" aria-hidden />
-                {action}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
-      {recommendation ? (
-        <div className="border-t border-ng-border p-4">
-          <RecommendationCard recommendation={recommendation} />
-        </div>
-      ) : null}
-    </Card>
-  );
-}

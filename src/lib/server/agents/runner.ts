@@ -27,7 +27,6 @@ export function getSupplyAgent(): SupplyAgent {
 export function startAgents(): void {
   const settings = getSettings();
   if (settings.skipAgentStartup) {
-    console.info("Agent startup skipped (SKIP_AGENT_STARTUP)");
     return;
   }
 
@@ -41,8 +40,7 @@ export function startAgents(): void {
     if (running) return;
     running = true;
     try {
-      const events = await getSupplyAgent().runCheck();
-      console.info(`Agent run completed, ${events} events`);
+      await getSupplyAgent().runCheck();
     } catch (error) {
       console.error("Agent loop failed", error);
     } finally {
@@ -52,5 +50,4 @@ export function startAgents(): void {
 
   timer.unref?.();
   globalRunner.__nexusGridAgentTimer = timer;
-  console.info(`Agent loop started (every ${settings.agentPollIntervalSeconds}s)`);
 }

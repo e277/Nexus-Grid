@@ -165,7 +165,7 @@ async function topUp(): Promise<void> {
         cache.set(state.iso3, { profile: null, expiresAt: Date.now() + RETRY_AFTER_MS });
         globalSoil.__nexusGridSoilLastError =
           error instanceof Error ? error.message : String(error);
-        console.warn(`SoilGrids failed for ${state.iso3}:`, error);
+        console.error(`SoilGrids failed for ${state.iso3}:`, error);
       }
     }
   } finally {

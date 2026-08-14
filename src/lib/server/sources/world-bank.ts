@@ -108,7 +108,7 @@ export function fetchWorldBank(force = false): Promise<Snapshot<Observation>> {
           records.push(...observations);
         } catch (error) {
           missing.push(indicator.id);
-          console.warn(`World Bank indicator ${indicator.id} failed:`, error);
+          console.error(`World Bank indicator ${indicator.id} failed:`, error);
         }
       }
 

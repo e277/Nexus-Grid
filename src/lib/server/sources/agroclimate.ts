@@ -114,7 +114,7 @@ export function fetchAgroclimate(force = false): Promise<Snapshot<MonthlyClimate
           records.push(await fetchState(state.iso3, state.name, state.farmland));
         } catch (error) {
           failed.push(state.iso3);
-          console.warn(`NASA POWER failed for ${state.iso3}:`, error);
+          console.error(`NASA POWER failed for ${state.iso3}:`, error);
         }
       }
 

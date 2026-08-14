@@ -86,5 +86,4 @@ export function registerEventHandlers(): void {
       }
     });
   }
-  console.info(`Registered supervisor for ${SUPERVISED_EVENTS.length} event types`);
 }

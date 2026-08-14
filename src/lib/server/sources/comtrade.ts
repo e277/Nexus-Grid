@@ -103,7 +103,7 @@ export function fetchComtrade(force = false): Promise<Snapshot<TradeFlow>> {
           records.push(...(await fetchReporter(state.m49)));
         } catch (error) {
           failed.push(state.iso3);
-          console.warn(`Comtrade fetch failed for ${state.iso3}:`, error);
+          console.error(`Comtrade fetch failed for ${state.iso3}:`, error);
         }
       }
 

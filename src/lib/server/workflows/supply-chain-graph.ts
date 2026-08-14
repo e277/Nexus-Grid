@@ -28,8 +28,71 @@ import { utcnowIso } from "../time";
 import { getCheckpointer } from "./checkpointer";
 import { recommendAction } from "./language-step";
 import { dispatchPlan, dispatchStatus } from "../dispatch/openclaw";
+import { ClimateRiskAgent } from "../agents/climate";
+import { DemandIntelligenceAgent } from "../agents/demand";
+import { agentTitle } from "../agents/labels";
+import { LogisticsAgent } from "../agents/logistics";
+import { PlantingCoordinationAgent } from "../agents/planting";
+import type { AgentResult } from "../agents/base";
 
 const MAX_REPLANS = 1;
+/**
+ * One instance per specialist, built on first use and kept for the process.
+ *
+ * Each agent holds a bounded memory of its own recent results, so a fresh
+ * instance per run would throw away the context that memory exists for.
+ *
+ * Lazy, and on `globalThis`, for the same reason the graph and checkpointer
+ * are: constructing them at module scope runs during Next's build-time page
+ * collection, where there is no request and nothing for an agent to read.
+ */
+const globalAgents = globalThis as typeof globalThis & {
+  __nexusGridGraphAgents?: {
+    demand: DemandIntelligenceAgent;
+    planting: PlantingCoordinationAgent;
+    logistics: LogisticsAgent;
+    climate: ClimateRiskAgent;
+  };
+};
+
+function agents() {
+  if (!globalAgents.__nexusGridGraphAgents) {
+    globalAgents.__nexusGridGraphAgents = {
+      demand: new DemandIntelligenceAgent(),
+      planting: new PlantingCoordinationAgent(),
+      logistics: new LogisticsAgent(),
+      climate: new ClimateRiskAgent(),
+    };
+  }
+  return globalAgents.__nexusGridGraphAgents;
+}
+
+/**
+ * Run a specialist for a step and shape its result for the state.
+ *
+ * An agent failing must not fail the run: its reading is what the console
+ * shows about the step, not what the step decides, so a specialist that
+ * cannot answer leaves the graph on exactly the path it would have taken.
+ */
+async function actingAgent(
+  agent: { run: (payload: Record<string, unknown>) => Promise<AgentResult> },
+  payload: Record<string, unknown>
+) {
+  try {
+    const result = await agent.run(payload);
+    return {
+      name: result.agent,
+      title: agentTitle(result.agent),
+      action: result.action,
+      confidence: result.confidence,
+      rationale: result.rationale,
+    };
+  } catch (error) {
+    console.error("Specialist failed during a coordination run:", error);
+    return undefined;
+  }
+}
+
 const RECOMMEND_ATTEMPTS = 3;
 /** First retry waits this long; the second waits twice it. */
 const RETRY_BASE_MS = 1_000;
@@ -54,6 +117,18 @@ export const SupplyAnnotation = Annotation.Root({
   require_approval: Annotation<boolean | undefined>,
   // Derived along the workflow
   phase: Annotation<string | undefined>,
+  /**
+   * The specialist that acted at this step, and what it concluded.
+   *
+   * The graph's routing stays deterministic — the same signal produces the
+   * same path, which is what makes a run reproducible and testable. What the
+   * agent contributes is the reading: its own assessment of the step, recorded
+   * to the activity log and carried here so the console can say which
+   * specialist is working rather than naming a function.
+   */
+  acting_agent: Annotation<
+    { name: string; title: string; action: string; confidence: number; rationale: string } | undefined
+  >,
   gap_severity: Annotation<string | undefined>,
   observed_at: Annotation<string | undefined>,
   decision: Annotation<string | undefined>,
@@ -76,6 +151,15 @@ export const SupplyAnnotation = Annotation.Root({
 export type SupplyState = typeof SupplyAnnotation.State;
 export type SupplyUpdate = typeof SupplyAnnotation.Update;
 
+/**
+ * Normalise the signal the run was triggered on.
+ *
+ * Deliberately calls no specialist. The agent whose subject this is —
+ * Supply Intelligence — is the scanner that *starts* coordination runs:
+ * its handler calls `runOnce` for every gap it finds. Invoking it from
+ * inside a run makes each run spawn more runs, without limit. It belongs
+ * upstream of the graph and must stay there.
+ */
 export function perceive(state: SupplyState): SupplyUpdate {
   const normalized = withSignalDefaults(state);
   return {
@@ -88,7 +172,7 @@ export function perceive(state: SupplyState): SupplyUpdate {
   };
 }
 
-export function assess(state: SupplyState): SupplyUpdate {
+export async function assess(state: SupplyState): Promise<SupplyUpdate> {
   const severity = state.gap_severity ?? "minor";
   const suppliers = Array.isArray(state.regional_suppliers) ? state.regional_suppliers : [];
 
@@ -106,7 +190,12 @@ export function assess(state: SupplyState): SupplyUpdate {
     `external=${state.external_share_pct}% ($${(state.external_usd ?? 0).toLocaleString()}), ` +
     `severity=${severity}, regional suppliers=${suppliers.length}`;
 
-  return { phase: "assess", decision, decision_rationale: rationale, rationale };
+  const acting = await actingAgent(agents().demand, {
+    commodity: state.commodity,
+    importer_iso3: state.importer_iso3,
+  });
+
+  return { phase: "assess", acting_agent: acting, decision, decision_rationale: rationale, rationale };
 }
 
 export async function recommend(state: SupplyState): Promise<SupplyUpdate> {
@@ -116,7 +205,7 @@ export async function recommend(state: SupplyState): Promise<SupplyUpdate> {
       return await recommendAction(state);
     } catch (error) {
       lastError = error;
-      console.warn(`recommend attempt ${attempt}/${RECOMMEND_ATTEMPTS} failed:`, error);
+      console.error(`recommend attempt ${attempt}/${RECOMMEND_ATTEMPTS} failed:`, error);
 
       // Back off before trying again. The common failure here is a provider
       // rate limit, and answering one by immediately sending two more is the
@@ -144,7 +233,7 @@ export async function recommend(state: SupplyState): Promise<SupplyUpdate> {
   };
 }
 
-export function plan(state: SupplyState): SupplyUpdate {
+export async function plan(state: SupplyState): Promise<SupplyUpdate> {
   const decision = state.decision ?? "monitor";
   const suppliers = Array.isArray(state.regional_suppliers) ? state.regional_suppliers : [];
   let planData: Record<string, unknown>;
@@ -183,7 +272,15 @@ export function plan(state: SupplyState): SupplyUpdate {
   }
 
   planData.recommendation = state.recommendation;
-  return { phase: "plan", plan_data: planData };
+
+  // Whichever specialist owns the decision: staggering seasons is the planting
+  // agent's subject, opening a supply line is the logistics agent's.
+  const acting = await actingAgent(
+    decision === "stagger_planting" ? agents().planting : agents().logistics,
+    { commodity: state.commodity, importer_iso3: state.importer_iso3, decision }
+  );
+
+  return { phase: "plan", acting_agent: acting, plan_data: planData };
 }
 
 /** Approval gate: urgent plans go to a human unless pre-approved. */
@@ -298,7 +395,7 @@ export async function execute(state: SupplyState): Promise<SupplyUpdate> {
 }
 
 /** Watch execution for disruption signals that force a re-plan. */
-export function monitor(state: SupplyState): SupplyUpdate {
+export async function monitor(state: SupplyState): Promise<SupplyUpdate> {
   // Live climate risk at the importing state is the disruption signal here:
   // a coordination plan agreed into a storm window is worth re-planning.
   const disruption = state.climate_risk === "high" || state.climate_risk === "severe";
@@ -310,7 +407,12 @@ export function monitor(state: SupplyState): SupplyUpdate {
     checked_at: utcnowIso(),
   };
 
-  const updates: SupplyUpdate = { phase: "monitor", monitor_result: result };
+  const acting = await actingAgent(agents().climate, {
+    importer_iso3: state.importer_iso3,
+    commodity: state.commodity,
+  });
+
+  const updates: SupplyUpdate = { phase: "monitor", acting_agent: acting, monitor_result: result };
   if (result.will_replan) {
     updates.replan_count = (state.replan_count ?? 0) + 1;
     // Downgrade the signal so the re-plan converges instead of looping
@@ -392,21 +494,23 @@ export function buildGraph() {
 type CompiledSupplyGraph = ReturnType<ReturnType<typeof buildGraph>["compile"]>;
 
 const globalGraph = globalThis as typeof globalThis & {
-  __nexusGridGraphV3?: CompiledSupplyGraph;
+  __nexusGridGraphV4?: CompiledSupplyGraph;
 };
 
 /**
  * Compile the workflow once against the shared checkpointer.
  *
  * Held on `globalThis` so paused threads stay resumable across hot reloads.
- * The key carries a version because the runtime beneath it has been replaced:
- * a stale compiled graph would keep serving the retired implementation.
+ * The key carries a version because a compiled graph outlives the module that
+ * built it: after the state gains a channel or a node changes what it does, a
+ * cached graph keeps serving the previous shape, and the change looks like it
+ * silently failed. Bump the version whenever either changes.
  */
 export function getGraph(): CompiledSupplyGraph {
-  if (!globalGraph.__nexusGridGraphV3) {
-    globalGraph.__nexusGridGraphV3 = buildGraph().compile({ checkpointer: getCheckpointer() });
+  if (!globalGraph.__nexusGridGraphV4) {
+    globalGraph.__nexusGridGraphV4 = buildGraph().compile({ checkpointer: getCheckpointer() });
   }
-  return globalGraph.__nexusGridGraphV3;
+  return globalGraph.__nexusGridGraphV4;
 }
 
 export type { CompiledStateGraph };

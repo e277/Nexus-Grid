@@ -69,9 +69,6 @@ export class GeoRoutingProvider implements RoutingProvider {
     const origin = lookupIsland(originIsland);
     const destination = lookupIsland(destinationIsland);
     if (origin === null || destination === null) {
-      console.info(
-        `No coordinates for ${originIsland} -> ${destinationIsland}; falling back to stub routing`
-      );
       return fallback.estimateTransit(originIsland, destinationIsland);
     }
 

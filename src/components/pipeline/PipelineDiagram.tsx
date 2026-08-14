@@ -147,6 +147,10 @@ export interface PipelineDiagramProps {
   awaitingApproval: boolean;
   /** Source label for the recommend → plan edge, once the model has answered. */
   modelSource?: string | null;
+  /** The sourcing gap this traversal belongs to, and its place in the sweep. */
+  subject?: { label: string; position: number; total: number } | null;
+  /** The specialist that acted at each step, keyed by node id. */
+  agentByNode?: Record<string, { title: string; action: string; confidence: number }>;
 }
 
 export function PipelineDiagram({
@@ -155,6 +159,8 @@ export function PipelineDiagram({
   focus,
   awaitingApproval,
   modelSource,
+  subject,
+  agentByNode = {},
 }: PipelineDiagramProps) {
   /**
    * How long the step in flight has been running.
@@ -221,6 +227,13 @@ export function PipelineDiagram({
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ng-accent opacity-70" />
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-ng-accent" />
           </span>
+          {/* Which gap, before which step: the diagram and the checklist below
+              are the same sweep, and this is the only thing that says so. */}
+          {subject ? (
+            <span className="font-semibold text-ng-primary">
+              {subject.position}/{subject.total} {subject.label}
+            </span>
+          ) : null}
           <span className="font-semibold">{runningNode.label}</span>
           <span className="text-ng-secondary">{runningNode.desc}</span>
           <span className="ml-auto shrink-0 tabular-nums font-semibold text-ng-accent">
@@ -442,6 +455,16 @@ export function PipelineDiagram({
               >
                 {node.label}
               </text>
+
+              {/* The specialist that answered here, once it has. Steps with no
+                  agent — the model call, the dispatch — are left unlabelled
+                  rather than given a name they did not earn. */}
+              {agentByNode[node.id] ? (
+                <text x={x + 32} y={y + 36} fontSize={10} fill="var(--color-text-secondary)">
+                  {agentByNode[node.id].title} ·{" "}
+                  {Math.round(agentByNode[node.id].confidence * 100)}%
+                </text>
+              ) : null}
 
               {node.status === "done" ? (
                 <path

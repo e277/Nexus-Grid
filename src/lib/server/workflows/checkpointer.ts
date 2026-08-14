@@ -61,7 +61,6 @@ export function getCheckpointer(): BaseCheckpointSaver {
       mkdirSync(dirname(path), { recursive: true });
       globalCheckpointer.__nexusGridCheckpointer = SqliteSaver.fromConnString(path);
       globalCheckpointer.__nexusGridCheckpointerKind = "sqlite";
-      console.info(`Workflow checkpointer: sqlite (${path})`);
       return globalCheckpointer.__nexusGridCheckpointer;
     } catch (error) {
       // A missing native build should degrade the guarantee, not the app.
@@ -75,6 +74,5 @@ export function getCheckpointer(): BaseCheckpointSaver {
 
   globalCheckpointer.__nexusGridCheckpointer = new MemorySaver();
   globalCheckpointer.__nexusGridCheckpointerKind = "memory";
-  console.info("Workflow checkpointer: in-memory");
   return globalCheckpointer.__nexusGridCheckpointer;
 }
