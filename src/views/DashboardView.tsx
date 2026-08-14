@@ -142,31 +142,9 @@ export function DashboardView() {
    * went. The alternative is guessing, and a diagram that guesses is the
    * animation this replaced.
    */
-  async function consume(
-    body: Record<string, unknown>,
-    signal: AbortSignal,
-    /**
-     * Whether this run drives the diagram.
-     *
-     * In a parallel sweep only one does. The diagram shows a single graph
-     * traversal, and twelve runs writing to it would render a composite of
-     * twelve different positions — a picture of no run in particular.
-     */
-    options: {
-      drivesDiagram: boolean;
-      /** Whether finishing should start the next gap. False in a parallel sweep. */
-      chain: boolean;
-      gap: SubstitutionOpportunity | null;
-    } = {
-      drivesDiagram: true,
-      chain: true,
-      gap: null,
-    }
-  ) {
-    const { drivesDiagram, chain, gap } = options;
+  async function consume(body: Record<string, unknown>, signal: AbortSignal) {
     for await (const { event, data } of streamWorkflow(body, signal)) {
       if (event === "started") {
-        if (!drivesDiagram) continue;
         setThreadId(String(data.thread_id));
         setNodes((prev) => ({ ...prev, perceive: { ...prev.perceive, status: "running" } }));
         continue;
@@ -175,7 +153,7 @@ export function DashboardView() {
       if (event === "node") {
         const id = String(data.node);
         const update = (data.update ?? {}) as Record<string, unknown>;
-        if (!drivesDiagram || !PIPELINE_NODES.some((n) => n.id === id)) continue;
+        if (!PIPELINE_NODES.some((n) => n.id === id)) continue;
 
         setTrace((prev) => [...prev, id]);
         setNodes((prev) => {
@@ -196,35 +174,22 @@ export function DashboardView() {
       }
 
       if (event === "finished") {
-        if (drivesDiagram) {
-          if (data.status === "awaiting_approval") {
-            setRunning(false);
-            setAwaitingApproval(true);
-            setInterruptPayload((data.interrupt ?? null) as Record<string, unknown> | null);
-            // The graph is genuinely parked inside `hold` — show that, rather
-            // than leaving the node looking untouched.
-            setNodes((prev) => ({ ...prev, hold: { ...prev.hold, status: "running" } }));
-            continue;
-          }
-          setNodes((prev) => {
-            const next = { ...prev };
-            for (const key of Object.keys(next)) {
-              if (next[key].status !== "done") next[key] = { ...next[key], status: "skipped" };
-            }
-            return next;
-          });
-        }
-
-        // A parallel run banks its own outcome and starts nothing: the sweep
-        // is over when every promise settles, not when one of them does.
-        // Chaining here as well as awaiting the promises would run each gap
-        // twice.
-        if (!chain) {
-          if (gap) {
-            setCompleted((done) => [...done, { gap, state: (data.value ?? {}) as FinalState }]);
-          }
+        if (data.status === "awaiting_approval") {
+          setRunning(false);
+          setAwaitingApproval(true);
+          setInterruptPayload((data.interrupt ?? null) as Record<string, unknown> | null);
+          // The graph is genuinely parked inside `hold` — show that, rather
+          // than leaving the node looking untouched.
+          setNodes((prev) => ({ ...prev, hold: { ...prev.hold, status: "running" } }));
           continue;
         }
+        setNodes((prev) => {
+          const next = { ...prev };
+          for (const key of Object.keys(next)) {
+            if (next[key].status !== "done") next[key] = { ...next[key], status: "skipped" };
+          }
+          return next;
+        });
 
         // Bank this gap's outcome, then continue the sweep.
         setQueueIndex((index) => {
@@ -241,7 +206,7 @@ export function DashboardView() {
       }
 
       if (event === "failed") {
-        if (drivesDiagram) setRunning(false);
+        setRunning(false);
         setRunError(String(data.detail ?? "The run failed."));
       }
     }
@@ -255,11 +220,10 @@ export function DashboardView() {
    * basis to answer — the ranking of what matters is the agents' job, and a
    * dropdown quietly limited a sweep to whatever was selected.
    *
-   * This is the gated path, and it is sequential for the gate's sake: a gap
-   * that reaches the gate stops the queue where it is, because the point of
-   * the gate is that a human decides before anything downstream happens.
-   * `decide()` restarts the queue at the next gap. When the gate is off,
-   * `runAll` skips this and runs every gap at once instead.
+   * Sequential, and the gate is why it has to be: a gap that reaches the gate
+   * stops the queue where it is, because the point of the gate is that a human
+   * decides before anything downstream happens. `decide()` restarts the queue
+   * at the next gap.
    */
   async function runFrom(index: number) {
     const queue = gapsRef.current;
@@ -308,76 +272,26 @@ export function DashboardView() {
   }
 
   /**
-   * Every gap, in parallel when nothing can stop to ask.
+   * Start the sweep at the first gap.
    *
-   * Sequential exists only because of the approval gate: twelve concurrent
-   * runs that each hold an urgent plan would raise twelve simultaneous gates,
-   * with no order to answer them in and a diagram that can only show one — an
-   * operator would be approving plans whose reasoning is not on screen.
+   * One at a time, whether or not the gate is armed. Running them at once was
+   * measurably faster — the source cache de-duplicates in flight, so twelve
+   * concurrent runs cause one fetch per publisher rather than twelve — but it
+   * bought that with a console nobody could follow: one diagram cannot show
+   * twelve traversals, so eleven of the runs happened somewhere off screen.
    *
-   * With the gate off nothing pauses, so that objection disappears and the
-   * sweep runs concurrently. The diagram follows the first run; the checklist
-   * is what shows all of them, and it is the honest view of a parallel sweep.
+   * A sweep an operator can watch is worth more here than a sweep that
+   * finishes sooner, and the sequential path is the one the approval gate
+   * needs anyway. `runFrom` and `decide` carry it from there.
    */
-  async function runAll() {
+  function runAll() {
     if (running || gaps.length === 0) return;
-
     gapsRef.current = gaps;
     setCompleted([]);
     setRunError(null);
-
-    // Gated: one at a time, each gap with its own controller inside runFrom.
-    if (requireApproval) {
-      void runFrom(0);
-      return;
-    }
-
-    // Ungated: one controller for the whole sweep, so stopping stops all of it.
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    setRunning(true);
-    // Null, not 0: in a parallel sweep there is no "current" gap. The
-    // checklist reads that as "every unswept gap is in flight", which is true.
-    setQueueIndex(null);
-    setAwaitingApproval(false);
-    setInterruptPayload(null);
-    setThreadId(null);
-    setRecommendation(null);
-    setFinalState(null);
-    setNodes(buildInitialNodes());
-    setTrace([]);
-
-    const body = (gap: SubstitutionOpportunity) => ({
-      event: "substitution_gap",
-      commodity: gap.commodity,
-      importer: gap.importer,
-      importer_iso3: gap.importer_iso3,
-      external_usd: gap.external_usd,
-      external_share_pct: Math.round(gap.external_share_pct),
-      regional_suppliers: gap.regional_suppliers,
-      climate_risk: climateByIso3[gap.importer_iso3] ?? "low",
-      require_approval: false,
-    });
-
-    const outcomes = await Promise.allSettled(
-      gaps.map((gap, index) =>
-        consume(body(gap), controller.signal, { drivesDiagram: index === 0, chain: false, gap })
-      )
-    );
-
-    if (controller.signal.aborted) return;
-
-    const failed = outcomes.filter((o) => o.status === "rejected").length;
-    if (failed > 0) {
-      setRunError(`${failed} of ${gaps.length} runs failed. The rest completed.`);
-    }
-    setRunning(false);
-    setQueueIndex(null);
+    void runFrom(0);
   }
 
-  /** The one point a run does not proceed on its own. */
   async function decide(decision: GateDecision, note: string | null) {
     if (!threadId) return;
     const controller = new AbortController();
@@ -464,28 +378,6 @@ export function DashboardView() {
 
       </Card>
 
-      {/* ── The gate ────────────────────────────────────────────────────
-             Always on screen, inert until a run parks here. A control that
-             appears and vanishes reads as incidental, and this is the one
-             point in the loop where a run is not autonomous.
-
-             The banner above this used to read "Sweep paused — awaiting human
-             approval", beside a panel already headed "Approval gate" and
-             badged with the held plan's priority. Two elements saying one
-             thing, and the louder one was the element with no buttons on it. */}
-      <ApprovalPanel
-        recommendation={held}
-        onDecide={decide}
-        busy={resuming}
-        active={awaitingApproval && held !== null}
-        gateEnabled={requireApproval}
-      />
-
-      {/* Beside the gate, not filed under the analysis: approving a plan into
-          a deployment with nowhere to send it is the failure this warns about,
-          and it has to be legible at the moment of the decision. */}
-      {analysis ? <DispatchPanel dispatch={analysis.dispatch} /> : null}
-
       {/* ── The sweep: the control and the list it advances ──────────────
              Every gap is listed from the start and ticks off as it finishes.
              Showing only the completed ones hid the shape of the work: a
@@ -530,9 +422,6 @@ export function DashboardView() {
                 className="h-3.5 w-3.5 rounded border-ng-border text-ng-accent focus:ring-ng-accent"
               />
               Gate urgent plans
-              <span className="hidden text-ng-2xs text-ng-disabled lg:inline">
-                {requireApproval ? "· one at a time" : "· all at once"}
-              </span>
             </label>
 
             <Button
@@ -627,6 +516,28 @@ export function DashboardView() {
             })}
           </ul>
         </Card>
+
+      {/* ── The gate ────────────────────────────────────────────────────
+             Always on screen, inert until a run parks here. A control that
+             appears and vanishes reads as incidental, and this is the one
+             point in the loop where a run is not autonomous.
+
+             The banner above this used to read "Sweep paused — awaiting human
+             approval", beside a panel already headed "Approval gate" and
+             badged with the held plan's priority. Two elements saying one
+             thing, and the louder one was the element with no buttons on it. */}
+      <ApprovalPanel
+        recommendation={held}
+        onDecide={decide}
+        busy={resuming}
+        active={awaitingApproval && held !== null}
+        gateEnabled={requireApproval}
+      />
+
+      {/* Beside the gate, not filed under the analysis: approving a plan into
+          a deployment with nowhere to send it is the failure this warns about,
+          and it has to be legible at the moment of the decision. */}
+      {analysis ? <DispatchPanel dispatch={analysis.dispatch} /> : null}
 
       {/* ── Results: only once the run has actually finished ────────────── */}
       {complete && finalState ? (
