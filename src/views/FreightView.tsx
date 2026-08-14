@@ -134,6 +134,16 @@ export function FreightView() {
         <table className="w-full min-w-[820px] text-left">
           <thead>
             <tr>
+              <th
+                scope="col"
+                className={cn(
+                  "w-10 px-3 py-2 text-right text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary",
+                  "sticky top-0 z-10 bg-ng-surface border-b border-ng-border"
+                )}
+              >
+                <span aria-hidden>#</span>
+                <span className="sr-only">Row number</span>
+              </th>
               {["Lane", "Commodity", "Distance", "Transit", "Weather", "Displaces"].map(
                 (column, i) => (
                   <th
@@ -159,6 +169,12 @@ export function FreightView() {
                   index % 2 === 1 && "bg-ng-row-alt"
                 )}
               >
+                {/* Absolute, not per-page: a number that restarted at 1 on
+                    every page would say nothing about where a row sits in the
+                    sixty. */}
+                <td className="whitespace-nowrap px-3 py-2 text-right text-ng-2xs tabular-nums text-ng-disabled">
+                  {paged.from + index}
+                </td>
                 <td className="whitespace-nowrap px-3 py-2 text-ng-sm font-medium text-ng-primary">
                   {lane.supplier} → {lane.importer}
                 </td>

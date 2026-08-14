@@ -130,6 +130,16 @@ export function VisibilityView() {
           <table className="w-full min-w-[680px] text-left">
             <thead>
               <tr>
+                <th
+                  scope="col"
+                  className={cn(
+                    "w-10 px-3 py-2 text-right text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary",
+                    "sticky top-0 z-10 bg-ng-surface border-b border-ng-border"
+                  )}
+                >
+                  <span aria-hidden>#</span>
+                  <span className="sr-only">Row number</span>
+                </th>
                 {["Agent", "Action", "Confidence", "When"].map((column, i) => (
                   <th
                     key={column}
@@ -153,6 +163,10 @@ export function VisibilityView() {
                     index % 2 === 1 && "bg-ng-row-alt"
                   )}
                 >
+                  {/* Absolute across pages, so a row keeps its number. */}
+                  <td className="whitespace-nowrap px-3 py-2 text-right text-ng-2xs tabular-nums text-ng-disabled">
+                    {paged.from + index}
+                  </td>
                   <td className="whitespace-nowrap px-3 py-2 text-ng-sm font-medium text-ng-primary">
                     {entry.agent_title ?? entry.agent_name}
                   </td>

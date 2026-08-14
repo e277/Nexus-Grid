@@ -192,6 +192,16 @@ export function FindingsBoard({
       <table className="w-full min-w-[720px] text-left">
         <thead>
           <tr>
+            <th
+              scope="col"
+              className={cn(
+                "w-10 px-3 py-2 text-right text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary",
+                "sticky top-0 z-10 bg-ng-surface border-b border-ng-border"
+              )}
+            >
+              <span aria-hidden>#</span>
+              <span className="sr-only">Row number</span>
+            </th>
             {["Severity", "Domain", "Finding", "Key figure", "Confidence"].map((column, i) => (
               <th
                 key={column}
@@ -228,6 +238,11 @@ export function FindingsBoard({
                   index % 2 === 1 && !active && "bg-ng-row-alt"
                 )}
               >
+                {/* The finding's place in the whole filtered set, not in the
+                    page — the same number the reader saw before they paged. */}
+                <td className="whitespace-nowrap px-3 py-2 text-right text-ng-2xs tabular-nums text-ng-disabled">
+                  {index + 1}
+                </td>
                 <td className="whitespace-nowrap px-3 py-2">
                   <span className="flex items-center gap-1.5">
                     <Icon
@@ -301,7 +316,7 @@ export function FindingsBoard({
                 <tr>
                   {/* Spans the table so the detail is not squeezed into one
                       column's width. */}
-                  <td colSpan={5} className="bg-ng-bg p-0">
+                  <td colSpan={6} className="bg-ng-bg p-0">
                     <div className="px-3 py-3">
                       <FindingDetail finding={finding} />
                     </div>
