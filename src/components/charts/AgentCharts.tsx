@@ -124,7 +124,7 @@ export function FindingsByDomainChart({
           color: SEVERITY_COLOR[severity],
         }))}
       />
-      <div className="h-[260px] w-full">
+      <div className="h-[210px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={rows} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
             <CartesianGrid {...GRID_PROPS} vertical={false} />
@@ -225,7 +225,7 @@ export function ConfidenceChart({ findings }: { findings: Finding[] }) {
       title="Confidence across findings"
       subtitle="How many findings sit at each confidence level. Low confidence is not wrong — it means the agent wants the figure checked before it is acted on"
     >
-      <div className="h-[240px] w-full">
+      <div className="h-[210px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={buckets} margin={{ top: 20, right: 12, bottom: 18, left: 0 }}>
             <CartesianGrid {...GRID_PROPS} vertical={false} />
@@ -342,7 +342,7 @@ export function SupplierScoreChart({ match }: { match: GapMatch | null }) {
       <ChartLegend
         items={FACTOR_KEYS.map((factor, index) => ({ label: factor, color: SERIES[index] }))}
       />
-      <div className="w-full" style={{ height: rows.length * 44 + 40 }}>
+      <div className="w-full" style={{ height: Math.max(150, rows.length * 34 + 48) }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={rows}
@@ -454,7 +454,7 @@ export function AgentDecisionChart({
       title="Decisions by agent"
       subtitle="How many decisions each specialist recorded, and how confident it was on average. These are the platform's own records, not a publisher's data"
     >
-      <div className="w-full" style={{ height: byAgent.length * 40 + 48 }}>
+      <div className="w-full" style={{ height: Math.max(150, byAgent.length * 30 + 52) }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={byAgent}
@@ -522,7 +522,7 @@ export function GateOutcomeChart({
           Run a coordination cycle on the dashboard and answer at the gate to populate this.
         </p>
       ) : (
-        <div className="h-[220px] w-full">
+        <div className="h-[210px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={rows} margin={{ top: 20, right: 12, bottom: 18, left: 0 }}>
               <CartesianGrid {...GRID_PROPS} vertical={false} />

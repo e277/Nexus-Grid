@@ -1,6 +1,6 @@
 "use client";
 
-import { Brain, Filter, Send, Sparkles, X } from "lucide-react";
+import { Filter, Send, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
@@ -12,11 +12,13 @@ import {
 } from "../charts/AgentCharts";
 import { SEVERITY_COLOR } from "../charts/chart-kit";
 import { FindingDetail } from "../charts/FindingDetail";
+import { SupplierCoverageChart } from "../charts/SupplierCoverageChart";
 import {
   FindingsBoard,
   FindingsMatrix,
   type TaggedFinding,
 } from "../charts/FindingsBoard";
+import { Kpi, KpiStrip } from "./KpiStrip";
 import { Badge } from "../ui/badge";
 import { Card } from "../ui/card";
 import { PillTabs, type PillOption } from "../ui/tabs";
@@ -67,6 +69,8 @@ export function AnalysisSection({ data }: { data: AnalysisOverview }) {
   /** A cell picked in the severity-by-confidence matrix. */
   const [cell, setCell] = useState<{ severity: FindingSeverity; confidence: string } | null>(null);
   const [selectedFinding, setSelectedFinding] = useState<number | null>(null);
+  /** `importer_iso3-commodity_code` of the gap whose breakdown is open. */
+  const [gapKey, setGapKey] = useState<string | null>(null);
 
   const allFindings: TaggedFinding[] = useMemo(
     () =>
@@ -92,6 +96,20 @@ export function AnalysisSection({ data }: { data: AnalysisOverview }) {
   const detail = selectedFinding !== null ? (filtered[selectedFinding] ?? null) : null;
 
   const interpreted = data.analyses.filter((a) => a.source !== "rules").length;
+  const criticals = allFindings.filter((f) => f.severity === "critical").length;
+  const allModelRead = interpreted === data.analyses.length;
+  const approved = data.gate_decisions.filter(
+    (g) => g.decision === "approved" || g.decision === "modified"
+  ).length;
+  const coverage = data.matches.filter((m) => m.matches.length > 0);
+  const bestScores = coverage.map((m) => m.matches[0].score);
+  const medianCoverage =
+    bestScores.length > 0
+      ? [...bestScores].sort((a, b) => a - b)[Math.floor(bestScores.length / 2)]
+      : null;
+  const openGap = coverage.find(
+    (m) => `${m.importer_iso3}-${m.commodity_code}` === gapKey
+  );
   const scored = data.decisions.filter((d) => typeof d.confidence === "number");
   const meanConfidence =
     scored.length > 0
@@ -121,117 +139,135 @@ export function AnalysisSection({ data }: { data: AnalysisOverview }) {
   const filtersActive = domain !== null || severity !== "all" || cell !== null;
 
   return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Stat
-          label="Agent decisions"
-          value={data.decisions.length}
-          hint={meanConfidence === null ? "none scored yet" : `mean confidence ${meanConfidence}%`}
-          icon={<Brain size={13} />}
-          tone="info"
+    <div className="space-y-4">
+      {/* ── The headline row ──────────────────────────────────────────────
+             Five figures a reader should be able to take without reading a
+             chart. Each is said once here and explained by exactly one chart
+             below, rather than restated by several. */}
+      <KpiStrip>
+        <Kpi
+          label="Findings raised"
+          value={allFindings.length}
+          hint={`across ${data.analyses.length} specialist agents`}
         />
-        <Stat
-          label="Domains read by a model"
-          value={`${interpreted} / ${data.analyses.length}`}
+        <Kpi
+          label="Rated critical"
+          value={criticals}
+          tone={criticals > 0 ? "danger" : "success"}
+          hint={criticals > 0 ? "needs a decision first" : "nothing critical right now"}
+        />
+        <Kpi
+          label="Mean confidence"
+          value={meanConfidence === null ? "—" : `${meanConfidence}%`}
           hint={
-            interpreted === data.analyses.length
-              ? "every reading below came from a model"
-              : "the rest are rule-derived"
+            meanConfidence === null
+              ? "no decision has been scored"
+              : `across ${data.decisions.length} agent decisions`
           }
-          icon={<Sparkles size={13} />}
-          tone={interpreted === data.analyses.length ? "success" : "warning"}
         />
-      </div>
+        <Kpi
+          label="Median coverage"
+          value={medianCoverage === null ? "—" : `${medianCoverage}`}
+          hint={
+            medianCoverage === null
+              ? "no gap has a scored supplier"
+              : `best regional match, ${coverage.length} gaps scored`
+          }
+        />
+        <Kpi
+          label="Gate decisions"
+          value={data.gate_decisions.length}
+          tone={data.gate_decisions.length === 0 ? "neutral" : "success"}
+          hint={
+            data.gate_decisions.length === 0
+              ? "no run has reached the gate"
+              : `${approved} approved or amended`
+          }
+        />
+      </KpiStrip>
+
+      {/* Who produced these readings, said once and up front — a rule-derived
+          fallback is not a model's judgement, and the difference belongs
+          beside the numbers rather than buried per chart. */}
+      <p className="text-ng-2xs text-ng-secondary">
+        {allModelRead
+          ? `All ${data.analyses.length} domain readings below came from a model.`
+          : `${interpreted} of ${data.analyses.length} domain readings came from a model; the rest are rule-derived fallbacks.`}
+      </p>
 
       {/* ── One filter row, scoping everything below it ─────────────────── */}
-      <Card className="space-y-3 p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Filter size={13} className="shrink-0 text-ng-secondary" aria-hidden />
-          <span className="text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary">
-            Domain
-          </span>
-          <PillTabs
-            label="Filter findings by domain"
-            options={domainOptions}
-            value={domain ?? "all"}
-            onChange={(value) => setDomain(value === "all" ? null : value)}
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="ml-[21px] text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary">
-            Severity
-          </span>
-          <PillTabs
-            label="Filter findings by severity"
-            options={severityOptions}
-            value={severity}
-            onChange={setSeverity}
-          />
-          {filtersActive ? (
-            <button
-              onClick={() => {
-                setDomain(null);
-                setSeverity("all");
-                setCell(null);
-                setSelectedFinding(null);
-              }}
-              className="inline-flex items-center gap-1 rounded-full border border-ng-border px-2.5 py-1 text-ng-2xs font-semibold text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent"
-            >
-              <X size={10} aria-hidden />
-              Clear · showing {filtered.length} of {allFindings.length}
-            </button>
-          ) : null}
-        </div>
+      <Card className="flex flex-wrap items-center gap-x-3 gap-y-2 p-2.5">
+        <Filter size={13} className="shrink-0 text-ng-secondary" aria-hidden />
+        <PillTabs
+          label="Filter findings by domain"
+          options={domainOptions}
+          value={domain ?? "all"}
+          onChange={(value) => setDomain(value === "all" ? null : value)}
+        />
+        <span aria-hidden className="hidden h-4 w-px bg-ng-border sm:block" />
+        <PillTabs
+          label="Filter findings by severity"
+          options={severityOptions}
+          value={severity}
+          onChange={setSeverity}
+        />
+        {filtersActive ? (
+          <button
+            onClick={() => {
+              setDomain(null);
+              setSeverity("all");
+              setCell(null);
+              setSelectedFinding(null);
+            }}
+            className="ml-auto inline-flex items-center gap-1 rounded-full border border-ng-border px-2.5 py-1 text-ng-2xs font-semibold text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent"
+          >
+            <X size={10} aria-hidden />
+            Clear · {filtered.length} of {allFindings.length}
+          </button>
+        ) : null}
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <FindingsByDomainChart
-          analyses={data.analyses}
-          selected={domain}
-          onSelect={setDomain}
-        />
-        <ConfidenceChart findings={filtered} />
-      </div>
-
-      {/* ── The ranking the logistics agent works from ────────────────────
-             Every gap, largest first, rather than one chosen from a dropdown.
-             A picker made the reader ask for each answer one at a time and
-             hid how many gaps there were; the point of the page is that they
-             can be read against each other. */}
-      {data.matches.length > 0 ? (
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-ng-lg font-bold tracking-tight text-ng-primary">
-              Supplier ranking — {data.matches.length} sourcing gap
-              {data.matches.length === 1 ? "" : "s"}
-            </h2>
-            <p className="mt-0.5 max-w-3xl text-ng-sm text-ng-secondary">
-              Every gap the agents found a regional supplier for, largest first. Each supplier is
-              scored out of 100 on four observed factors.{" "}
-              <span className="text-ng-primary">Not scored:</span>{" "}
-              {data.matches[0].not_scored.join(" ")}
-            </p>
-          </div>
-
-          {data.matches.map((match) => (
-            <SupplierScoreChart
-              key={`${match.importer_iso3}-${match.commodity_code}`}
-              match={match}
-            />
-          ))}
+      {/* ── The grid ──────────────────────────────────────────────────────
+             Twelve columns, so a chart can take the width its shape needs
+             rather than an even half. The two that answer "what did the
+             agents find" lead; the three that answer "what was done about
+             it" sit under them at a third each. */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div className="xl:col-span-7">
+          <FindingsByDomainChart analyses={data.analyses} selected={domain} onSelect={setDomain} />
         </div>
-      ) : null}
+        <div className="xl:col-span-5">
+          <FindingsMatrix findings={filtered} onSelect={setCell} selected={cell} />
+        </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <AgentDecisionChart decisions={data.decisions} />
-        <GateOutcomeChart gateDecisions={data.gate_decisions} />
+        <div className="xl:col-span-4">
+          <ConfidenceChart findings={filtered} />
+        </div>
+        <div className="xl:col-span-4">
+          <AgentDecisionChart decisions={data.decisions} />
+        </div>
+        <div className="xl:col-span-4">
+          <GateOutcomeChart gateDecisions={data.gate_decisions} />
+        </div>
+
+        {/* Coverage across every gap, then the breakdown for the one picked.
+            This was one stacked chart per gap, twelve deep — the comparison
+            they were each answering separately is a single question, and
+            scrolling between them was the only way to ask it. */}
+        {coverage.length > 0 ? (
+          <div className="xl:col-span-7">
+            <SupplierCoverageChart matches={data.matches} selected={gapKey} onSelect={setGapKey} />
+          </div>
+        ) : null}
+        {coverage.length > 0 ? (
+          <div className="xl:col-span-5">
+            <SupplierScoreChart match={openGap ?? coverage[0]} />
+          </div>
+        ) : null}
       </div>
-
-      {/* ── The findings, as a board rather than a document ───────────── */}
-      <FindingsMatrix findings={filtered} onSelect={setCell} selected={cell} />
 
       <div>
-        <h2 className="text-ng-lg font-bold tracking-tight text-ng-primary">
+        <h2 className="text-ng-base font-bold tracking-tight text-ng-primary">
           {filtered.length} finding{filtered.length === 1 ? "" : "s"}
           {filtersActive ? " matching the filters" : ""}
         </h2>
@@ -332,37 +368,3 @@ export function DispatchPanel({ dispatch }: { dispatch: DispatchReadiness }) {
   );
 }
 
-function Stat({
-  label,
-  value,
-  hint,
-  icon,
-  tone,
-}: {
-  label: string;
-  value: string | number;
-  hint: string;
-  icon: React.ReactNode;
-  tone: "ai" | "danger" | "success" | "info" | "warning";
-}) {
-  const tint = {
-    ai: "border-ng-ai-bd/70 bg-gradient-to-br from-ng-ai-bg to-ng-surface",
-    danger: "border-ng-danger-bd/70 bg-gradient-to-br from-ng-danger-bg to-ng-surface",
-    success: "border-ng-success-bd/70 bg-gradient-to-br from-ng-success-bg to-ng-surface",
-    info: "border-ng-info-bd/70 bg-gradient-to-br from-ng-info-bg to-ng-surface",
-    warning: "border-ng-warning-bd/70 bg-gradient-to-br from-ng-warning-bg to-ng-surface",
-  }[tone];
-
-  return (
-    <Card className={cn("p-4", tint)}>
-      <div className="flex items-center gap-1.5 text-ng-secondary">
-        <span className="shrink-0">{icon}</span>
-        <p className="text-ng-2xs font-bold uppercase tracking-[.6px]">{label}</p>
-      </div>
-      <p className="mt-1.5 text-ng-hero font-bold leading-none tracking-tight text-ng-primary">
-        {value}
-      </p>
-      <p className="mt-2 text-ng-xs leading-snug text-ng-secondary">{hint}</p>
-    </Card>
-  );
-}
