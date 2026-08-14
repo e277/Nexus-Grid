@@ -39,24 +39,25 @@ export function CoverageNote({
       aria-label="Coverage"
       className={cn(
         "rounded-[10px] border p-4",
-        partial
-          ? "border-ng-info-bd bg-ng-info-bg"
-          : "border-ng-warning-bd bg-ng-warning-bg"
+        partial ? "border-ng-info-bd bg-ng-info-bg" : "border-ng-border bg-ng-bg"
       )}
     >
       <div className="flex flex-wrap items-center gap-2">
         <Icon
           size={15}
-          className={cn("shrink-0", partial ? "text-ng-info-tx" : "text-ng-warning-tx")}
+          className={cn("shrink-0", partial ? "text-ng-info-tx" : "text-ng-secondary")}
           aria-hidden
         />
+        {/* A scope heading rather than a verdict. What is and is not built is
+            in the rows below, stated exactly; the heading's job is to say
+            that the boundary was chosen, not that something fell short. */}
         <h2
           className={cn(
             "text-ng-base font-semibold",
-            partial ? "text-ng-info-tx" : "text-ng-warning-tx"
+            partial ? "text-ng-info-tx" : "text-ng-primary"
           )}
         >
-          {partial ? "Partly covered" : "Not covered"}
+          {partial ? "Scope" : "Scope — not implemented"}
         </h2>
       </div>
 

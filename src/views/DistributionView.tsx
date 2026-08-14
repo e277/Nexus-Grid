@@ -34,7 +34,7 @@ export function DistributionView() {
           </>
         }
       >
-        <div className="mt-3 border-t border-ng-warning-bd pt-3">
+        <div className="mt-3 border-t border-ng-border pt-3">
           <p className="text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary">
             What the platform does instead
           </p>
