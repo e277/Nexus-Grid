@@ -13,7 +13,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "build:geo": "node scripts/build-caricom-geometry.mjs"
+    "build:geo": "node scripts/build-caricom-geometry.mjs",
+    "gateway:up": "docker compose --env-file .env -f openclaw/docker-compose.yml up -d",
+    "gateway:down": "docker compose --env-file .env -f openclaw/docker-compose.yml down",
+    "gateway:watch": "docker compose --env-file .env -f openclaw/docker-compose.yml watch",
+    "gateway:cli": "docker compose --env-file .env -f openclaw/docker-compose.yml run --rm cli"
   },
   "dependencies": {
     "@langchain/langgraph": "^1.4.9",

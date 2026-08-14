@@ -28,4 +28,3 @@ Thumbs.db
 .nexus-grid/
 
 # OpenClaw gateway state and its generated token
-openclaw/.env

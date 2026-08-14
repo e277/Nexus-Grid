@@ -6,6 +6,15 @@
 # container sidesteps both: the gateway brings its own runtime, and the app's
 # toolchain is untouched.
 #
+# Every command here needs `--env-file ../.env`, which the npm scripts supply:
+#   npm run gateway:up | gateway:watch | gateway:down
+#   npm run gateway:cli -- channels status
+#
+# The token lives once, in the project root .env, because the app presents it
+# and the gateway validates it — one secret, two readers. Compose loads that
+# file for interpolation only, and this file references exactly two variables,
+# so nothing else in it reaches the container.
+#
 # First run — seed the config into the state volume. The gateway refuses to
 # start without gateway.mode=local, and it owns the file afterwards (adding a
 # channel rewrites it), so openclaw.json here is a seed, not the live copy:
@@ -36,7 +45,7 @@ services:
       # The shared secret Nexus-Grid presents as a bearer token. This endpoint
       # is full operator access on the gateway, which is why the port below is
       # bound to loopback only.
-      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?set OPENCLAW_GATEWAY_TOKEN in openclaw/.env}
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?set OPENCLAW_GATEWAY_TOKEN in the project root .env}
     ports:
       # 127.0.0.1 deliberately, not 0.0.0.0: OpenClaw's own security note says
       # to keep this surface on loopback or a private ingress, never exposed.
