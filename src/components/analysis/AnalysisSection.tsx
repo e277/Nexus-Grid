@@ -17,11 +17,13 @@ import {
   FindingsMatrix,
   type TaggedFinding,
 } from "../charts/FindingsBoard";
+import { SourceBar } from "../SourceBar";
 import { Kpi, KpiStrip } from "./KpiStrip";
 import { Badge } from "../ui/badge";
 import { Card } from "../ui/card";
 import { PillTabs, type PillOption } from "../ui/tabs";
 import { cn } from "../../lib/utils";
+import { ANALYSIS_SOURCES } from "../../source-map";
 import type { AnalysisOverview, DispatchReadiness, FindingSeverity } from "../../types";
 
 const DOMAIN_LABEL: Record<string, string> = {
@@ -287,6 +289,9 @@ export function AnalysisSection({ data }: { data: AnalysisOverview }) {
           />
         </>
       )}
+
+      {/* Every publisher behind the comparison, linked out. */}
+      <SourceBar sources={data.sources} uses={ANALYSIS_SOURCES} />
     </div>
   );
 }

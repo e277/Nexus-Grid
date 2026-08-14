@@ -1,4 +1,5 @@
 import type { SourceUse } from "./components/SourceBar";
+import type { AnalysisDomain } from "./types";
 
 /**
  * Which upstream publisher feeds which page, and what it contributes there.
@@ -102,3 +103,56 @@ export const LOGISTICS_SOURCES: SourceUse[] = [
     contributes: "Named storms active in the basin.",
   },
 ];
+
+/**
+ * Impact Metrics reads every domain, so it names every publisher behind them.
+ *
+ * The per-page rule still holds — this page really does rest on all six,
+ * because it compares conclusions drawn from all six. What each line says is
+ * what that publisher contributed *to the comparison*, not a restatement of
+ * its role on the page where its figures were first read.
+ */
+export const ANALYSIS_SOURCES: SourceUse[] = [
+  {
+    slot: "trade",
+    contributes:
+      "Every sourcing gap the findings are drawn from, and the supplier ranking's trade evidence.",
+  },
+  {
+    slot: "climate",
+    contributes: "Live risk at both ends of each lane, which the supplier score weighs.",
+  },
+  {
+    slot: "agroclimate",
+    contributes: "The planting windows behind the complementary-season factor in that score.",
+  },
+  {
+    slot: "soil",
+    contributes: "Growing conditions behind the soil agent's findings.",
+  },
+  {
+    slot: "indicators",
+    contributes: "Agricultural capacity per member state, behind the soil and outcome readings.",
+  },
+  {
+    slot: "storms",
+    contributes: "Named storms in the basin, which qualify the logistics findings.",
+  },
+];
+
+/** The slots one domain's agent was actually given. */
+export function sourcesForDomain(domain: AnalysisDomain): SourceUse[] {
+  switch (domain) {
+    case "market":
+      return FARM_TO_MARKET_SOURCES;
+    case "soil":
+      return SOIL_SOURCES;
+    case "planting":
+      return PLANTING_SOURCES;
+    case "logistics":
+      return LOGISTICS_SOURCES;
+    default:
+      // The outcome reading draws on the whole picture rather than one slice.
+      return ANALYSIS_SOURCES;
+  }
+}

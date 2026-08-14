@@ -10,10 +10,12 @@ import {
   FindingsMatrix,
   type TaggedFinding,
 } from "../components/charts/FindingsBoard";
+import { SourceBar } from "../components/SourceBar";
 import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { usePoll } from "../hooks";
+import { sourcesForDomain } from "../source-map";
 import type { AnalysisDomain, FindingSeverity } from "../types";
 
 /**
@@ -127,6 +129,12 @@ export function DomainView({
           <FindingsBoard findings={filtered} selectedIndex={selected} onSelect={setSelected} />
         </>
       )}
+
+      {/* Where this agent's inputs came from, linked out to each publisher.
+          A conclusion a reader cannot trace is a conclusion they have to take
+          on trust, and these are public datasets — the least this page can do
+          is say which, and point at them. */}
+      <SourceBar sources={data.sources} uses={sourcesForDomain(domain)} />
     </div>
   );
 }
