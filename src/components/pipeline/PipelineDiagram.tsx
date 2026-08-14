@@ -275,8 +275,24 @@ export function PipelineDiagram({
         {PHASES.map((phase) => {
           const complete = phaseComplete(phase.id);
           const locked = phase.id === "execute" && awaitingApproval;
+          // The specialist that answered in this phase. A phase holding two
+          // nodes takes whichever reported one; the phases whose work is a
+          // rule step, the model call or the dispatch stay unlabelled rather
+          // than being given a name they did not earn.
+          const acting = phase.nodes.map((id) => agentByNode[id]).find(Boolean);
           return (
             <g key={phase.id} opacity={dim(phase.id)} style={{ transition: "opacity .2s" }}>
+              {acting ? (
+                <text
+                  x={phase.x + 16}
+                  y={COLUMN.top - 14}
+                  fontSize={11}
+                  fontWeight={600}
+                  fill="var(--color-text-secondary)"
+                >
+                  {acting.title} · {Math.round(acting.confidence * 100)}%
+                </text>
+              ) : null}
               <rect
                 x={phase.x}
                 y={COLUMN.top}
@@ -455,16 +471,6 @@ export function PipelineDiagram({
               >
                 {node.label}
               </text>
-
-              {/* The specialist that answered here, once it has. Steps with no
-                  agent — the model call, the dispatch — are left unlabelled
-                  rather than given a name they did not earn. */}
-              {agentByNode[node.id] ? (
-                <text x={x + 32} y={y + 36} fontSize={10} fill="var(--color-text-secondary)">
-                  {agentByNode[node.id].title} ·{" "}
-                  {Math.round(agentByNode[node.id].confidence * 100)}%
-                </text>
-              ) : null}
 
               {node.status === "done" ? (
                 <path

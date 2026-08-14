@@ -189,8 +189,20 @@ export function DashboardView() {
    */
   const { data: analysis } = usePoll(() => api.analysisOverview(), 30_000);
 
-  /** Largest first, so a short sweep takes the gaps that matter most. */
-  const sweepGaps = demoMode ? gaps.slice(0, 3) : gaps;
+  /**
+   * A short sweep runs Jamaica's largest gap, and only that.
+   *
+   * One gap rather than three: each costs a model call of roughly twenty
+   * seconds, so one finishes while someone is still watching it. Jamaica
+   * because it is a named member state a reader can hold in mind, rather than
+   * whichever gap happens to sort first today.
+   *
+   * Falls back to the largest gap overall if Jamaica has none in the current
+   * trade year. Showing nothing would leave the button inert with no
+   * explanation, and the checklist names whichever gap it picked either way.
+   */
+  const jamaicaGaps = gaps.filter((gap) => gap.importer === "Jamaica");
+  const sweepGaps = demoMode ? (jamaicaGaps.length > 0 ? jamaicaGaps : gaps).slice(0, 1) : gaps;
 
   const done = new Map(
     completed.map(({ gap, state }) => [`${gap.importer_iso3}-${gap.commodity_code}`, state])
@@ -519,7 +531,7 @@ export function DashboardView() {
               />
               Short sweep
               <span className="hidden text-ng-2xs text-ng-disabled xl:inline">
-                · 3 largest gaps
+                · Jamaica only
               </span>
             </label>
 
