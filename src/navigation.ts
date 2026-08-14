@@ -1,9 +1,11 @@
 import {
+  Activity,
   LayoutDashboard,
   Leaf,
   Ship,
   Sprout,
   Store,
+  Truck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -14,7 +16,9 @@ export type PageId =
   | "farm-to-market"
   | "soil"
   | "planting"
-  | "logistics";
+  | "logistics"
+  | "freight"
+  | "visibility";
 
 export interface Page {
   id: PageId;
@@ -37,7 +41,11 @@ export interface NavGroup {
 }
 
 /**
- * Five destinations: the loop, and the four specialists.
+ * The loop, four specialist readings, the scored freight lanes, and the
+ * platform's own activity record.
+ *
+ * Page titles use the track's names for the build areas they implement, so a
+ * reader holding the brief can match them without translating.
  *
  * They were collapsed to one page, and one page was wrong for what this is.
  * Each specialist reads a different part of the food system — trade, soil,
@@ -85,10 +93,10 @@ export const NAV_GROUPS: NavGroup[] = [
       },
       {
         id: "soil",
-        label: "Soil & Crop",
+        label: "Soil Monitoring",
         icon: Leaf,
         domain: "soil",
-        title: "Soil & Crop Intelligence",
+        title: "Soil Monitoring & Agricultural Intelligence",
         description:
           "What the ground can carry: soil readings against the crops each member state is being asked to supply.",
       },
@@ -109,6 +117,27 @@ export const NAV_GROUPS: NavGroup[] = [
         title: "Port & Logistics Coordination",
         description:
           "Whether the food can actually move: transit windows, routing between member states, and the weather that closes them.",
+      },
+      {
+        id: "freight",
+        label: "Freight Matching",
+        icon: Truck,
+        title: "Freight Matching & Route Optimization",
+        description:
+          "Every supplier–importer lane the platform scored: sea distance between real ports, the transit it implies, live weather at both ends, and the import value each lane could displace.",
+      },
+    ],
+  },
+  {
+    label: "Operations record",
+    pages: [
+      {
+        id: "visibility",
+        label: "Supply Chain Visibility",
+        icon: Activity,
+        title: "Supply Chain Visibility & Tracking",
+        description:
+          "Every action the agents have taken, in order — which specialist acted, what it decided, how confident it was, and when.",
       },
     ],
   },

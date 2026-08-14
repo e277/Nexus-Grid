@@ -1,0 +1,148 @@
+"use client";
+
+import { Ship } from "lucide-react";
+
+import { api } from "../api";
+import { LiveIndicator } from "../components/LiveIndicator";
+import { SourceBar } from "../components/SourceBar";
+import { Badge } from "../components/ui/badge";
+import { Card } from "../components/ui/card";
+import { Skeleton } from "../components/ui/skeleton";
+import { usePoll } from "../hooks";
+import { cn } from "../lib/utils";
+import { LOGISTICS_SOURCES } from "../source-map";
+import type { Lane } from "../types";
+
+const STATUS: Record<string, { label: string; tone: "success" | "warning" | "danger" }> = {
+  clear: { label: "Clear", tone: "success" },
+  watch: { label: "Watch", tone: "warning" },
+  at_risk: { label: "At risk", tone: "danger" },
+};
+
+function usd(value: number): string {
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`;
+  if (value >= 1_000_000) return `$${Math.round(value / 1_000_000)}M`;
+  return `$${value.toLocaleString()}`;
+}
+
+/**
+ * Which supplier can actually reach which importer, and at what cost in hours.
+ *
+ * A lane is a match the platform scored, not a carrier's published schedule:
+ * the commodity, the two member states, the sea distance between their ports,
+ * the transit that implies, and live weather at both ends. Sorted by the value
+ * the lane could displace, so the freight worth arranging first is at the top.
+ *
+ * `geo-estimate` is stated on every row that carries one. No free inter-island
+ * freight API exists, so transit is derived from real port coordinates and a
+ * documented average speed — which is a defensible estimate and a dishonest
+ * booking, so it is labelled as the former.
+ */
+export function FreightView() {
+  const { data, error, updatedAt, refreshing, intervalMs } = usePoll(
+    () => api.lanes(),
+    30_000
+  );
+
+  if (error) {
+    return (
+      <p className="rounded-md border border-ng-warning-bd bg-ng-warning-bg px-4 py-3 text-sm text-ng-warning-tx">
+        Failed to load the lanes: {error}
+      </p>
+    );
+  }
+
+  if (!data) return <Skeleton className="h-72" />;
+
+  const lanes = [...data.lanes].sort((a, b) => b.external_usd - a.external_usd);
+  const atRisk = lanes.filter((l) => l.status === "at_risk").length;
+  const fastest = lanes.reduce<Lane | null>(
+    (best, l) => (best === null || l.transit_hours < best.transit_hours ? l : best),
+    null
+  );
+
+  return (
+    <div className="space-y-4">
+      <Card className="flex flex-wrap items-center gap-x-4 gap-y-2 p-4">
+        <Ship size={14} className="shrink-0 text-ng-secondary" aria-hidden />
+        <span className="text-ng-base font-semibold text-ng-primary">
+          {lanes.length} scored lanes
+        </span>
+        <span className="text-ng-sm text-ng-secondary">
+          {atRisk} at risk from weather at one or both ends
+        </span>
+        {fastest ? (
+          <span className="text-ng-sm text-ng-secondary">
+            Shortest transit {Math.round(fastest.transit_hours)}h ·{" "}
+            {fastest.supplier} → {fastest.importer}
+          </span>
+        ) : null}
+        <LiveIndicator
+          className="ml-auto"
+          updatedAt={updatedAt}
+          refreshing={refreshing}
+          intervalMs={intervalMs}
+        />
+      </Card>
+
+      <div className="overflow-x-auto rounded-[10px] border border-ng-border bg-ng-surface">
+        <table className="w-full min-w-[820px] text-left">
+          <thead>
+            <tr className="border-b border-ng-border">
+              {["Lane", "Commodity", "Distance", "Transit", "Weather", "Displaces"].map(
+                (column, i) => (
+                  <th
+                    key={column}
+                    className={cn(
+                      "px-3 py-2 text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary",
+                      i >= 2 && "text-right"
+                    )}
+                  >
+                    {column}
+                  </th>
+                )
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {lanes.map((lane, index) => (
+              <tr
+                key={`${lane.supplier_iso3}-${lane.importer_iso3}-${lane.commodity}`}
+                className={cn(
+                  "border-b border-ng-border last:border-0",
+                  index % 2 === 1 && "bg-ng-row-alt"
+                )}
+              >
+                <td className="whitespace-nowrap px-3 py-2 text-ng-sm font-medium text-ng-primary">
+                  {lane.supplier} → {lane.importer}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-ng-xs text-ng-secondary">
+                  {lane.commodity}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-right text-ng-xs tabular-nums text-ng-secondary">
+                  {lane.distance_km === null ? "—" : `${Math.round(lane.distance_km)} km`}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-right text-ng-sm tabular-nums text-ng-primary">
+                  {Math.round(lane.transit_hours)}h
+                  <span className="ml-1 text-ng-2xs text-ng-disabled">
+                    {lane.estimate_source === "geo-estimate" ? "est." : ""}
+                  </span>
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-right">
+                  <Badge size="sm" variant={STATUS[lane.status]?.tone ?? "muted"}>
+                    {STATUS[lane.status]?.label ?? lane.status}
+                  </Badge>
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-right text-ng-sm tabular-nums text-ng-primary">
+                  {usd(lane.external_usd)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <SourceBar sources={data.sources ?? []} uses={LOGISTICS_SOURCES} />
+    </div>
+  );
+}

@@ -4,6 +4,9 @@ export interface AgentActivity {
   action: string;
   confidence?: number | null;
   created_at?: string | null;
+  /** Readable forms the route derives from `agent_name` and `action`. */
+  agent_title?: string;
+  action_label?: string;
 }
 
 export interface AuditLog {

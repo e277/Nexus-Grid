@@ -9,6 +9,8 @@ import { usePoll } from "./hooks";
 import { findPage, type PageId } from "./navigation";
 import { DashboardView } from "./views/DashboardView";
 import { DomainView } from "./views/DomainView";
+import { FreightView } from "./views/FreightView";
+import { VisibilityView } from "./views/VisibilityView";
 
 const COLLAPSE_KEY = "nexus_grid_sidebar_collapsed";
 
@@ -71,6 +73,8 @@ export default function App() {
           </div>
 
           {page === "dashboard" ? <DashboardView /> : null}
+          {page === "freight" ? <FreightView /> : null}
+          {page === "visibility" ? <VisibilityView /> : null}
           {/* The four specialist readings are one component: they differ in
               which agent produced them, not in how a reading is presented.
               `key` remounts on navigation so a cell selected on one page does
