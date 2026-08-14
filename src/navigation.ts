@@ -45,25 +45,18 @@ export interface NavGroup {
 }
 
 /**
- * The loop, four specialist readings, the scored freight lanes, and the
- * platform's own activity record.
+ * The coordination loop, and one page for each of the track's eight build
+ * areas.
  *
- * Page titles use the track's names for the build areas they implement, so a
- * reader holding the brief can match them without translating.
+ * Titles and descriptions are the track's own words, in the track's own order,
+ * so a reader holding the brief can match a page to an area without
+ * translating. What each page actually contains is on the page — including,
+ * for the two areas this platform does not implement, a note saying so and
+ * naming the dataset that would close it.
  *
- * They were collapsed to one page, and one page was wrong for what this is.
- * Each specialist reads a different part of the food system — trade, soil,
- * planting calendars, freight — and a rail that names them is the only thing
- * on screen that says the platform covers all four. Folded into a single
- * scroll, that breadth read as one long page of charts.
- *
- * The groups mirror how the work divides rather than how the code does:
- * Operations is what the platform is doing now, Intelligence is what each
- * agent has concluded about its own domain.
- *
- * There is no separate analysis page: the addressable total and the supplier
- * ranking sit with the agent that finds the gaps, and the gate history sits
- * with the gate. A finding and the figure that sizes it belong on one page.
+ * A description here states the area, not the implementation. That is the
+ * point of quoting the brief, and it is only honest because every page that
+ * falls short of its area says where it falls short, above the fold.
  *
  * Provenance never earned a page of its own: it is a property of a figure, so
  * each finding carries its own evidence, and each reading names the publishers
@@ -84,7 +77,7 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Intelligence",
+    label: "Food systems",
     pages: [
       {
         id: "farm-to-market",
@@ -93,7 +86,15 @@ export const NAV_GROUPS: NavGroup[] = [
         domain: "market",
         title: "Farm-to-Market Intelligence",
         description:
-          "Where the region buys food from outside itself when a neighbour already grows it — the substitution the coordination loop exists to act on.",
+          "Systems that connect agricultural supply with regional demand—giving producers visibility into where food is needed most.",
+      },
+      {
+        id: "crop-planning",
+        label: "Crop Planning",
+        icon: LineChart,
+        title: "Crop Planning & Yield Forecasting",
+        description:
+          "Forecasting tools that align planting decisions with projected demand and environmental conditions across regions.",
       },
       {
         id: "soil",
@@ -102,15 +103,7 @@ export const NAV_GROUPS: NavGroup[] = [
         domain: "soil",
         title: "Soil Monitoring & Agricultural Intelligence",
         description:
-          "What the ground can carry: soil readings against the crops each member state is being asked to supply.",
-      },
-      {
-        id: "crop-planning",
-        label: "Crop Planning",
-        icon: LineChart,
-        title: "Crop Planning & Yield Forecasting",
-        description:
-          "Measured change in each member state's food production, and a plain statement of why no yield forecast is offered.",
+          "Platforms that track soil health, land use, and growing conditions to optimize crop cycles and agricultural output.",
       },
       {
         id: "planting",
@@ -119,7 +112,15 @@ export const NAV_GROUPS: NavGroup[] = [
         domain: "planting",
         title: "Regional Planting Coordination",
         description:
-          "Whether planting calendars line up across islands — the difference between a region that covers its own gaps and one that gluts and shorts the same crop in the same season.",
+          "Systems that align planting schedules across farms and islands to reduce oversupply, prevent shortages, and stabilize markets.",
+      },
+      {
+        id: "freight",
+        label: "Freight Matching",
+        icon: Truck,
+        title: "Freight Matching & Route Optimization",
+        description:
+          "Matching freight capacity with agricultural supply in real time, optimizing shipping routes across islands.",
       },
       {
         id: "logistics",
@@ -128,15 +129,15 @@ export const NAV_GROUPS: NavGroup[] = [
         domain: "logistics",
         title: "Port & Logistics Coordination",
         description:
-          "Whether the food can actually move: transit windows, routing between member states, and the weather that closes them.",
+          "Coordination layers for port operations, customs processing, and inter-island freight movement.",
       },
       {
-        id: "freight",
-        label: "Freight Matching",
-        icon: Truck,
-        title: "Freight Matching & Route Optimization",
+        id: "visibility",
+        label: "Supply Chain Visibility",
+        icon: Activity,
+        title: "Supply Chain Visibility & Tracking",
         description:
-          "Every supplier–importer lane the platform scored: sea distance between real ports, the transit it implies, live weather at both ends, and the import value each lane could displace.",
+          "End-to-end visibility systems that track food from farm to market across the regional supply chain.",
       },
       {
         id: "distribution",
@@ -144,20 +145,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: Warehouse,
         title: "Food Distribution & Inventory Optimization",
         description:
-          "The one build area this platform does not implement, and what it would take to.",
-      },
-    ],
-  },
-  {
-    label: "Operations record",
-    pages: [
-      {
-        id: "visibility",
-        label: "Supply Chain Visibility",
-        icon: Activity,
-        title: "Supply Chain Visibility & Tracking",
-        description:
-          "Every action the agents have taken, in order — which specialist acted, what it decided, how confident it was, and when.",
+          "Optimization systems for food distribution, warehouse management, and inventory across island markets.",
       },
     ],
   },
