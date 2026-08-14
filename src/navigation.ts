@@ -6,6 +6,8 @@ import {
   Sprout,
   Store,
   Truck,
+  Warehouse,
+  LineChart,
   type LucideIcon,
 } from "lucide-react";
 
@@ -17,7 +19,9 @@ export type PageId =
   | "soil"
   | "planting"
   | "logistics"
+  | "crop-planning"
   | "freight"
+  | "distribution"
   | "visibility";
 
 export interface Page {
@@ -101,6 +105,14 @@ export const NAV_GROUPS: NavGroup[] = [
           "What the ground can carry: soil readings against the crops each member state is being asked to supply.",
       },
       {
+        id: "crop-planning",
+        label: "Crop Planning",
+        icon: LineChart,
+        title: "Crop Planning & Yield Forecasting",
+        description:
+          "Measured change in each member state's food production, and a plain statement of why no yield forecast is offered.",
+      },
+      {
         id: "planting",
         label: "Planting Coordination",
         icon: Sprout,
@@ -125,6 +137,14 @@ export const NAV_GROUPS: NavGroup[] = [
         title: "Freight Matching & Route Optimization",
         description:
           "Every supplier–importer lane the platform scored: sea distance between real ports, the transit it implies, live weather at both ends, and the import value each lane could displace.",
+      },
+      {
+        id: "distribution",
+        label: "Distribution",
+        icon: Warehouse,
+        title: "Food Distribution & Inventory Optimization",
+        description:
+          "The one build area this platform does not implement, and what it would take to.",
       },
     ],
   },

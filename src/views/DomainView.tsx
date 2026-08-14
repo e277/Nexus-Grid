@@ -6,7 +6,6 @@ import { useState } from "react";
 import { api } from "../api";
 import { ConfidenceChart } from "../components/charts/AgentCharts";
 import { PlantingCoverageChart } from "../components/charts/PlantingCoverageChart";
-import { ProductionTrendChart } from "../components/charts/ProductionTrendChart";
 import { SourcingAnalysis } from "../components/analysis/SourcingAnalysis";
 import {
   FindingsBoard,
@@ -130,11 +129,6 @@ export function DomainView({
           calendar itself belongs on its page — and it is the one view here
           that looks forward rather than reporting the present. */}
       {domain === "planting" ? <PlantingCoverageChart /> : null}
-
-      {/* What each member state actually grows, measured across the observed
-          series. The soil agent reads growing conditions; this is the output
-          those conditions produced. */}
-      {domain === "soil" ? <ProductionTrendChart /> : null}
 
       {/* The substitution case sits on the page about substitution: the agent
           that raises a sourcing finding and the figures that size it were a
