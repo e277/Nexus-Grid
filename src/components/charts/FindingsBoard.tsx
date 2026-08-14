@@ -5,6 +5,7 @@ import { Fragment } from "react";
 import { AlertTriangle, ChevronDown, CircleHelp, Eye, TrendingUp } from "lucide-react";
 
 import { cn } from "../../lib/utils";
+import { Pagination, usePagination } from "../ui/pagination";
 import type { Finding, FindingSeverity } from "../../types";
 import { ChartFrame, CONFIDENCE_COLOR, SEVERITY_COLOR } from "./chart-kit";
 import { FindingDetail } from "./FindingDetail";
@@ -177,18 +178,26 @@ export function FindingsBoard({
   selectedIndex: number | null;
   onSelect: (index: number | null) => void;
 }) {
+  // Paged on the same list `selectedIndex` indexes into, and the offset is
+  // added back below — so the row that is open stays open when the reader
+  // pages away and returns, instead of a different row springing open in its
+  // place.
+  const paged = usePagination(findings, 25, findings.length);
+
   if (findings.length === 0) return null;
 
   return (
-    <div className="overflow-x-auto rounded-[10px] border border-ng-border bg-ng-surface">
+    <div className="rounded-[10px] border border-ng-border bg-ng-surface">
+      <div className="max-h-[65vh] overflow-auto">
       <table className="w-full min-w-[720px] text-left">
         <thead>
-          <tr className="border-b border-ng-border">
+          <tr>
             {["Severity", "Domain", "Finding", "Key figure", "Confidence"].map((column, i) => (
               <th
                 key={column}
                 className={cn(
                   "px-3 py-2 text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary",
+                  "sticky top-0 z-10 bg-ng-surface border-b border-ng-border",
                   i === 3 && "text-right"
                 )}
               >
@@ -198,7 +207,8 @@ export function FindingsBoard({
           </tr>
         </thead>
         <tbody>
-          {findings.map((finding, index) => {
+          {paged.pageItems.map((finding, offsetIndex) => {
+            const index = paged.page * (paged.pageSize === 0 ? findings.length : paged.pageSize) + offsetIndex;
             const Icon = SEVERITY_ICON[finding.severity] ?? Eye;
             const lead = finding.metrics[0] ?? null;
             const share =
@@ -303,6 +313,13 @@ export function FindingsBoard({
           })}
         </tbody>
       </table>
+      </div>
+      <Pagination
+        {...paged}
+        onPage={paged.setPage}
+        onPageSize={paged.setPageSize}
+        noun="findings"
+      />
     </div>
   );
 }

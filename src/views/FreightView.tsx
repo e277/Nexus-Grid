@@ -1,6 +1,7 @@
 "use client";
 
 import { Ship } from "lucide-react";
+import { useMemo } from "react";
 
 import { api } from "../api";
 import { CaribbeanMap } from "../components/charts/CaribbeanMap";
@@ -9,6 +10,7 @@ import { LiveIndicator } from "../components/LiveIndicator";
 import { SourceBar } from "../components/SourceBar";
 import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
+import { Pagination, usePagination } from "../components/ui/pagination";
 import { Skeleton } from "../components/ui/skeleton";
 import { usePoll } from "../hooks";
 import { cn } from "../lib/utils";
@@ -46,6 +48,14 @@ export function FreightView() {
     30_000
   );
 
+  // Sorted before paging: the window has to be onto a stable order, or a row
+  // moves between pages as the poll refreshes.
+  const lanes = useMemo(
+    () => [...(data?.lanes ?? [])].sort((a, b) => b.external_usd - a.external_usd),
+    [data]
+  );
+  const paged = usePagination(lanes, 25, lanes.length);
+
   if (error) {
     return (
       <p className="rounded-md border border-ng-warning-bd bg-ng-warning-bg px-4 py-3 text-sm text-ng-warning-tx">
@@ -56,7 +66,6 @@ export function FreightView() {
 
   if (!data) return <Skeleton className="h-72" />;
 
-  const lanes = [...data.lanes].sort((a, b) => b.external_usd - a.external_usd);
   const atRisk = lanes.filter((l) => l.status === "at_risk").length;
   const fastest = lanes.reduce<Lane | null>(
     (best, l) => (best === null || l.transit_hours < best.transit_hours ? l : best),
@@ -116,16 +125,22 @@ export function FreightView() {
 
       <CaribbeanMap lanes={lanes} ports={data.ports ?? []} />
 
-      <div className="overflow-x-auto rounded-[10px] border border-ng-border bg-ng-surface">
+      <div className="rounded-[10px] border border-ng-border bg-ng-surface">
+        {/* Scrolls in both directions with a capped height, which is what lets
+            the header stick: `position: sticky` resolves against the nearest
+            scrollport, so a container that only scrolled sideways would pin
+            the header to a box that never moves vertically. */}
+        <div className="max-h-[65vh] overflow-auto">
         <table className="w-full min-w-[820px] text-left">
           <thead>
-            <tr className="border-b border-ng-border">
+            <tr>
               {["Lane", "Commodity", "Distance", "Transit", "Weather", "Displaces"].map(
                 (column, i) => (
                   <th
                     key={column}
                     className={cn(
                       "px-3 py-2 text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary",
+                      "sticky top-0 z-10 bg-ng-surface border-b border-ng-border",
                       i >= 2 && "text-right"
                     )}
                   >
@@ -136,7 +151,7 @@ export function FreightView() {
             </tr>
           </thead>
           <tbody>
-            {lanes.map((lane, index) => (
+            {paged.pageItems.map((lane, index) => (
               <tr
                 key={`${lane.supplier_iso3}-${lane.importer_iso3}-${lane.commodity}`}
                 className={cn(
@@ -171,6 +186,8 @@ export function FreightView() {
             ))}
           </tbody>
         </table>
+        </div>
+        <Pagination {...paged} onPage={paged.setPage} onPageSize={paged.setPageSize} noun="lanes" />
       </div>
 
       <SourceBar sources={data.sources ?? []} uses={LOGISTICS_SOURCES} />

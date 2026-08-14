@@ -8,6 +8,7 @@ import { CoverageNote } from "../components/CoverageNote";
 import { LiveIndicator } from "../components/LiveIndicator";
 import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
+import { Pagination, usePagination } from "../components/ui/pagination";
 import { Skeleton } from "../components/ui/skeleton";
 import { usePoll } from "../hooks";
 import { cn } from "../lib/utils";
@@ -47,6 +48,9 @@ export function VisibilityView() {
     () => api.agentActivities({ limit: 100 }),
     20_000
   );
+
+  const entries = data ?? [];
+  const paged = usePagination(entries, 25, entries.length);
 
   if (error) {
     return (
@@ -121,15 +125,17 @@ export function VisibilityView() {
           </p>
         </Card>
       ) : (
-        <div className="overflow-x-auto rounded-[10px] border border-ng-border bg-ng-surface">
+        <div className="rounded-[10px] border border-ng-border bg-ng-surface">
+          <div className="max-h-[65vh] overflow-auto">
           <table className="w-full min-w-[680px] text-left">
             <thead>
-              <tr className="border-b border-ng-border">
+              <tr>
                 {["Agent", "Action", "Confidence", "When"].map((column, i) => (
                   <th
                     key={column}
                     className={cn(
                       "px-3 py-2 text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary",
+                      "sticky top-0 z-10 bg-ng-surface border-b border-ng-border",
                       i >= 2 && "text-right"
                     )}
                   >
@@ -139,7 +145,7 @@ export function VisibilityView() {
               </tr>
             </thead>
             <tbody>
-              {data.map((entry, index) => (
+              {paged.pageItems.map((entry, index) => (
                 <tr
                   key={entry.id}
                   className={cn(
@@ -168,6 +174,13 @@ export function VisibilityView() {
               ))}
             </tbody>
           </table>
+          </div>
+          <Pagination
+            {...paged}
+            onPage={paged.setPage}
+            onPageSize={paged.setPageSize}
+            noun="actions"
+          />
         </div>
       )}
     </div>
