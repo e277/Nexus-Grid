@@ -100,7 +100,22 @@ export function DashboardView() {
   const gapsRef = useRef<SubstitutionOpportunity[]>([]);
   const [queueIndex, setQueueIndex] = useState<number | null>(null);
   const [completed, setCompleted] = useState<{ gap: SubstitutionOpportunity; state: FinalState }[]>([]);
-  const [requireApproval, setRequireApproval] = useState(true);
+  /**
+   * The gate is opt-in.
+   *
+   * A first run should complete without the reader having to know what the
+   * gate is: pressing Run sweep and watching the loop finish is the shortest
+   * path to understanding what this does. Ticking the box is then a
+   * deliberate choice to see the one step that is not autonomous, which is
+   * the right way round — the feature is worth more when someone went
+   * looking for it than when it stops a run they did not expect to be
+   * stopped.
+   *
+   * Note the consequence: with the gate off, an approved plan is dispatched
+   * without a human answer, because there was no human in the loop to give
+   * one. That is what the delivery panel above the checklist is for.
+   */
+  const [requireApproval, setRequireApproval] = useState(false);
   /**
    * Run a short sweep instead of the whole region.
    *
