@@ -15,7 +15,7 @@ const SOURCE_LABEL: Record<string, string> = {
 /**
  * A model recommendation, rendered from named fields.
  *
- * This used to take one prose blob and pull it apart with regexes — split the
+ * The model answers in a schema rather than prose. Splitting a blob with
  * `<think>` block off the answer, guess where the reasoning ended, truncate
  * the rest to fit. The model now answers against a JSON schema, so each field
  * has somewhere to go and nothing has to be inferred from punctuation.

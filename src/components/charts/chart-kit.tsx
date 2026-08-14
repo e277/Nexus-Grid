@@ -50,9 +50,8 @@ export const SEVERITY_COLOR: Record<string, string> = {
  * low-confidence finding is not a bad one, it is one the agent wants checked
  * before it is acted on, and colouring it red-amber-green says the opposite.
  *
- * Defined once and imported wherever confidence appears, so the chart and the
- * table cannot drift apart — they encoded the same variable two different ways
- * until this existed.
+ * Defined once and imported wherever confidence appears, so the chart, the
+ * table and the matrix cannot encode the same variable two different ways.
  */
 export const CONFIDENCE_COLOR: Record<string, string> = {
   low: "color-mix(in oklab, var(--color-accent) 40%, var(--color-surface))",
@@ -163,11 +162,9 @@ export function ChartLegend({ items }: { items: { label: string; color: string }
 /**
  * A chart with its title, at the full width of its column.
  *
- * Every chart used to ship a table twin beside it, taking a fixed 22rem of a
- * two-column grid — so the chart, the thing a reader came for, was rendered in
- * whatever was left. The twin existed to keep values off the hover layer,
- * which is a real requirement and is now met the direct way: every mark
- * carries its own number, so there is nothing to open a table to find.
+ * The chart takes the full width of its column. Keeping values off the hover
+ * layer is a real requirement, and it is met directly: every mark carries its
+ * own number, so there is nothing to open a table to find.
  *
  * The counts these charts plot are small and few — five domains, three
  * confidence levels, four gate outcomes — which is exactly the case where

@@ -2,7 +2,7 @@
  * Per-page analysis: the agent's reading of one domain, not a data dump.
  *
  * Each intelligence page is an agent's answer to one question, and the numbers
- * appear only as the evidence it cites. That inverts what the console used to
+ * appear only as the evidence it cites. That inverts the usual arrangement:
  * do — render the projection as tables and charts and leave the reader to draw
  * the conclusion — and it is the point of the platform: a member state can
  * already see its own trade table, and what it cannot see is what the region's
@@ -232,7 +232,7 @@ ${gaps}`;
     // One ordering only. An earlier version passed the ranked shortlist and
     // then the raw lane list — sorted by value — directly beneath it, and the
     // analyst read the two as a single ranking and reported that the nearer
-    // supplier had been placed lower than the farther one, which it had not.
+    // supplier were placed lower than the farther one, which it is not.
     // The shortlist already carries transit, weather, value and a rationale
     // per lane, so nothing is lost by giving that alone.
     const shortlists = (inputs.matches ?? [])

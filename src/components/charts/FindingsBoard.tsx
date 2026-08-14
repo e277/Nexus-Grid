@@ -61,9 +61,8 @@ export function FindingsMatrix({
   );
 
   return (
-    // No table twin: this *is* the table. Every cell already prints its count
-    // as text, and the shading is a second reading of a number that is
-    // there — so a table beside it would have restated the same grid.
+    // No table twin: this *is* the table. Every cell prints its count as
+    // text, and the shading is a second reading of a number already there.
     <ChartFrame
       title="Severity against confidence"
       subtitle="Where the agents' conclusions sit — click a cell to filter"

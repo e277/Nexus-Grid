@@ -397,7 +397,7 @@ export function PipelineDiagram({
           const x = center.x - CARD.width / 2;
           const y = center.y - CARD.height / 2;
 
-          // The card always describes what the node *is*. It used to be
+          // The card always describes what the node *is*, never
           // overwritten by that node's output on the last run, which turned a
           // map of the loop into a place to dump text: a 156px card cannot
           // hold a model's answer, so it arrived truncated mid-word and

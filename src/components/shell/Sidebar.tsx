@@ -17,15 +17,13 @@ interface SidebarProps {
 /**
  * The only navigation, at every width.
  *
- * There were three: this rail, a slide-over drawer, and a bottom tab bar — the
- * latter two existing solely because the rail hid itself below `lg`. That is a
- * lot of surface to keep in step for one list of six links, and the tab bar
- * could only ever show three of them.
+ * One surface for one list of links, rather than a rail, a drawer and a tab
+ * bar to keep in step.
  *
- * So the rail no longer hides. Below `lg` it is the 60px icon strip, which is
- * cheap enough to keep on a phone and puts every destination one tap away
- * rather than two. From `lg` it honours the operator's collapse preference and
- * shows labels.
+ * The rail is visible at every width. Below `lg` it is the 60px icon strip,
+ * which is cheap enough to keep on a phone and puts every destination one tap
+ * away. From `lg` it honours the operator's collapse preference and shows
+ * labels.
  *
  * The responsive half is CSS, not a breakpoint read in JavaScript: labels are
  * rendered at every width and hidden by class. Reading the viewport in JS would

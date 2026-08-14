@@ -27,12 +27,11 @@ import {
 /**
  * How well the region can cover each gap, in one chart.
  *
- * This replaced one stacked chart per gap. Twelve charts down a page could not
- * be compared — the reader had to hold a score in their head while scrolling to
- * the next — and the question they were each answering separately is a single
- * comparative one: which gaps have a strong regional alternative and which do
- * not. One bar per gap answers it at a glance; the factor breakdown for the gap
- * you pick is the chart below.
+ * One bar per gap, so the question this answers is a comparative one: which
+ * gaps have a strong regional alternative and which do not. A chart per gap
+ * cannot answer it — the reader would hold a score in their head while
+ * scrolling to the next. The factor breakdown for the gap you pick sits
+ * beside it.
  *
  * Sorted by score, not by trade value. The ranking is the agents' judgement and
  * that is what this plots; the dollar figure rides along in the tooltip as

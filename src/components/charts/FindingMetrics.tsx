@@ -6,7 +6,7 @@ import type { FindingMetric, MetricUnit } from "../../types";
  * A finding's figures, drawn rather than written.
  *
  * These are the numbers the agent itself attached to its conclusion — not
- * scraped back out of its prose, which is what the console used to do and what
+ * scraped back out of its prose, which is guesswork dressed as data, and
  * made the page a wall of text with the quantities buried inside it. The agent
  * returns `{label, value, unit, of}` and this draws it.
  *

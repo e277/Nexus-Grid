@@ -1,7 +1,8 @@
 /**
  * The LLM recommendation step, asked for a schema rather than prose.
  *
- * This used to request free text and then perform surgery on it: strip
+ * The request asks for a schema, not free text. Performing surgery on prose —
+ * strip
  * `<think>` blocks with a regex, split reasoning from answer on a pattern,
  * truncate the remainder to fit a card. That is guesswork about a string, and
  * it broke visibly — a model that opened with "let me create a hypothetical

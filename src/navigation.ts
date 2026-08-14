@@ -4,7 +4,6 @@ import {
   Ship,
   Sprout,
   Store,
-  Target,
   type LucideIcon,
 } from "lucide-react";
 
@@ -15,8 +14,7 @@ export type PageId =
   | "farm-to-market"
   | "soil"
   | "planting"
-  | "logistics"
-  | "impact";
+  | "logistics";
 
 export interface Page {
   id: PageId;
@@ -39,7 +37,7 @@ export interface NavGroup {
 }
 
 /**
- * Six destinations: the loop, the four specialists, and the analysis.
+ * Five destinations: the loop, and the four specialists.
  *
  * They were collapsed to one page, and one page was wrong for what this is.
  * Each specialist reads a different part of the food system — trade, soil,
@@ -49,8 +47,11 @@ export interface NavGroup {
  *
  * The groups mirror how the work divides rather than how the code does:
  * Operations is what the platform is doing now, Intelligence is what each
- * agent has concluded about its own domain, Analysis is the cross-cutting
- * view where those conclusions are compared.
+ * agent has concluded about its own domain.
+ *
+ * There is no separate analysis page: the addressable total and the supplier
+ * ranking sit with the agent that finds the gaps, and the gate history sits
+ * with the gate. A finding and the figure that sizes it belong on one page.
  *
  * Provenance never earned a page of its own: it is a property of a figure, so
  * each finding carries its own evidence, and each reading names the publishers
@@ -108,19 +109,6 @@ export const NAV_GROUPS: NavGroup[] = [
         title: "Port & Logistics Coordination",
         description:
           "Whether the food can actually move: transit windows, routing between member states, and the weather that closes them.",
-      },
-    ],
-  },
-  {
-    label: "Analysis",
-    pages: [
-      {
-        id: "impact",
-        label: "Impact Metrics",
-        icon: Target,
-        title: "Impact Metrics",
-        description:
-          "Every agent's conclusions in one place, as charts you can cut: findings by domain and severity, the confidence behind them, how suppliers scored, and every decision taken at the gate.",
       },
     ],
   },

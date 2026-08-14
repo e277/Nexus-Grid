@@ -7,11 +7,9 @@ import { cn } from "../../lib/utils";
 /**
  * The headline row, in the idiom a BI dashboard uses for one.
  *
- * Deliberately not the gradient cards this replaced. Those were four tinted
- * panels competing with the charts under them; a KPI strip is quiet by design
- * — one rule between cells, a label, a figure, and one line of context — so
- * the eye lands on the numbers and then moves down to the charts that explain
- * them.
+ * Quiet by design — one rule between cells, a label, a figure, and one line of
+ * context — so the eye lands on the numbers and then moves down to the charts
+ * that explain them. Tinted panels here would compete with those charts.
  *
  * The figures use proportional digits, not `tabular-nums`: equal-width digits
  * make a display-size number look loose. Tabular figures belong where numbers
@@ -19,7 +17,7 @@ import { cn } from "../../lib/utils";
  */
 export function KpiStrip({ children }: { children: ReactNode }) {
   return (
-    <div className="grid grid-cols-2 divide-x divide-y divide-ng-border overflow-hidden rounded-[10px] border border-ng-border bg-ng-surface sm:grid-cols-3 xl:grid-cols-5 xl:divide-y-0">
+    <div className="grid grid-cols-1 divide-y divide-ng-border overflow-hidden rounded-[10px] border border-ng-border bg-ng-surface sm:grid-cols-3 sm:divide-x sm:divide-y-0">
       {children}
     </div>
   );

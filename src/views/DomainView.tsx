@@ -6,6 +6,7 @@ import { useState } from "react";
 import { api } from "../api";
 import { ConfidenceChart } from "../components/charts/AgentCharts";
 import { PlantingCoverageChart } from "../components/charts/PlantingCoverageChart";
+import { SourcingAnalysis } from "../components/analysis/SourcingAnalysis";
 import {
   FindingsBoard,
   FindingsMatrix,
@@ -17,6 +18,7 @@ import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { usePoll } from "../hooks";
+import { api as client } from "../api";
 import { sourcesForDomain } from "../source-map";
 import type { AnalysisDomain, FindingSeverity } from "../types";
 
@@ -45,6 +47,14 @@ export function DomainView({
   const { data, error, updatedAt, refreshing, intervalMs } = usePoll(
     () => api.analysis(domain),
     30_000,
+    [domain]
+  );
+
+  // Only Farm-to-Market renders the sourcing case, so only it pays for the
+  // overview. The other three would fetch a payload they never read.
+  const { data: overview } = usePoll(
+    () => (domain === "market" ? client.analysisOverview() : Promise.resolve(null)),
+    60_000,
     [domain]
   );
 
@@ -119,6 +129,11 @@ export function DomainView({
           calendar itself belongs on its page — and it is the one view here
           that looks forward rather than reporting the present. */}
       {domain === "planting" ? <PlantingCoverageChart /> : null}
+
+      {/* The substitution case sits on the page about substitution: the agent
+          that raises a sourcing finding and the figures that size it were a
+          navigation step apart while Impact Metrics was its own page. */}
+      {domain === "market" && overview ? <SourcingAnalysis data={overview} /> : null}
 
       {findings.length === 0 ? (
         <Card className="p-6">

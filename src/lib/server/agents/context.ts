@@ -1,7 +1,7 @@
 /**
  * The shared view agents reason over.
  *
- * Agents used to query a local database they also wrote to. They now read the
+ * Agents read the
  * same derived regional picture the rest of the platform reads, built from
  * cached upstream snapshots — so an agent's conclusion is reproducible from
  * published data rather than from state this system invented.

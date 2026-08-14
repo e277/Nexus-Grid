@@ -4,7 +4,7 @@
  * The scanning agent: sweeps the regional picture for import-substitution gaps
  * material enough to act on, and opens a workflow run for each one.
  *
- * Where this used to scan a local inventory table it wrote to itself, it now
+ * This
  * scans published trade data across fifteen states, so what it flags is a real
  * regional gap rather than a number this system made up.
  */

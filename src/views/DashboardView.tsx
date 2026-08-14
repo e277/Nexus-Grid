@@ -4,7 +4,8 @@ import { Circle, CircleCheck, Play, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { api, streamWorkflow } from "../api";
-import { DispatchPanel } from "../components/analysis/AnalysisSection";
+import { DispatchPanel } from "../components/analysis/DispatchPanel";
+import { AgentDecisionChart, GateOutcomeChart } from "../components/charts/AgentCharts";
 import { FormError } from "../components/Fields";
 import { ApprovalPanel, type HeldRecommendation } from "../components/pipeline/ApprovalPanel";
 import { PipelineDiagram } from "../components/pipeline/PipelineDiagram";
@@ -167,8 +168,8 @@ export function DashboardView() {
    * place: at the start (the entry node), and after a node whose single
    * outgoing edge is unambiguous. Where the graph branches — `plan`, and
    * `monitor` — nothing is claimed until the next event says which way it
-   * went. The alternative is guessing, and a diagram that guesses is the
-   * animation this replaced.
+   * went. The alternative is guessing, and a diagram that guesses is
+   * decoration.
    */
   async function consume(body: Record<string, unknown>, signal: AbortSignal) {
     for await (const { event, data } of streamWorkflow(body, signal)) {
@@ -578,10 +579,8 @@ export function DashboardView() {
              appears and vanishes reads as incidental, and this is the one
              point in the loop where a run is not autonomous.
 
-             The banner above this used to read "Sweep paused — awaiting human
-             approval", beside a panel already headed "Approval gate" and
-             badged with the held plan's priority. Two elements saying one
-             thing, and the louder one was the element with no buttons on it. */}
+             Its own heading and the held plan's priority badge say the run
+             has parked, so nothing above repeats it. */}
       <ApprovalPanel
         recommendation={held}
         onDecide={decide}
@@ -594,6 +593,19 @@ export function DashboardView() {
           a deployment with nowhere to send it is the failure this warns about,
           and it has to be legible at the moment of the decision. */}
       {analysis ? <DispatchPanel dispatch={analysis.dispatch} /> : null}
+
+      {/* ── What the loop has decided, across every run ──────────────────
+             These are the loop's own records — what each agent decided and
+             how humans answered at the gate — so they belong beside the loop
+             rather than on a separate analysis page. They accumulate across
+             runs, which is why they are here rather than inside a single
+             run's outcome. */}
+      {analysis && (analysis.decisions.length > 0 || analysis.gate_decisions.length > 0) ? (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <AgentDecisionChart decisions={analysis.decisions} />
+          <GateOutcomeChart gateDecisions={analysis.gate_decisions} />
+        </div>
+      ) : null}
 
       {/* ── Results: only once the run has actually finished ────────────── */}
       {complete && finalState ? (

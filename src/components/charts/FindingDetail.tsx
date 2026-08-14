@@ -31,8 +31,8 @@ const SEVERITY_VARIANT: Record<string, "danger" | "success" | "warning" | "muted
 /**
  * One finding in full: the agent's figures, its reasoning, and the evidence.
  *
- * Shown for the selected tile only. Twenty-four of these at once was the
- * document this page stopped being.
+ * Shown for the selected finding only. Twenty-four of these at once is a
+ * document rather than a set to compare.
  */
 export function FindingDetail({
   finding,

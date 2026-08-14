@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 /**
  * Run or resume the coordination loop, streaming each node as it completes.
  *
- * The console used to animate a run it had already received in full: the
+ * Each node is sent the moment it lands, so the console shows the run as it
  * trigger endpoint returned every update at once and the client replayed them
  * on timers. That looked live and was not — the pace was a constant, so a
  * thirty-second model call and an instant rule branch drew identically, and
