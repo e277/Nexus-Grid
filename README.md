@@ -107,9 +107,7 @@ npm test                     # vitest
 
 Optional configuration lives in `.env` — see `.env.example`. Setting
 `MINIMAX_API_KEY` (or `SHO_API_KEY`) activates the workflow's LLM recommendation
-step; without it that step returns a labelled stub. Setting the three
-`OPENCLAW_*` values activates real delivery; without them the execute step
-reports its dispatch as `simulated` rather than claiming one.
+step; without it that step returns a labelled stub.
 
 ## Structure
 
