@@ -11,7 +11,6 @@ import {
   SupplierScoreChart,
 } from "../charts/AgentCharts";
 import { SEVERITY_COLOR } from "../charts/chart-kit";
-import { FindingDetail } from "../charts/FindingDetail";
 import { SupplierCoverageChart } from "../charts/SupplierCoverageChart";
 import {
   FindingsBoard,
@@ -92,8 +91,6 @@ export function AnalysisSection({ data }: { data: AnalysisOverview }) {
     [allFindings, domain, severity, cell]
   );
 
-  // A tile index only means anything against the list it was picked from.
-  const detail = selectedFinding !== null ? (filtered[selectedFinding] ?? null) : null;
 
   const interpreted = data.analyses.filter((a) => a.source !== "rules").length;
   const criticals = allFindings.filter((f) => f.severity === "critical").length;
@@ -288,7 +285,6 @@ export function AnalysisSection({ data }: { data: AnalysisOverview }) {
             selectedIndex={selectedFinding}
             onSelect={setSelectedFinding}
           />
-          {detail ? <FindingDetail finding={detail} /> : null}
         </>
       )}
     </div>

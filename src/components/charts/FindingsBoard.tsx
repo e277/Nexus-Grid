@@ -1,10 +1,13 @@
 "use client";
 
-import { AlertTriangle, CircleHelp, Eye, TrendingUp } from "lucide-react";
+import { Fragment } from "react";
+
+import { AlertTriangle, ChevronDown, CircleHelp, Eye, TrendingUp } from "lucide-react";
 
 import { cn } from "../../lib/utils";
 import type { Finding, FindingSeverity } from "../../types";
 import { ChartFrame, SEVERITY_COLOR } from "./chart-kit";
+import { FindingDetail } from "./FindingDetail";
 import { formatMetric } from "./FindingMetrics";
 
 const SEVERITY_ORDER: FindingSeverity[] = ["critical", "opportunity", "watch", "gap"];
@@ -145,13 +148,19 @@ export function FindingsMatrix({
 }
 
 /**
- * Every finding as a table row.
+ * Every finding as a table row, opening in place.
  *
  * A tile grid still spent a card on each finding; twenty-four of them was a
  * gallery to scroll rather than a set to compare. Rows put severity,
  * confidence and the agent's own headline figure in fixed columns, so the
  * findings can be read against each other — which is the whole reason they are
- * on a page together. Selecting a row opens the one detail panel below.
+ * on a page together.
+ *
+ * The reasoning opens as a row directly beneath the one clicked, not as a
+ * panel under the table. With twenty-four rows the panel could be a screen
+ * away from the row that opened it, which left the reader scrolling to find
+ * out what they had just asked for and then scrolling back to pick the next
+ * one.
  */
 export function FindingsBoard({
   findings,
@@ -193,9 +202,10 @@ export function FindingsBoard({
             const active = selectedIndex === index;
 
             return (
+              <Fragment key={`${finding.domain}-${finding.title}-${index}`}>
               <tr
-                key={`${finding.domain}-${finding.title}-${index}`}
                 onClick={() => onSelect(active ? null : index)}
+                aria-expanded={active}
                 className={cn(
                   "cursor-pointer border-b border-ng-border transition-colors last:border-0 hover:bg-ng-accent-lit",
                   active && "bg-ng-accent-lit",
@@ -260,9 +270,32 @@ export function FindingsBoard({
                       )}
                     />
                     {finding.confidence}
+                    {/* The affordance the row was missing: nothing said a row
+                        could be opened, so the reasoning went unread. */}
+                    <ChevronDown
+                      size={13}
+                      aria-hidden
+                      className={cn(
+                        "ml-1 shrink-0 transition-transform",
+                        active ? "rotate-180 text-ng-accent" : "text-ng-disabled"
+                      )}
+                    />
                   </span>
                 </td>
               </tr>
+
+              {active ? (
+                <tr>
+                  {/* Spans the table so the detail is not squeezed into one
+                      column's width. */}
+                  <td colSpan={5} className="bg-ng-bg p-0">
+                    <div className="px-3 py-3">
+                      <FindingDetail finding={finding} />
+                    </div>
+                  </td>
+                </tr>
+              ) : null}
+              </Fragment>
             );
           })}
         </tbody>

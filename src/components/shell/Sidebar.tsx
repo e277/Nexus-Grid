@@ -15,11 +15,21 @@ interface SidebarProps {
 }
 
 /**
- * The rail collapses to icons at 60px and expands to 240px.
+ * The only navigation, at every width.
  *
- * Collapsed is a real mode, not a hidden sidebar: the icons stay clickable and
- * each carries its label as a `title`, so a narrow workspace loses the words
- * but not the navigation.
+ * There were three: this rail, a slide-over drawer, and a bottom tab bar — the
+ * latter two existing solely because the rail hid itself below `lg`. That is a
+ * lot of surface to keep in step for one list of six links, and the tab bar
+ * could only ever show three of them.
+ *
+ * So the rail no longer hides. Below `lg` it is the 60px icon strip, which is
+ * cheap enough to keep on a phone and puts every destination one tap away
+ * rather than two. From `lg` it honours the operator's collapse preference and
+ * shows labels.
+ *
+ * The responsive half is CSS, not a breakpoint read in JavaScript: labels are
+ * rendered at every width and hidden by class. Reading the viewport in JS would
+ * resolve only after mount, which means a first paint with the wrong layout.
  */
 export function Sidebar({
   page,
@@ -28,47 +38,46 @@ export function Sidebar({
   onToggleCollapsed,
   health,
 }: SidebarProps) {
+  /** Hidden while the rail is icons-only: always under `lg`, and above it when collapsed. */
+  const wordsOnly = cn("hidden", collapsed ? "" : "lg:block");
+
   return (
     <aside
       className={cn(
-        "hidden shrink-0 flex-col border-r border-ng-border bg-ng-surface transition-[width] duration-200 lg:flex",
-        collapsed ? "w-rail" : "w-sidebar"
+        "flex w-rail shrink-0 flex-col border-r border-ng-border bg-ng-surface transition-[width] duration-200",
+        collapsed ? "lg:w-rail" : "lg:w-sidebar"
       )}
     >
       <div
         className={cn(
-          "flex h-14 shrink-0 items-center border-b border-ng-border",
-          collapsed ? "justify-center px-2" : "gap-2.5 px-4"
+          "flex h-14 shrink-0 items-center border-b border-ng-border px-2",
+          collapsed ? "justify-center" : "justify-center lg:justify-start lg:gap-2.5 lg:px-4"
         )}
       >
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] bg-ng-accent text-[11px] font-extrabold tracking-tight text-ng-accent-fg">
           NG
         </div>
-        {collapsed ? null : (
-          <div className="min-w-0">
-            <p className="truncate text-sm font-bold leading-tight tracking-tight text-ng-primary">
-              Nexus-Grid
-            </p>
-            <p className="truncate text-ng-2xs font-medium uppercase tracking-wide text-ng-secondary">
-              Caribbean food coordination
-            </p>
-          </div>
-        )}
+        <div className={cn("min-w-0", wordsOnly)}>
+          <p className="truncate text-sm font-bold leading-tight tracking-tight text-ng-primary">
+            Nexus-Grid
+          </p>
+          <p className="truncate text-ng-2xs font-medium uppercase tracking-wide text-ng-secondary">
+            Caribbean food coordination
+          </p>
+        </div>
       </div>
 
       {/* Runtime status and the rail toggle share one row. The dot pulses only
           while the runtime is actually answering, so a dead backend reads as a
-          still, grey dot rather than a reassuring animation. The toggle is an
-          icon with a label only for screen readers — its meaning is in the
-          glyph, and a "Collapse" caption spent a whole row saying it again. */}
+          still, grey dot rather than a reassuring animation. */}
       <div
         className={cn(
           "flex shrink-0 items-center border-b border-ng-border px-2 py-2.5",
-          collapsed ? "justify-center" : "gap-2"
+          collapsed ? "justify-center" : "justify-center lg:justify-start lg:gap-2"
         )}
       >
         <span
-          className={cn("flex min-w-0 items-center", collapsed ? "" : "flex-1 gap-2 px-1")}
+          className={cn("flex min-w-0 items-center", collapsed ? "" : "lg:flex-1 lg:gap-2 lg:px-1")}
           title={
             health
               ? `System online · ${health.app} ${health.version} · ${health.environment}`
@@ -86,53 +95,59 @@ export function Sidebar({
               )}
             />
           </span>
-          {collapsed ? null : (
-            <span className="min-w-0">
-              <span className="block truncate text-ng-xs font-semibold text-ng-primary">
-                {health ? "System Online" : "Connecting…"}
-              </span>
-              <span className="block truncate text-ng-2xs capitalize text-ng-secondary">
-                {health ? `${health.version} · ${health.environment}` : "—"}
-              </span>
+          <span className={cn("min-w-0", wordsOnly)}>
+            <span className="block truncate text-ng-xs font-semibold text-ng-primary">
+              {health ? "System Online" : "Connecting…"}
             </span>
-          )}
+            <span className="block truncate text-ng-2xs capitalize text-ng-secondary">
+              {health ? `${health.version} · ${health.environment}` : "—"}
+            </span>
+          </span>
         </span>
 
+        {/* Collapsing is a desktop affordance: below `lg` the rail is already
+            at its narrowest, so the control would toggle nothing. */}
         {collapsed ? null : (
           <button
             onClick={onToggleCollapsed}
             aria-label="Collapse sidebar"
             title="Collapse sidebar"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent"
+            className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-md text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent lg:flex"
           >
             <PanelLeftClose size={15} />
           </button>
         )}
       </div>
 
-      {/* Collapsed, the toggle is the only way back, so it gets its own row
-          rather than competing with the status dot for 60px. */}
       {collapsed ? (
         <button
           onClick={onToggleCollapsed}
           aria-label="Expand sidebar"
           title="Expand sidebar"
-          className="flex h-8 shrink-0 items-center justify-center border-b border-ng-border text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent"
+          className="hidden h-8 shrink-0 items-center justify-center border-b border-ng-border text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent lg:flex"
         >
           <PanelLeftOpen size={15} />
         </button>
       ) : null}
 
-      <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
+      <nav aria-label="Primary" className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
         {NAV_GROUPS.map((group) => (
           <div key={group.label} className="space-y-0.5">
-            {collapsed ? (
-              <div className="mx-auto mb-1.5 h-px w-6 bg-ng-border" aria-hidden />
-            ) : (
-              <p className="px-2.5 pb-1 text-ng-2xs font-bold uppercase tracking-[.8px] text-ng-secondary">
-                {group.label}
-              </p>
-            )}
+            {/* The group reads as a heading where there is room for words and
+                as a rule where there is not. Either way the groups stay
+                separated, which is the work the label is doing. */}
+            <div
+              className={cn("mx-auto mb-1.5 h-px w-6 bg-ng-border", collapsed ? "" : "lg:hidden")}
+              aria-hidden
+            />
+            <p
+              className={cn(
+                "px-2.5 pb-1 text-ng-2xs font-bold uppercase tracking-[.8px] text-ng-secondary",
+                wordsOnly
+              )}
+            >
+              {group.label}
+            </p>
             {group.pages.map((item) => {
               const Icon = item.icon;
               const selected = page === item.id;
@@ -141,10 +156,14 @@ export function Sidebar({
                   key={item.id}
                   onClick={() => onNavigate(item.id)}
                   aria-current={selected ? "page" : undefined}
-                  title={collapsed ? item.label : undefined}
+                  title={item.label}
                   className={cn(
-                    "relative flex w-full items-center rounded-md py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent",
-                    collapsed ? "justify-center px-0" : "gap-2.5 px-2.5",
+                    // 44px tall on the icon rail: a nav that lives on a phone
+                    // needs a thumb-sized target, not a 28px desktop row.
+                    "relative flex w-full items-center rounded-md text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent",
+                    collapsed
+                      ? "h-11 justify-center px-0"
+                      : "h-11 justify-center px-0 lg:h-auto lg:justify-start lg:gap-2.5 lg:px-2.5 lg:py-1.5",
                     selected
                       ? "bg-ng-accent-lit font-semibold text-ng-accent"
                       : "text-ng-secondary hover:bg-ng-bg hover:text-ng-primary"
@@ -153,19 +172,17 @@ export function Sidebar({
                   {selected ? (
                     <span className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-ng-accent" />
                   ) : null}
-                  <Icon size={16} className={selected ? "opacity-100" : "opacity-70"} />
-                  {collapsed ? (
-                    <span className="sr-only">{item.label}</span>
-                  ) : (
-                    <span className="truncate">{item.label}</span>
-                  )}
+                  <Icon size={18} className={cn("lg:size-4", selected ? "opacity-100" : "opacity-70")} />
+                  <span className={cn("truncate", wordsOnly)}>{item.label}</span>
+                  {/* The label stays in the accessibility tree at every width;
+                      only its visual presence is responsive. */}
+                  <span className={cn("sr-only", collapsed ? "" : "lg:hidden")}>{item.label}</span>
                 </button>
               );
             })}
           </div>
         ))}
       </nav>
-
     </aside>
   );
 }

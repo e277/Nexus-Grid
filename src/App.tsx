@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { api } from "./api";
-import { MobileNav } from "./components/shell/MobileNav";
-import { NavSheet } from "./components/shell/NavSheet";
 import { Sidebar } from "./components/shell/Sidebar";
 import { TopBar } from "./components/shell/TopBar";
 import { usePoll } from "./hooks";
@@ -18,7 +16,6 @@ const COLLAPSE_KEY = "nexus_grid_sidebar_collapsed";
 export default function App() {
   const [page, setPage] = useState<PageId>("dashboard");
   const [collapsed, setCollapsed] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   // Read after mount: the server render has no localStorage, and the sidebar
   // width is not worth an inline script the way the theme is.
@@ -56,16 +53,9 @@ export default function App() {
         health={health}
       />
 
-      <NavSheet
-        open={menuOpen}
-        page={page}
-        onNavigate={setPage}
-        onClose={() => setMenuOpen(false)}
-        health={health}
-      />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <TopBar page={page} onOpenMenu={() => setMenuOpen(true)} />
+        <TopBar page={page} />
 
         <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
           {/* Page heading: what this screen is, before any numbers. */}
@@ -87,7 +77,6 @@ export default function App() {
           ) : null}
         </main>
 
-        <MobileNav page={page} onNavigate={setPage} />
       </div>
     </div>
   );

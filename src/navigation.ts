@@ -137,16 +137,3 @@ export function groupOf(id: PageId): string {
   return NAV_GROUPS.find((g) => g.pages.some((p) => p.id === id))?.label ?? "";
 }
 
-/**
- * The phone's bottom bar.
- *
- * Deliberately not the full tree: a six-item bar on a phone is a menu, and the
- * four specialist readings are reachable from the drawer. These three are the
- * ones a reader moves between — what the platform is doing, one reading, and
- * the analysis of all of them.
- */
-export const MOBILE_TABS: { id: PageId; label: string }[] = [
-  { id: "dashboard", label: "Pipeline" },
-  { id: "farm-to-market", label: "Intel" },
-  { id: "impact", label: "Analysis" },
-];

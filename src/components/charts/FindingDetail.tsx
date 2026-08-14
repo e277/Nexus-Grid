@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "../../lib/utils";
 import { Badge } from "../ui/badge";
 import { Card } from "../ui/card";
 import type { TaggedFinding } from "./FindingsBoard";
@@ -33,9 +34,16 @@ const SEVERITY_VARIANT: Record<string, "danger" | "success" | "warning" | "muted
  * Shown for the selected tile only. Twenty-four of these at once was the
  * document this page stopped being.
  */
-export function FindingDetail({ finding }: { finding: TaggedFinding }) {
+export function FindingDetail({
+  finding,
+  className,
+}: {
+  finding: TaggedFinding;
+  /** Set when this is nested — an expanded row supplies its own frame. */
+  className?: string;
+}) {
   return (
-    <Card className="border-ng-accent p-4 sm:p-5">
+    <Card className={cn("border-ng-accent p-4 sm:p-5", className)}>
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="muted" size="sm">
           {DOMAIN_LABEL[finding.domain] ?? finding.domain}

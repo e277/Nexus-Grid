@@ -10,7 +10,6 @@ import {
   FindingsMatrix,
   type TaggedFinding,
 } from "../components/charts/FindingsBoard";
-import { FindingDetail } from "../components/charts/FindingDetail";
 import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
@@ -72,7 +71,6 @@ export function DomainView({
       ? findings
       : findings.filter((f) => f.severity === cell.severity && f.confidence === cell.confidence);
 
-  const detail = selected !== null ? (filtered[selected] ?? null) : null;
   const byModel = analysis.source !== "rules";
 
   return (
@@ -127,7 +125,6 @@ export function DomainView({
           </div>
 
           <FindingsBoard findings={filtered} selectedIndex={selected} onSelect={setSelected} />
-          {detail ? <FindingDetail finding={detail} /> : null}
         </>
       )}
     </div>
