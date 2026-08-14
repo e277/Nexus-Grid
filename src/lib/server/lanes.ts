@@ -15,6 +15,7 @@
 
 import { matchAllGaps, type GapMatch } from "./matching";
 import type { RegionalPicture } from "./projection";
+import { lookupIsland } from "./sources/geo";
 import { getRoutingProvider } from "./sources/routing";
 
 export type Risk = "low" | "medium" | "high" | null;
@@ -33,6 +34,12 @@ export interface Lane {
   importer_climate_risk: Risk;
   status: "clear" | "watch" | "at_risk";
   external_usd: number;
+}
+
+/** Capital-or-main-port position, or null where the table has no entry. */
+function coordinatesFor(name: string): [number, number] | null {
+  const found = lookupIsland(name);
+  return found ? [found[0], found[1]] : null;
 }
 
 export interface PortExposure {
@@ -113,6 +120,9 @@ export function buildLanes(picture: RegionalPicture): {
       climate_risk: state.climate_risk,
       lanes: laneCount.get(state.iso3) ?? 0,
       food_imports_usd: state.food_imports_usd,
+      // The same table the transit estimate is computed from, so a port sits
+      // on the map exactly where the distance between lanes was measured.
+      coordinates: coordinatesFor(state.name),
     }))
     .sort((a, b) => b.lanes - a.lanes);
 

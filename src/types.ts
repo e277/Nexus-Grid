@@ -316,6 +316,8 @@ export interface PortExposure {
   lanes: number;
   /** Trade value observed moving through this state, USD. */
   food_imports_usd: number;
+  /** Capital or main port, so the console can place it on a map. */
+  coordinates: [latitude: number, longitude: number] | null;
 }
 
 export interface LanesResponse {

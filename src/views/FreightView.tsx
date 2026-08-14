@@ -3,6 +3,7 @@
 import { Ship } from "lucide-react";
 
 import { api } from "../api";
+import { CaribbeanMap } from "../components/charts/CaribbeanMap";
 import { CoverageNote } from "../components/CoverageNote";
 import { LiveIndicator } from "../components/LiveIndicator";
 import { SourceBar } from "../components/SourceBar";
@@ -112,6 +113,8 @@ export function FreightView() {
           intervalMs={intervalMs}
         />
       </Card>
+
+      <CaribbeanMap lanes={lanes} ports={data.ports ?? []} />
 
       <div className="overflow-x-auto rounded-[10px] border border-ng-border bg-ng-surface">
         <table className="w-full min-w-[820px] text-left">

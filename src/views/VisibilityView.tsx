@@ -3,6 +3,7 @@
 import { Activity } from "lucide-react";
 
 import { api } from "../api";
+import { ActivityTimeline } from "../components/charts/ActivityTimeline";
 import { CoverageNote } from "../components/CoverageNote";
 import { LiveIndicator } from "../components/LiveIndicator";
 import { Badge } from "../components/ui/badge";
@@ -109,6 +110,8 @@ export function VisibilityView() {
           intervalMs={intervalMs}
         />
       </Card>
+
+      {data.length > 0 ? <ActivityTimeline activities={data} /> : null}
 
       {data.length === 0 ? (
         <Card className="p-6">
