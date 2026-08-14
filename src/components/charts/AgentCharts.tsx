@@ -452,8 +452,8 @@ export function AgentDecisionChart({
 
   return (
     <ChartFrame
-      title="Decisions by agent"
-      subtitle="How many decisions each specialist recorded, and how confident it was on average. These are the platform's own records, not a publisher's data"
+      title="Decisions by agent, this cycle"
+      subtitle="What each specialist answered during this cycle, and how confident it was. Cleared when the next sweep starts — these are the platform's own records, not a publisher's data"
     >
       <div className="w-full" style={{ height: Math.max(150, byAgent.length * 30 + 52) }}>
         <ResponsiveContainer width="100%" height="100%">
@@ -511,16 +511,17 @@ export function GateOutcomeChart({
 
   return (
     <ChartFrame
-      title="Human decisions at the approval gate"
+      title="Human decisions at the gate, this cycle"
       subtitle={
         total === 0
-          ? "No run has been decided yet — the gate is the one point a run is not autonomous"
-          : `${total} decision${total === 1 ? "" : "s"} recorded. Approved and modified plans are delivered; rejected and escalated ones are decisions not to act`
+          ? "Nothing has reached the gate this cycle — it only stops for an urgent or high-priority plan, and only when the gate is armed"
+          : `${total} answered this cycle. Approved and modified plans are delivered; rejected and escalated ones are decisions not to act`
       }
     >
       {total === 0 ? (
         <p className="py-6 text-center text-ng-sm text-ng-secondary">
-          Run a coordination cycle on the dashboard and answer at the gate to populate this.
+          Tick <span className="font-medium text-ng-primary">Gate urgent plans</span> before
+          running, and answer when the sweep parks here.
         </p>
       ) : (
         <div className="h-[210px] w-full">

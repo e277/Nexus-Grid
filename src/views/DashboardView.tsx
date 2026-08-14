@@ -171,6 +171,16 @@ export function DashboardView() {
    * model call, the dispatch — stays unattributed instead of borrowing a name.
    */
   const [agentByNode, setAgentByNode] = useState<Record<string, ActingAgent>>({});
+  /**
+   * What this cycle recorded, cleared when the next one starts.
+   *
+   * Deliberately not the all-time activity log. That accumulates across every
+   * scan the runtime has ever done, so the chart answered "how busy has this
+   * process been" when the question in front of an operator is "what did the
+   * sweep I just ran decide". One sweep, one reading.
+   */
+  const [cycleAgents, setCycleAgents] = useState<{ agent: string; confidence: number | null }[]>([]);
+  const [cycleGates, setCycleGates] = useState<{ decision: string }[]>([]);
   const [trace, setTrace] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
   const [resuming, setResuming] = useState(false);
@@ -248,7 +258,10 @@ export function DashboardView() {
         });
 
         const acting = (update as { acting_agent?: ActingAgent }).acting_agent;
-        if (acting) setAgentByNode((prev) => ({ ...prev, [id]: acting }));
+        if (acting) {
+          setAgentByNode((prev) => ({ ...prev, [id]: acting }));
+          setCycleAgents((prev) => [...prev, { agent: acting.title, confidence: acting.confidence }]);
+        }
 
         if (id === "recommend") setRecommendation(update.recommendation);
         continue;
@@ -370,11 +383,16 @@ export function DashboardView() {
     gapsRef.current = sweepGaps;
     setCompleted([]);
     setRunError(null);
+    // A new cycle starts from nothing: these describe this sweep, not the
+    // history of the process.
+    setCycleAgents([]);
+    setCycleGates([]);
     void runFrom(0);
   }
 
   async function decide(decision: GateDecision, note: string | null) {
     if (!threadId) return;
+    setCycleGates((prev) => [...prev, { decision }]);
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -664,10 +682,10 @@ export function DashboardView() {
              rather than on a separate analysis page. They accumulate across
              runs, which is why they are here rather than inside a single
              run's outcome. */}
-      {analysis && (analysis.decisions.length > 0 || analysis.gate_decisions.length > 0) ? (
+      {cycleAgents.length > 0 || cycleGates.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <AgentDecisionChart decisions={analysis.decisions} />
-          <GateOutcomeChart gateDecisions={analysis.gate_decisions} />
+          <AgentDecisionChart decisions={cycleAgents} />
+          <GateOutcomeChart gateDecisions={cycleGates} />
         </div>
       ) : null}
 
