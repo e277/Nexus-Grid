@@ -146,6 +146,18 @@ export const api = {
   /** Every domain at once, plus the decision record — what the charts plot. */
   analysisOverview: () => get<AnalysisOverview>("/analysis"),
 
+  /** Observed annual production series per member state. */
+  production: () =>
+    get<{
+      production: {
+        iso3: string;
+        country: string;
+        change_pct: number | null;
+        covers: string | null;
+        points: number;
+      }[];
+    }>("/production"),
+
   // Orchestration & observability
   workflowStatus: () => get<{ workflow: string; status: string }>("/workflow/status"),
   triggerWorkflow: (body: Record<string, unknown>) =>
