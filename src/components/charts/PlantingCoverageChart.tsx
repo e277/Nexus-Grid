@@ -61,7 +61,7 @@ export function PlantingCoverageChart() {
   return (
     <ChartFrame
       title="Regional planting coverage, month by month"
-      subtitle={`How many of ${states.length} member states can start a rain-fed season in each month. Thinnest: ${thinMonths.join(", ")} at ${thinnest} — a long-run normal from NASA POWER, not a forecast`}
+      subtitle={`How many of ${states.length} member states can start a rain-fed season in each month. Thinnest: ${thinMonths.join(", ")} at ${thinnest} — a long-run normal from NASA POWER, not a forecast. Coordination is between member states, not individual farms: no farm-level planting data is published for the region`}
     >
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] border-separate border-spacing-[2px]">

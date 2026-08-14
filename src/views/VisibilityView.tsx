@@ -3,6 +3,7 @@
 import { Activity } from "lucide-react";
 
 import { api } from "../api";
+import { CoverageNote } from "../components/CoverageNote";
 import { LiveIndicator } from "../components/LiveIndicator";
 import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
@@ -64,6 +65,33 @@ export function VisibilityView() {
 
   return (
     <div className="space-y-4">
+      <CoverageNote
+        level="partial"
+        covered={
+          <>
+            End-to-end visibility of the <span className="font-medium">coordination</span>:
+            every action each agent took, what it decided, how confident it was and when,
+            including the scans that found nothing. The decisions taken at the approval
+            gate are on the dashboard.
+          </>
+        }
+        missing={
+          <>
+            Tracking food. No consignment, shipment or delivery is followed from farm to
+            market anywhere in this platform, and nothing here reports where a physical
+            good is.
+          </>
+        }
+        requires={
+          <>
+            Consignment-level events from carriers, ports or distributors — the scans and
+            status updates that make a shipment traceable. None is published as an open
+            feed for the region, and trade statistics record a border crossing after the
+            fact rather than a movement as it happens.
+          </>
+        }
+      />
+
       <Card className="flex flex-wrap items-center gap-x-4 gap-y-2 p-4">
         <Activity size={14} className="shrink-0 text-ng-secondary" aria-hidden />
         <span className="text-ng-base font-semibold text-ng-primary">

@@ -13,6 +13,7 @@ import {
   type TaggedFinding,
 } from "../components/charts/FindingsBoard";
 import { LiveIndicator } from "../components/LiveIndicator";
+import { CoverageNote } from "../components/CoverageNote";
 import { SourceBar } from "../components/SourceBar";
 import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
@@ -124,6 +125,38 @@ export function DomainView({
           </p>
         ) : null}
       </Card>
+
+      {/* Port operations and customs are named by the area this page carries
+          the name of, and neither is in the platform. Said here rather than
+          left for a reader to notice missing. */}
+      {domain === "logistics" ? (
+        <CoverageNote
+          level="partial"
+          covered={
+            <>
+              Inter-island freight movement: which member state can supply which, the sea
+              transit between them, and the live weather that sets whether a lane is clear,
+              worth watching, or at risk. The logistics agent&rsquo;s reading of all of it
+              is above.
+            </>
+          }
+          missing={
+            <>
+              Port operations and customs processing. There is no berth schedule, no
+              terminal throughput, no dwell time and no customs status anywhere in this
+              platform, and no finding infers one.
+            </>
+          }
+          requires={
+            <>
+              Port call and customs feeds from the authorities that run them. CARICOM port
+              authorities and customs administrations do not publish these as open
+              machine-readable services, so the coordination this page offers stops at the
+              water rather than continuing onto the quay.
+            </>
+          }
+        />
+      ) : null}
 
       {/* The planting agent reasons over the region's calendar, so the
           calendar itself belongs on its page — and it is the one view here

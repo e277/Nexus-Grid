@@ -3,6 +3,7 @@
 import { Ship } from "lucide-react";
 
 import { api } from "../api";
+import { CoverageNote } from "../components/CoverageNote";
 import { LiveIndicator } from "../components/LiveIndicator";
 import { SourceBar } from "../components/SourceBar";
 import { Badge } from "../components/ui/badge";
@@ -63,6 +64,33 @@ export function FreightView() {
 
   return (
     <div className="space-y-4">
+      <CoverageNote
+        level="partial"
+        covered={
+          <>
+            Every supplier–importer lane scored and ranked by the value it could displace,
+            with sea distance between real port coordinates, the transit that implies, and
+            live weather at both ends setting each lane&rsquo;s status.
+          </>
+        }
+        missing={
+          <>
+            Freight capacity and route optimisation. Nothing here knows what space is
+            available on a sailing, when the next one leaves, or what a route would cost —
+            and no lane is optimised against alternatives, because there is one sea path
+            between two islands and the estimate is of that path.
+          </>
+        }
+        requires={
+          <>
+            Carrier schedules and vessel capacity, or an AIS feed. No free inter-island
+            freight API publishes them for this region; AIS providers that would are
+            credentialed. The supplier ranking already lists vessel capacity and sailing
+            schedules among the factors it refuses to score, rather than weighting a guess.
+          </>
+        }
+      />
+
       <Card className="flex flex-wrap items-center gap-x-4 gap-y-2 p-4">
         <Ship size={14} className="shrink-0 text-ng-secondary" aria-hidden />
         <span className="text-ng-base font-semibold text-ng-primary">
