@@ -42,6 +42,24 @@ export const SEVERITY_COLOR: Record<string, string> = {
   gap: "var(--color-muted-border)",
 };
 
+/**
+ * Confidence is ordinal, not a status.
+ *
+ * One hue stepped light to dark, because low → medium → high has a natural
+ * order and no polarity. It deliberately does not wear the status tokens: a
+ * low-confidence finding is not a bad one, it is one the agent wants checked
+ * before it is acted on, and colouring it red-amber-green says the opposite.
+ *
+ * Defined once and imported wherever confidence appears, so the chart and the
+ * table cannot drift apart — they encoded the same variable two different ways
+ * until this existed.
+ */
+export const CONFIDENCE_COLOR: Record<string, string> = {
+  low: "color-mix(in oklab, var(--color-accent) 40%, var(--color-surface))",
+  medium: "color-mix(in oklab, var(--color-accent) 64%, var(--color-surface))",
+  high: "color-mix(in oklab, var(--color-accent) 88%, var(--color-surface))",
+};
+
 /** Gate outcomes mean good and bad, so they wear status tokens too. */
 export const DECISION_COLOR: Record<string, string> = {
   approved: "var(--color-success)",

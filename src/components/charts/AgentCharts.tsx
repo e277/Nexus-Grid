@@ -16,6 +16,7 @@ import type { AnalysisResult, Finding, GapMatch } from "../../types";
 import {
   AXIS_PROPS,
   ChartFrame,
+  CONFIDENCE_COLOR,
   ChartLegend,
   DECISION_COLOR,
   GRID_PROPS,
@@ -187,7 +188,7 @@ export function FindingsByDomainChart({
  * per bucket means no legend; the axis is the key.
  */
 export function ConfidenceChart({ findings }: { findings: Finding[] }) {
-  const buckets = (["low", "medium", "high"] as const).map((level, index) => {
+  const buckets = (["low", "medium", "high"] as const).map((level) => {
     const count = findings.filter((f) => f.confidence === level).length;
     return {
       level: level[0].toUpperCase() + level.slice(1),
@@ -195,7 +196,7 @@ export function ConfidenceChart({ findings }: { findings: Finding[] }) {
       // The count answers "how many"; the share answers "how much of the
       // whole", which is the question a three-bucket chart is actually asked.
       label: findings.length > 0 ? `${count}  (${Math.round((count / findings.length) * 100)}%)` : "0",
-      fill: `color-mix(in oklab, var(--color-accent) ${32 + index * 26}%, var(--color-surface))`,
+      fill: CONFIDENCE_COLOR[level],
     };
   });
 

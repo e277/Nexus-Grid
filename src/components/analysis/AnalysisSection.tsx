@@ -10,7 +10,7 @@ import {
   GateOutcomeChart,
   SupplierScoreChart,
 } from "../charts/AgentCharts";
-import { SEVERITY_COLOR } from "../charts/chart-kit";
+import { compact, SEVERITY_COLOR } from "../charts/chart-kit";
 import { SupplierCoverageChart } from "../charts/SupplierCoverageChart";
 import {
   FindingsBoard,
@@ -108,6 +108,11 @@ export function AnalysisSection({
   const approved = data.gate_decisions.filter(
     (g) => g.decision === "approved" || g.decision === "modified"
   ).length;
+  // The region's own money, currently leaving it. Every gap here is a
+  // commodity a CARICOM state buys outside the region while another member
+  // state already supplies it — so this is the addressable part of the import
+  // bill, not the bill itself, and it is the outcome the whole loop is for.
+  const addressableUsd = data.matches.reduce((sum, m) => sum + m.external_usd, 0);
   const coverage = data.matches.filter((m) => m.matches.length > 0);
   const bestScores = coverage.map((m) => m.matches[0].score);
   const medianCoverage =
@@ -153,9 +158,10 @@ export function AnalysisSection({
              below, rather than restated by several. */}
       <KpiStrip>
         <Kpi
-          label="Findings raised"
-          value={allFindings.length}
-          hint={`across ${data.analyses.length} specialist agents`}
+          label="Addressable imports"
+          value={compact(addressableUsd)}
+          tone="success"
+          hint={`${data.matches.length} commodity–importer pairs a member state already supplies`}
         />
         <Kpi
           label="Rated critical"

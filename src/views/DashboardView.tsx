@@ -101,6 +101,16 @@ export function DashboardView() {
   const [queueIndex, setQueueIndex] = useState<number | null>(null);
   const [completed, setCompleted] = useState<{ gap: SubstitutionOpportunity; state: FinalState }[]>([]);
   const [requireApproval, setRequireApproval] = useState(true);
+  /**
+   * Run a short sweep instead of the whole region.
+   *
+   * Every gap costs one model call of roughly twenty seconds, so twelve of them
+   * is about four minutes — fine unattended, far too long to stand in front of.
+   * This scopes the sweep to the three largest gaps, and scopes the checklist
+   * and the counter with it, so the card never claims a total it is not going
+   * to run.
+   */
+  const [demoMode, setDemoMode] = useState(false);
   const [focus, setFocus] = useState<PhaseId | "all">("all");
 
 
@@ -124,6 +134,9 @@ export function DashboardView() {
    * which has to be legible at the gate rather than a page away.
    */
   const { data: analysis } = usePoll(() => api.analysisOverview(), 30_000);
+
+  /** Largest first, so a short sweep takes the gaps that matter most. */
+  const sweepGaps = demoMode ? gaps.slice(0, 3) : gaps;
 
   const done = new Map(
     completed.map(({ gap, state }) => [`${gap.importer_iso3}-${gap.commodity_code}`, state])
@@ -285,8 +298,8 @@ export function DashboardView() {
    * needs anyway. `runFrom` and `decide` carry it from there.
    */
   function runAll() {
-    if (running || gaps.length === 0) return;
-    gapsRef.current = gaps;
+    if (running || sweepGaps.length === 0) return;
+    gapsRef.current = sweepGaps;
     setCompleted([]);
     setRunError(null);
     void runFrom(0);
@@ -402,14 +415,16 @@ export function DashboardView() {
               <p className="mt-0.5 text-ng-2xs text-ng-secondary">
                 {gaps.length === 0
                   ? "Loading live trade data…"
-                  : `${done.size} of ${gaps.length} sourcing gap${gaps.length === 1 ? "" : "s"} swept`}
+                  : `${done.size} of ${sweepGaps.length} sourcing gap${sweepGaps.length === 1 ? "" : "s"} swept${
+                      demoMode ? ` · ${gaps.length} found` : ""
+                    }`}
               </p>
             </div>
 
             <span className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-ng-muted sm:w-32">
               <span
                 className="block h-full rounded-full bg-ng-accent transition-[width] duration-300"
-                style={{ width: `${(done.size / Math.max(1, gaps.length)) * 100}%` }}
+                style={{ width: `${(done.size / Math.max(1, sweepGaps.length)) * 100}%` }}
               />
             </span>
 
@@ -424,9 +439,25 @@ export function DashboardView() {
               Gate urgent plans
             </label>
 
+            {/* Named for what it is. A sweep that silently ran three of twelve
+                would be a demo lying about its own scope. */}
+            <label className="flex shrink-0 items-center gap-2 text-ng-xs text-ng-secondary">
+              <input
+                type="checkbox"
+                checked={demoMode}
+                disabled={running || awaitingApproval}
+                onChange={(e) => setDemoMode(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-ng-border text-ng-accent focus:ring-ng-accent"
+              />
+              Short sweep
+              <span className="hidden text-ng-2xs text-ng-disabled xl:inline">
+                · 3 largest gaps
+              </span>
+            </label>
+
             <Button
               onClick={runAll}
-              disabled={running || awaitingApproval || gaps.length === 0}
+              disabled={running || awaitingApproval || sweepGaps.length === 0}
               className="shrink-0 rounded-full"
             >
               {running ? (
@@ -443,7 +474,7 @@ export function DashboardView() {
             </Button>
           </div>
 
-          {gaps.length === 0 ? (
+          {sweepGaps.length === 0 ? (
             <p className="px-4 py-6 text-ng-sm text-ng-secondary">
               Reading the regional trade picture…
             </p>
@@ -454,7 +485,7 @@ export function DashboardView() {
               status is a glyph, so three of them fit across a desktop and the
               card stops growing with the region's gap count. */}
           <ul className="grid grid-cols-1 gap-px bg-ng-border sm:grid-cols-2 2xl:grid-cols-3">
-            {gaps.map((gap, index) => {
+            {sweepGaps.map((gap, index) => {
               const key = `${gap.importer_iso3}-${gap.commodity_code}`;
               const outcome = done.get(key) ?? null;
               const active = running && !outcome && queueIndex === index;

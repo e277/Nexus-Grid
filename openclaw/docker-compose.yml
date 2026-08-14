@@ -18,6 +18,7 @@
 #   …run --rm cli channels login      # prints a QR — scan it from the phone
 #
 # Start:   docker compose -f openclaw/docker-compose.yml up -d
+# Develop: docker compose -f openclaw/docker-compose.yml watch
 # Status:  docker compose -f openclaw/docker-compose.yml run --rm cli channels status
 # Health:  curl http://127.0.0.1:18789/healthz
 services:
@@ -45,6 +46,23 @@ services:
       # these a restart loses the WhatsApp pairing and you scan the QR again.
       - openclaw-state:/home/node/.openclaw
       - openclaw-keys:/home/node/.config/openclaw
+    # `docker compose -f openclaw/docker-compose.yml watch` — edit openclaw.json
+    # here and the gateway picks it up and restarts, instead of the copy-in-and-
+    # restart dance.
+    #
+    # This makes the file in this directory authoritative for gateway settings,
+    # which is only safe because it is now complete: it carries the plugin
+    # entry and the channel account as well as the policies. A partial seed
+    # synced over the live config would disable the WhatsApp channel, since
+    # sync replaces the file rather than merging into it.
+    #
+    # Pairing credentials and sessions are not in this file — they live
+    # elsewhere in the state volume and are untouched by a sync.
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./openclaw.json
+          target: /home/node/.openclaw/openclaw.json
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18789/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s

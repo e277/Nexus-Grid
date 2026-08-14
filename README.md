@@ -1,8 +1,70 @@
 # Nexus-Grid
 
-Autonomous agentic orchestration platform for Caribbean food systems, built as a
-single Next.js application — the operator console and the agent/workflow runtime
-live in the same codebase and run as one service.
+**The Caribbean imports about 80% of its food. Nexus-Grid finds the part of that
+bill the region could supply itself, and coordinates the swap.**
+
+Reading live UN Comtrade data across 15 CARICOM member states, it currently
+identifies:
+
+| | |
+|---|---|
+| Regional food imports | **$1.52B** |
+| Traded inside CARICOM | $137M |
+| **Addressable — bought outside the region while a member state already supplies it** | **$1.12B** across 12 commodity–importer pairs |
+
+That last figure is the point. It is not an estimate or a projection: it is the
+sum of the trade flows where one CARICOM state buys a commodity from outside the
+region that another CARICOM state already exports into it.
+
+*Scope note:* the wider Caribbean imports $10B+ of food across 30+ states and
+territories. The figures above are the 15 CARICOM member states covered by the
+UN Comtrade series this reads, for the most recent settled year — a subset,
+computed rather than quoted.
+
+## What it does with that
+
+A coordination loop runs over each gap, end to end, autonomous at every step but
+one:
+
+```
+perceive → assess → recommend → plan → ┬→ execute → monitor → recover
+                                       └→ hold (a human decides) → execute → …
+```
+
+Five specialist agents read one domain each — trade, soil, planting calendars,
+freight — and their conclusions drive every page. Urgent plans stop at an
+approval gate for a human answer (approve, amend, reject, escalate); the graph
+genuinely pauses there, checkpointed to disk, and survives a restart. An
+approved plan is then **delivered to a real WhatsApp desk** through an OpenClaw
+gateway. A rejected or escalated one is never sent, because that is a decision
+not to act.
+
+It strengthens systems rather than replacing them: it does not buy, sell, hold
+stock, or run a marketplace. It tells existing actors what to coordinate, and
+carries the message.
+
+## No keys, no accounts, no seeded data
+
+Every data source is a **free, public, keyless endpoint** — so this runs on your
+machine, against live data, with nothing to sign up for:
+
+| Source | Contributes |
+|---|---|
+| [UN Comtrade](https://comtradeplus.un.org/) | Trade flows — every sourcing gap starts here |
+| [World Bank Open Data](https://data.worldbank.org/indicator) | Arable land, cereal yield, agriculture's share of GDP |
+| [ISRIC SoilGrids](https://soilgrids.org/) | pH, organic carbon and clay under each growing point |
+| [NASA POWER](https://power.larc.nasa.gov/) | Rain-fed planting windows per member state |
+| [Open-Meteo](https://open-meteo.com/en/docs) | Live climate risk at both ends of every lane |
+| [NOAA NHC](https://www.nhc.noaa.gov/) | Named storms active in the basin |
+
+Paid and credentialed datasets were deliberately left out. A figure nobody else
+can reproduce is not evidence.
+
+Nothing is invented to fill a gap. When a publisher is down the page says so and
+names what is missing; when a reading came from the deterministic fallback
+rather than a model it is badged `rule-derived`; the supplier ranking lists what
+it did **not** score. Without a model key the whole system still runs — every
+reading is rule-derived and labelled as such.
 
 ## Quick start
 
@@ -17,14 +79,30 @@ caches in the background; UN Comtrade takes around a minute to answer, and the
 console shows each publisher as `pending` until it does rather than showing a
 zero.
 
+### What to look at
+
+1. **Dashboard** — press *Run sweep*. Watch the loop traverse; the caption names
+   the step in flight and times it. The long pause is the model composing a
+   plan, which is the only slow step in a run.
+2. Tick **Gate urgent plans** first to see the human-in-the-loop interrupt: the
+   run parks, the plan and its risks are on screen, and nothing proceeds until
+   you answer.
+3. **Impact Metrics** — the $1.12B, which gaps have a strong regional
+   alternative, and every decision taken at the gate.
+4. **Intelligence pages** — one agent's reading per domain, each citing the
+   publishers behind it.
+
 ```bash
 npm run build && npm start   # production
 npm run typecheck            # tsc --noEmit
+npm test                     # vitest
 ```
 
-Optional configuration lives in `.env.local` — see `.env.example`. Setting
+Optional configuration lives in `.env` — see `.env.example`. Setting
 `MINIMAX_API_KEY` (or `SHO_API_KEY`) activates the workflow's LLM recommendation
-step; without it that step returns a labelled stub.
+step; without it that step returns a labelled stub. Setting the three
+`OPENCLAW_*` values activates real delivery; without them the execute step
+reports its dispatch as `simulated` rather than claiming one.
 
 ## Structure
 
@@ -35,13 +113,13 @@ src/
     layout.tsx      # Root layout, applies the stored theme before first paint
     page.tsx        # Client shell
   App.tsx           # Shell: rail, breadcrumb, page switch
-  navigation.ts     # The seven pages and their groups — one source for nav and breadcrumb
+  navigation.ts     # The six pages and their groups — one source for nav and breadcrumb
   components/
-    shell/          # Sidebar, TopBar, MobileNav, NavSheet
+    shell/          # Sidebar (responsive rail) and TopBar
     pipeline/       # Node model, phase/canvas geometry, SVG diagram, approval panel
     charts/         # chart-kit and the charts over agent output
     ui/             # shadcn-style primitives (Radix + CVA)
-  views/            # Dashboard (loop + the four domain readings) and ImpactView (the charts)
+  views/            # Dashboard (the loop), DomainView (one agent's reading), ImpactView (the charts)
   api.ts            # Typed client for /api/*
   types.ts          # Shared response types
   index.css         # Design tokens — dark on bare :root, light under [data-theme]

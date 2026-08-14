@@ -6,7 +6,7 @@ import { AlertTriangle, ChevronDown, CircleHelp, Eye, TrendingUp } from "lucide-
 
 import { cn } from "../../lib/utils";
 import type { Finding, FindingSeverity } from "../../types";
-import { ChartFrame, SEVERITY_COLOR } from "./chart-kit";
+import { ChartFrame, CONFIDENCE_COLOR, SEVERITY_COLOR } from "./chart-kit";
 import { FindingDetail } from "./FindingDetail";
 import { formatMetric } from "./FindingMetrics";
 
@@ -81,7 +81,14 @@ export function FindingsMatrix({
                   scope="col"
                   className="px-1 py-1 text-center text-ng-2xs font-bold uppercase tracking-[.5px] text-ng-secondary"
                 >
-                  {confidence} confidence
+                  <span className="inline-flex items-center gap-1">
+                    <span
+                      aria-hidden
+                      className="h-2 w-2 shrink-0 rounded-full ring-1 ring-inset ring-ng-border"
+                      style={{ background: CONFIDENCE_COLOR[confidence] }}
+                    />
+                    {confidence} confidence
+                  </span>
                 </th>
               ))}
             </tr>
@@ -258,16 +265,13 @@ export function FindingsBoard({
                 </td>
                 <td className="whitespace-nowrap px-3 py-2">
                   <span className="flex items-center gap-1.5 text-ng-xs text-ng-secondary">
+                    {/* The same ramp the confidence chart uses. This wore
+                        green/amber/grey, which read as good/warning/bad for a
+                        variable that has an order but no polarity. */}
                     <span
                       aria-hidden
-                      className={cn(
-                        "h-1.5 w-1.5 rounded-full",
-                        finding.confidence === "high"
-                          ? "bg-ng-success"
-                          : finding.confidence === "medium"
-                            ? "bg-ng-warning"
-                            : "bg-ng-muted-bd"
-                      )}
+                      className="h-2 w-2 shrink-0 rounded-full ring-1 ring-inset ring-ng-border"
+                      style={{ background: CONFIDENCE_COLOR[finding.confidence] }}
                     />
                     {finding.confidence}
                     {/* The affordance the row was missing: nothing said a row

@@ -8,10 +8,22 @@
     }
   },
   "plugins": {
-    "allow": ["whatsapp"]
+    "allow": ["whatsapp"],
+    "entries": {
+      "whatsapp": {
+        "enabled": true
+      }
+    }
   },
   "channels": {
     "whatsapp": {
+      "enabled": true,
+      "accounts": {
+        "default": {
+          "name": "Nexus-Grid",
+          "enabled": true
+        }
+      },
       "dmPolicy": "allowlist",
       "allowFrom": [],
       "groupPolicy": "disabled"
