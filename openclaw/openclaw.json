@@ -9,5 +9,12 @@
   },
   "plugins": {
     "allow": ["whatsapp"]
+  },
+  "channels": {
+    "whatsapp": {
+      "dmPolicy": "allowlist",
+      "allowFrom": [],
+      "groupPolicy": "disabled"
+    }
   }
 }
