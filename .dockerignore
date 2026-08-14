@@ -1,0 +1,26 @@
+# Rebuilt inside the image, and copying the host's would ship a native addon
+# compiled against the host's libc.
+node_modules
+.next
+
+# Configuration is injected at run time, never baked in.
+.env
+.env.local
+
+# Local state: the checkpoint database is a volume, not image content.
+.nexus-grid
+
+.git
+.gitignore
+*.log
+tsconfig.tsbuildinfo
+coverage
+
+# The gateway is its own image; only its compose file and seed config matter,
+# and those are read from the host rather than copied in.
+openclaw
+
+# Docs and tooling the running app never reads.
+README.md
+docs
+scripts

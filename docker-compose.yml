@@ -1,0 +1,92 @@
+# The whole application: the console and agent runtime, and the gateway it
+# delivers approved plans through.
+#
+#   docker compose up -d --build      the lot
+#   docker compose logs -f app        follow the runtime
+#   docker compose run --rm cli channels status
+#
+# Configuration comes from the project root .env — one file, read by the app
+# and by Compose, because the gateway token is a single secret with two
+# readers. See openclaw/docker-compose.yml for the gateway's own notes.
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nexus-grid:local
+    container_name: nexus-grid-app
+    restart: unless-stopped
+    # Every app setting, injected rather than baked into the image.
+    env_file:
+      - .env
+    environment:
+      # Overrides the value in .env, which points at host loopback for running
+      # the app outside a container. In here the gateway is a service name, and
+      # `environment` wins over `env_file`.
+      OPENCLAW_GATEWAY_URL: http://gateway:18789
+      CHECKPOINT_DB_PATH: /app/.nexus-grid/checkpoints.sqlite
+    ports:
+      - "127.0.0.1:5180:5180"
+    volumes:
+      # A paused approval gate is checkpointed to disk. Without this the gate
+      # is lost whenever the container is replaced, which is exactly when a
+      # human decision is most likely to be waiting.
+      - nexus-grid-state:/app/.nexus-grid
+    depends_on:
+      gateway:
+        condition: service_healthy
+
+  gateway:
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    container_name: nexus-grid-openclaw
+    restart: unless-stopped
+    command: ["node", "openclaw.mjs", "gateway", "--bind", "lan", "--auth", "token"]
+    environment:
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?set OPENCLAW_GATEWAY_TOKEN in the project root .env}
+    ports:
+      # Loopback only: /tools/invoke is full operator access on the gateway.
+      # The app reaches it over the compose network, not through this.
+      - "127.0.0.1:18789:18789"
+    volumes:
+      - openclaw-state:/home/node/.openclaw
+      - openclaw-keys:/home/node/.config/openclaw
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./openclaw/openclaw.json
+          target: /home/node/.openclaw/openclaw.json
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:18789/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # One-shot CLI against the gateway's own state, for pairing and inspection.
+  cli:
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    profiles: ["cli"]
+    entrypoint: ["openclaw"]
+    depends_on:
+      - gateway
+    # Shares the gateway's network namespace so 127.0.0.1 is the gateway.
+    # Reaching it by service name would trip OpenClaw's refusal to speak
+    # plaintext ws:// to a non-loopback address — a refusal worth keeping.
+    network_mode: "service:gateway"
+    environment:
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-}
+    volumes:
+      - openclaw-state:/home/node/.openclaw
+      - openclaw-keys:/home/node/.config/openclaw
+
+volumes:
+  nexus-grid-state:
+  # Pinned to the names the gateway's own compose project created. Compose
+  # otherwise prefixes volumes with the project name, so moving these services
+  # into a root-level file would have silently created empty ones — and the
+  # WhatsApp pairing, which lives in this volume, would have to be scanned
+  # again.
+  openclaw-state:
+    name: openclaw_openclaw-state
+  openclaw-keys:
+    name: openclaw_openclaw-keys

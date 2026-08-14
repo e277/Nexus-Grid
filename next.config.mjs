@@ -5,6 +5,13 @@ const nextConfig = {
   // declares `export const runtime = "nodejs"` — the Edge runtime would give
   // each request its own module instance and lose all three.
   reactStrictMode: true,
+  /**
+   * Trace the server bundle into `.next/standalone`, so the container ships
+   * the application and the modules it actually reaches rather than the whole
+   * dependency tree. `serverExternalPackages` below is excluded from that
+   * trace by design, so the Dockerfile copies those modules explicitly.
+   */
+  output: "standalone",
   // Next writes AGENTS.md/CLAUDE.md to the repo root otherwise.
   agentRules: false,
   /**

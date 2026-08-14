@@ -68,6 +68,15 @@ reading is rule-derived and labelled as such.
 
 ## Quick start
 
+Everything in containers — the console, the agent runtime, and the gateway:
+
+```bash
+docker compose up -d --build     # http://localhost:5180
+docker compose logs -f app
+```
+
+Or on the host, if you would rather have hot reload:
+
 ```bash
 npm install
 npm run dev     # http://localhost:5180
