@@ -31,6 +31,9 @@ import { dispatchPlan, dispatchStatus } from "../dispatch/openclaw";
 
 const MAX_REPLANS = 1;
 const RECOMMEND_ATTEMPTS = 3;
+/** First retry waits this long; the second waits twice it. */
+const RETRY_BASE_MS = 1_000;
+const RETRY_JITTER_MS = 400;
 
 /**
  * Shared state. Every channel is last-write-wins: nodes return the keys they
@@ -112,9 +115,19 @@ export async function recommend(state: SupplyState): Promise<SupplyUpdate> {
     try {
       return await recommendAction(state);
     } catch (error) {
-      // Retry transient LLM/tooling failures
       lastError = error;
       console.warn(`recommend attempt ${attempt}/${RECOMMEND_ATTEMPTS} failed:`, error);
+
+      // Back off before trying again. The common failure here is a provider
+      // rate limit, and answering one by immediately sending two more is the
+      // shape most likely to extend it. Jittered so retries from separate
+      // runs do not line up.
+      if (attempt < RECOMMEND_ATTEMPTS) {
+        const backoffMs = RETRY_BASE_MS * 2 ** (attempt - 1);
+        await new Promise((resolve) =>
+          setTimeout(resolve, backoffMs + Math.random() * RETRY_JITTER_MS)
+        );
+      }
     }
   }
   return {

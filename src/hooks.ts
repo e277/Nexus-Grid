@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface PollState<T> {
   data: T | null;
@@ -30,21 +30,43 @@ export function usePoll<T>(
   const [tick, setTick] = useState(0);
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  /**
+   * The last payload, serialized, so an unchanged response can be dropped.
+   *
+   * Most polls return exactly what the previous one did — the analyses behind
+   * these pages are cached for fifteen minutes, so a thirty-second interval
+   * asks the same question thirty times per change. Calling `setData` anyway
+   * hands React a new object identity and re-renders the page for nothing,
+   * which is most of what a reader sees as the page "constantly updating".
+   *
+   * A ref, not state: it must not itself cause a render.
+   */
+  const lastSerialized = useRef<string | null>(null);
 
   const refresh = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
     let cancelled = false;
+    // The deps changed, so the next payload answers a different question and
+    // must not be compared against the previous one's.
+    lastSerialized.current = null;
 
     function run() {
       if (!cancelled) setRefreshing(true);
       loader()
         .then((result) => {
-          if (!cancelled) {
-            setData(result);
-            setError(null);
-            setUpdatedAt(Date.now());
-          }
+          if (cancelled) return;
+          setError(null);
+
+          // `updatedAt` moves on every successful response, changed or not:
+          // it answers "when did we last hear from the server", which is the
+          // question a freshness indicator is asking.
+          setUpdatedAt(Date.now());
+
+          const serialized = JSON.stringify(result);
+          if (serialized === lastSerialized.current) return;
+          lastSerialized.current = serialized;
+          setData(result);
         })
         .catch((err) => {
           if (cancelled) return;

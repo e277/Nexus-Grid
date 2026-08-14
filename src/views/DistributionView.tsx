@@ -31,6 +31,12 @@ export function DistributionView() {
             Trade statistics record what crossed a border, not what is sitting in a
             warehouse behind it, so the gap cannot be closed by reading the sources already
             here more carefully.
+            <br />
+            <br />
+            The nearest open dataset is WFP&rsquo;s market price series on the Humanitarian
+            Data Exchange, which is free and needs no key. It covers 1 of the 15 CARICOM
+            member states — Haiti — so it would answer for one member and stay silent on
+            fourteen. It is not wired in for that reason rather than an access one.
           </>
         }
       >

@@ -81,16 +81,23 @@ zero.
 
 ### What to look at
 
-1. **Dashboard** — press *Run sweep*. Watch the loop traverse; the caption names
-   the step in flight and times it. The long pause is the model composing a
-   plan, which is the only slow step in a run.
-2. Tick **Gate urgent plans** first to see the human-in-the-loop interrupt: the
-   run parks, the plan and its risks are on screen, and nothing proceeds until
-   you answer.
-3. **Impact Metrics** — the $1.12B, which gaps have a strong regional
-   alternative, and every decision taken at the gate.
-4. **Intelligence pages** — one agent's reading per domain, each citing the
-   publishers behind it.
+1. **Dashboard** — tick **Short sweep**, press *Run sweep*. Watch the loop
+   traverse; the caption names the step in flight and times it. The long pause
+   is the model composing a plan, and it is the only slow step in a run.
+2. Tick **Gate urgent plans** and run again to see the human-in-the-loop
+   interrupt: the run parks, the plan and its risks are on screen, and nothing
+   proceeds until you answer. Approve one and the plan is delivered.
+3. **Farm-to-Market Intelligence** — the $1.12B, and which gaps have a strong
+   regional alternative.
+4. **Regional Planting Coordination** — the months the region collectively
+   cannot start a rain-fed season, which is its structural import window.
+5. **Supply Chain Visibility** — every action the agents have taken, including
+   the scans that found nothing.
+
+The rail carries a page for each of the track's eight build areas. Two of them
+— **Crop Planning & Yield Forecasting** and **Food Distribution & Inventory
+Optimization** — state their own scope instead of implementing it, and say
+exactly which dataset would close the gap.
 
 ```bash
 npm run build && npm start   # production
