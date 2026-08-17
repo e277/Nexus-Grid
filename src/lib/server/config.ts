@@ -36,16 +36,17 @@ export interface Settings {
   /**
    * OpenClaw gateway, used by the `execute` node to actually deliver a plan.
    *
-   * The gateway is a separate long-running process that owns the channels
-   * (Slack, WhatsApp, Signal, …); this app talks to it over its HTTP tool
-   * surface. Without a URL and token the node reports `unconfigured` and the
-   * dispatch is labelled simulated rather than pretending to have sent.
+   * The gateway is a separate long-running process; this app talks to it over
+   * its WebSocket control plane and posts approved plans into the dashboard
+   * (Control UI) for an operator to read. Without a URL and token the node
+   * reports `unconfigured` and the dispatch is labelled simulated rather than
+   * pretending to have sent.
    */
   openclawGatewayUrl: string;
   openclawGatewayToken: string;
-  /** Channel target the plan is delivered to, e.g. a Slack channel id. */
-  openclawTarget: string;
-  /** Gateway agent whose session the message is sent through. */
+  /** Dashboard session a plan is posted into; `main` is the gateway's own. */
+  openclawSessionKey: string;
+  /** Gateway agent that session belongs to. */
   openclawAgentId: string;
 
   /** Agent runtime */
@@ -93,7 +94,7 @@ export function getSettings(): Settings {
 
     openclawGatewayUrl: str("OPENCLAW_GATEWAY_URL", ""),
     openclawGatewayToken: str("OPENCLAW_GATEWAY_TOKEN", ""),
-    openclawTarget: str("OPENCLAW_TARGET", ""),
+    openclawSessionKey: str("OPENCLAW_SESSION_KEY", "main"),
     openclawAgentId: str("OPENCLAW_AGENT_ID", "main"),
 
     skipAgentStartup: bool("SKIP_AGENT_STARTUP", false),

@@ -20,13 +20,20 @@ services:
     env_file:
       - .env
     environment:
-      # Overrides the value in .env, which points at host loopback for running
-      # the app outside a container. In here the gateway is a service name, and
-      # `environment` wins over `env_file`.
-      OPENCLAW_GATEWAY_URL: http://gateway:18789
+      # Loopback, not a service name — see `network_mode` below. `environment`
+      # wins over `env_file`, so this overrides whatever .env carries.
+      OPENCLAW_GATEWAY_URL: ws://127.0.0.1:18789
       CHECKPOINT_DB_PATH: /app/.nexus-grid/checkpoints.sqlite
-    ports:
-      - "127.0.0.1:5180:5180"
+    # Shares the gateway's network namespace so 127.0.0.1 is the gateway, the
+    # same arrangement the cli service needs and for a related reason: posting
+    # a plan to the dashboard is `chat.inject`, an operator.admin method, and
+    # the gateway grants a shared-token connection its operator scopes only
+    # from loopback. Reached by service name the app authenticates fine and is
+    # then permitted nothing. Two consequences worth knowing: this service can
+    # publish no ports of its own (the console is published on gateway below),
+    # and restarting the gateway strands this container's networking, so
+    # restart the pair together.
+    network_mode: "service:gateway"
     volumes:
       # A paused approval gate is checkpointed to disk. Without this the gate
       # is lost whenever the container is replaced, which is exactly when a
@@ -44,9 +51,12 @@ services:
     environment:
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?set OPENCLAW_GATEWAY_TOKEN in the project root .env}
     ports:
-      # Loopback only: /tools/invoke is full operator access on the gateway.
-      # The app reaches it over the compose network, not through this.
+      # Loopback only: the gateway token is full operator access. The app does
+      # not come through here — it is inside this namespace already.
       - "127.0.0.1:18789:18789"
+      # The console, whose container shares this namespace and so cannot
+      # publish its own port. http://127.0.0.1:5180 all the same.
+      - "127.0.0.1:5180:5180"
     volumes:
       - openclaw-state:/home/node/.openclaw
       - openclaw-keys:/home/node/.config/openclaw

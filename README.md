@@ -35,9 +35,9 @@ Five specialist agents read one domain each — trade, soil, planting calendars,
 freight — and their conclusions drive every page. Urgent plans stop at an
 approval gate for a human answer (approve, amend, reject, escalate); the graph
 genuinely pauses there, checkpointed to disk, and survives a restart. An
-approved plan is then **delivered to a real WhatsApp desk** through an OpenClaw
-gateway. A rejected or escalated one is never sent, because that is a decision
-not to act.
+approved plan is then **posted to a real operator dashboard** — the Control UI
+of a running OpenClaw gateway. A rejected or escalated one is never posted,
+because that is a decision not to act.
 
 It strengthens systems rather than replacing them: it does not buy, sell, hold
 stock, or run a marketplace. It tells existing actors what to coordinate, and
@@ -201,11 +201,12 @@ an in-memory gate dies on the next deploy. Set the path empty for in-memory.
 over server-sent events, so the console shows a run's real pace rather than
 replaying a finished one on a timer.
 
-**Plans get delivered.** The `execute` node hands an approved plan to a running
-[OpenClaw](https://openclaw.ai) gateway over its HTTP tool surface — the
-gateway owns the channels a ministry desk reads. Unconfigured, the dispatch is
-labelled simulated rather than pretending to have sent; rejected and escalated
-plans are never delivered at all.
+**Plans get delivered.** The `execute` node posts an approved plan into the
+dashboard of a running [OpenClaw](https://openclaw.ai) gateway, where an
+operator reads it — a `chat.inject` on the gateway's control plane, so it
+starts no agent run and sends nothing to any outside channel. Unconfigured, the
+dispatch is labelled simulated rather than pretending to have sent; rejected
+and escalated plans are never posted at all.
 
 ## API
 

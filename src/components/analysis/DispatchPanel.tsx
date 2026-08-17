@@ -34,10 +34,10 @@ export function DispatchPanel({ dispatch }: { dispatch: DispatchReadiness }) {
         <Badge variant={ready ? "success" : "warning"} size="sm">
           {ready ? "Ready" : "Not configured"}
         </Badge>
-        {ready && dispatch.target ? (
+        {ready && dispatch.session ? (
           <span className="text-ng-xs text-ng-secondary">
-            approved plans go to{" "}
-            <span className="font-mono text-ng-primary">{dispatch.target}</span> via agent{" "}
+            approved plans go to the OpenClaw dashboard, session{" "}
+            <span className="font-mono text-ng-primary">{dispatch.session}</span> on agent{" "}
             <span className="font-mono text-ng-primary">{dispatch.agent_id}</span>
           </span>
         ) : null}
@@ -45,8 +45,9 @@ export function DispatchPanel({ dispatch }: { dispatch: DispatchReadiness }) {
 
       {ready ? (
         <p className="mt-2 max-w-3xl text-ng-sm leading-relaxed text-ng-secondary">
-          An approved or amended plan is delivered to a running OpenClaw gateway. Rejected and
-          escalated plans are never sent — they are decisions not to act.
+          An approved or amended plan is posted into a running OpenClaw gateway&apos;s dashboard,
+          where an operator reads it — it starts no agent run and is sent to no outside channel.
+          Rejected and escalated plans are never posted at all: they are decisions not to act.
         </p>
       ) : (
         <>

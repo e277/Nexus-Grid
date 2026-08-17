@@ -385,25 +385,52 @@ animation this replaced.
 
 ### Delivering a plan
 
-The `execute` node hands an approved plan to an **OpenClaw** gateway — a
-separate long-running process that owns the channels a ministry desk actually
-reads, exposed as one HTTP tool surface (`POST /tools/invoke`). This app calls
-that surface; it does not embed the gateway.
+The `execute` node posts an approved plan into the **dashboard** of an
+**OpenClaw** gateway — a separate long-running process whose Control UI is the
+surface an operator actually watches. This app calls that gateway; it does not
+embed it.
 
 That is deliberate. The `openclaw` npm package *is* the gateway: 56 direct
 dependencies, ~365 packages installed, a CLI, an onboarding wizard and a plugin
 SDK with some three hundred export paths, meant to be run with `openclaw
 onboard` and left running. Embedding it in a Next.js route handler would
 multiply this app's ten runtime dependencies thirtyfold to obtain one thing —
-"send this text to that channel" — that the gateway already exposes over HTTP.
-It also declares a Node engine range this project does not satisfy.
+"put this plan in front of an operator" — that the gateway already exposes on
+its control plane. It also declares a Node engine range this project does not
+satisfy.
 
-Only an approved or amended plan is delivered; a rejected or escalated one is a
-decision *not* to act, and sending it anyway would be the opposite of what the
+The call is `chat.inject`: it appends the plan to the dashboard session and
+broadcasts it to the Control UI, with **no agent run, no model call and no
+outbound channel delivery**. That is the right shape for what a plan is — a
+notice for a human to read, not a prompt for an agent to answer — and it is why
+delivery needs no phone number or channel target at all.
+
+Two properties of the gateway shape the wiring, and neither is obvious:
+
+- `chat.inject` is an `operator.admin` method on the gateway's **WebSocket**
+  control plane. The HTTP surface (`POST /tools/invoke`) reaches the agent
+  *tool* registry only, which has no tool that writes to the dashboard, so this
+  one call cannot go over HTTP.
+- A shared-token connection is granted its operator scopes **only from
+  loopback**. Addressed across a container network the app authenticates
+  successfully and is then permitted nothing — the handshake succeeds with an
+  empty scope set and the call is refused. So `docker-compose.yml` runs the app
+  inside the gateway's network namespace, the same arrangement the `cli`
+  service already needs, and the console's port is published on the gateway
+  service because a container sharing a namespace cannot publish its own.
+
+The client is about eighty lines against `WebSocket` (global in Node 22) — open
+a socket, answer the `connect.challenge`, make one call, close — and adds no
+dependency.
+
+Only an approved or amended plan is posted; a rejected or escalated one is a
+decision *not* to act, and posting it anyway would be the opposite of what the
 gate is for. Delivery is keyed by thread id, so re-running a thread does not
-re-notify the desk, and a delivery failure is recorded as a follow-up in
-`recover` rather than failing the run. With no gateway configured the status is
-`unconfigured` and the console says "not delivered" — never "done".
+re-notify the desk; unlike the tool surface, `chat.inject` takes no idempotency
+key, so that memory is kept in-process here and is lost on restart. A delivery
+failure is recorded as a follow-up in `recover` rather than failing the run.
+With no gateway configured the status is `unconfigured` and the console says
+"not delivered" — never "done".
 
 ---
 

@@ -131,7 +131,8 @@ export interface GateDecisionRecord {
 /** Whether an approved plan has anywhere to be delivered. */
 export interface DispatchReadiness {
   status: "ready" | "unconfigured" | "unavailable";
-  target: string | null;
+  /** The OpenClaw dashboard session approved plans are posted into. */
+  session: string | null;
   agent_id: string;
   /** The environment variables still unset, each with what it is for. */
   missing: { key: string; describes: string }[];
