@@ -61,30 +61,33 @@ export function CoverageNote({
         </h2>
       </div>
 
-      <dl className="mt-2.5 space-y-2">
+      <dl className="mt-3 space-y-3">
         {covered ? (
           <div>
-            <dt className="text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary">
+            <dt className="text-ng-xs font-bold uppercase tracking-[.6px] text-ng-secondary">
               On this page
             </dt>
-            <dd className="mt-0.5 max-w-4xl text-ng-sm leading-relaxed text-ng-primary">
+            <dd className="mt-1 max-w-4xl text-ng-base leading-relaxed text-ng-primary">
               {covered}
             </dd>
           </div>
         ) : null}
         <div>
-          <dt className="text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary">
+          <dt className="text-ng-xs font-bold uppercase tracking-[.6px] text-ng-secondary">
             Not here
           </dt>
-          <dd className="mt-0.5 max-w-4xl text-ng-sm leading-relaxed text-ng-primary">
+          <dd className="mt-1 max-w-4xl text-ng-base leading-relaxed text-ng-primary">
             {missing}
           </dd>
         </div>
         <div>
-          <dt className="text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary">
+          <dt className="text-ng-xs font-bold uppercase tracking-[.6px] text-ng-secondary">
             What it would take
           </dt>
-          <dd className="mt-0.5 max-w-4xl text-ng-sm leading-relaxed text-ng-secondary">
+          {/* Same weight as "Not here" — this is naming the closing dataset,
+              not a footnote, and text-secondary read as literally less
+              important than the sentence above it. */}
+          <dd className="mt-1 max-w-4xl text-ng-base leading-relaxed text-ng-primary">
             {requires}
           </dd>
         </div>

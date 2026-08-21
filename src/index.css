@@ -20,7 +20,7 @@
     --color-border:         #334155;
     --color-text-primary:   #F1F5F9;
     --color-text-secondary: #94A3B8;
-    --color-text-disabled:  #64748B;
+    --color-text-disabled:  #8494AC;
     --color-accent:         #10B981;
     --color-accent-hover:   #34D399;
     --color-accent-active:  #059669;
@@ -120,10 +120,15 @@
     --color-border:         #E2E8F0;
     --color-text-primary:   #0F172A;
     --color-text-secondary: #64748B;
-    --color-text-disabled:  #94A3B8;
-    --color-accent:         #059669;
-    --color-accent-hover:   #047857;
-    --color-accent-active:  #065F46;
+    --color-text-disabled:  #52606D;
+    /* Darkened one step from the original #059669 — that value was 3.77:1
+       against white, short of the 4.5:1 AA text needs, and it was the
+       background of every primary button and the color of every accent link
+       in light mode. This is the old --color-accent-hover shade; hover/active
+       below continue the same progression one step further. */
+    --color-accent:         #047857;
+    --color-accent-hover:   #065F46;
+    --color-accent-active:  #064E3B;
     --color-accent-light:   #ECFDF5;
     --color-accent-fg:      #FFFFFF;
     --color-success:        #059669;
@@ -167,11 +172,18 @@
     --phase-recover-bg:   #FEF2F2;
     --phase-recover-tx:   #991B1B;
 
+    /* chart-3/4/5 re-stepped from the original #1baf7a/#eda100/#e87ba4: those
+       read 2.82/2.17/2.69 against this mode's white card surface, short of
+       the dataviz skill's 3:1 floor. Re-validated via
+       scripts/validate_palette.js — all 5 now clear contrast (3.07–4.42:1),
+       CVD separation ΔE 9.2 (protan, above the 8.0 target), normal-vision
+       floor 19.0 (above the 15 gate). Dark mode's palette already passed and
+       is untouched. */
     --chart-1: #2a78d6;
     --chart-2: #eb6834;
-    --chart-3: #1baf7a;
-    --chart-4: #eda100;
-    --chart-5: #e87ba4;
+    --chart-3: #0c9c7a;
+    --chart-4: #c98500;
+    --chart-5: #d1527f;
 
     --div-neg-3: #DC2626;
     --div-neg-2: #F87171;
