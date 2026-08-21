@@ -103,10 +103,13 @@ zero.
 5. **Supply Chain Visibility** — every action the agents have taken, including
    the scans that found nothing.
 
-The rail carries a page for each of the track's eight build areas. Two of them
-— **Crop Planning & Yield Forecasting** and **Food Distribution & Inventory
-Optimization** — state their own scope instead of implementing it, and say
-exactly which dataset would close the gap.
+The rail carries a page for each of the track's eight build areas. Four of
+them — Crop Planning, Freight Matching, Port & Logistics, and Supply Chain
+Visibility — are partial: real findings on the page, plus a scope note saying
+exactly what is not covered. One — **Food Distribution & Inventory
+Optimization** — is the scope note alone: it states what it would take rather
+than implementing it. See [docs/ARCHITECTURE.md §10](docs/ARCHITECTURE.md) for
+the full scorecard against the brief.
 
 ```bash
 npm run build && npm start   # production

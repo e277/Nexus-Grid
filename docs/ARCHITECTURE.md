@@ -7,6 +7,12 @@ Chains track.
 This is the single reference for the project: what it is, how it is built, what
 it reads, what is implemented against the brief, and what is not.
 
+`../Nexus-Grid Architecture.dc.html` is the original pitch document this
+project was scoped from — a design canvas from before implementation, kept
+as-is for the record. Where the two disagree, this file describes what was
+actually built and is the one to trust; the diagrams here (§3, §9) reuse its
+visual language with labels corrected against the current code.
+
 ---
 
 ## 1. The thesis
@@ -52,6 +58,8 @@ None of those figures are entered by hand. Each traces to a published source.
 
 ## 3. Architecture
 
+![System architecture — sources, the coordination core, and where output lands](diagrams/system-architecture.svg)
+
 ```
 Operator console (src/app, src/views, src/components)
         │  REST (src/api.ts)
@@ -85,8 +93,13 @@ memory and the workflow checkpointer are process-local singletons on
 
 Next.js 16 (App Router) · React 19 · TypeScript · Tailwind with shadcn-style
 primitives (Radix + CVA) · Recharts · LangGraph · Vitest. One process, no
-broker, no Docker; the only persistence is a single SQLite file holding paused
-workflow runs.
+message broker, no database server; the only persistence is a single SQLite
+file holding paused workflow runs. `docker compose up` runs this app alongside
+the OpenClaw gateway it dispatches to — see "Delivering a plan" in §9 for why
+they share a container network — but neither the app nor its data layer
+requires Docker; `npm run dev` is the same process without it.
+
+![Technology stack — six layers, with what the vision doc named for each layer that this build does not have](diagrams/tech-stack.svg)
 
 ### The console
 
@@ -299,6 +312,10 @@ perceive → assess → recommend → plan → (approval gate) → execute → m
                                         hold (interrupt)      assess ◄── re-plan (max 1×)
 ```
 
+![The control loop, simplified — one run per detected gap, opened fresh by the Supply agent rather than a closed cycle](diagrams/control-loop.svg)
+
+![The coordination graph — 8 real LangGraph nodes, the human approval gate, and the re-plan edge](diagrams/coordination-graph.svg)
+
 The graph runs on **LangGraph** (`@langchain/langgraph`). It ran on a
 hand-rolled runtime of about 220 lines — nodes, conditional edges, state merge,
 a checkpointer, `interrupt()` — which did the job for as long as the
@@ -338,6 +355,8 @@ a run back to `assess`. A real trace with elevated climate risk:
 1 perceive → 2 assess → 3 recommend → 4 plan → 5 execute → 6 monitor
            → 7 assess → 8 recommend → 9 plan → 10 execute → 11 monitor → 12 recover
 ```
+
+![A real trace — climate risk elevated at monitor, one re-plan back to assess, replan cap reached at recover](diagrams/replan-trace.svg)
 
 Five nodes execute twice. The console renders this as a graph rather than a
 pipeline: nodes carry the step numbers they ran at, traversed edges are drawn
@@ -418,6 +437,8 @@ Two properties of the gateway shape the wiring, and neither is obvious:
   inside the gateway's network namespace, the same arrangement the `cli`
   service already needs, and the console's port is published on the gateway
   service because a container sharing a namespace cannot publish its own.
+
+![Deployment topology — one Docker host, the app and gateway sharing a network namespace, no Kubernetes or edge layer](diagrams/deployment.svg)
 
 The client is about eighty lines against `WebSocket` (global in Node 22) — open
 a socket, answer the `connect.challenge`, make one call, close — and adds no
@@ -504,7 +525,7 @@ interpretation falls back to labelled rule-derived signals.
 ```bash
 npm install
 npm run dev        # http://localhost:5180
-npm test           # 19 tests
+npm test           # 54 tests
 npm run typecheck
 npm run build
 ```
@@ -524,6 +545,6 @@ npm run build
   observed and lists price, capacity and port throughput as explicitly
   unscored, so a reader can see the shape of what is missing.
 - **Port and customs systems** — no ASYCUDA or port authority connection.
-- **Test depth** — 40 tests cover the coordination graph, projection, caching,
+- **Test depth** — 54 tests cover the coordination graph, projection, caching,
   supplier matching and the naming layers. Sources are verified against live
   endpoints, not mocked in CI.
