@@ -211,43 +211,42 @@ export function PipelineDiagram({
     <>
     {/* Named, timed, and explained. The slow step is always the model call,
         and saying so turns a twenty-second wait from a stall into the one
-        part of the run that is actually thinking. */}
-    <div
-      className={cn(
-        "mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border px-3 py-2 text-ng-xs transition-colors",
-        runningNode
-          ? "border-ng-accent-bd bg-ng-accent-lit text-ng-primary"
-          : "border-ng-border bg-ng-bg text-ng-secondary"
-      )}
-      aria-live="polite"
-    >
-      {runningNode ? (
-        <>
-          <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden>
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ng-accent opacity-70" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-ng-accent" />
-          </span>
-          {/* Which gap, before which step: the diagram and the checklist below
-              are the same sweep, and this is the only thing that says so. */}
-          {subject ? (
-            <span className="font-semibold text-ng-primary">
-              {subject.position}/{subject.total} {subject.label}
+        part of the run that is actually thinking. Idle has nothing to say,
+        so it renders nothing rather than an empty bordered box. */}
+    {runningNode || trace.length > 0 ? (
+      <div
+        className={cn(
+          "mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border px-3 py-2 text-ng-xs transition-colors",
+          runningNode
+            ? "border-ng-accent-bd bg-ng-accent-lit text-ng-primary"
+            : "border-ng-border bg-ng-bg text-ng-secondary"
+        )}
+        aria-live="polite"
+      >
+        {runningNode ? (
+          <>
+            <span className="relative flex h-1.5 w-1.5 shrink-0" aria-hidden>
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ng-accent opacity-70" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-ng-accent" />
             </span>
-          ) : null}
-          <span className="font-semibold">{runningNode.label}</span>
-          <span className="text-ng-secondary">{runningNode.desc}</span>
-          <span className="ml-auto shrink-0 tabular-nums font-semibold text-ng-accent">
-            {elapsed}s
-          </span>
-        </>
-      ) : (
-        <span>
-          {trace.length > 0
-            ? "Run complete — every step below is where the loop actually went."
-            : "Idle. Start a sweep to watch the loop run."}
-        </span>
-      )}
-    </div>
+            {/* Which gap, before which step: the diagram and the checklist below
+                are the same sweep, and this is the only thing that says so. */}
+            {subject ? (
+              <span className="font-semibold text-ng-primary">
+                {subject.position}/{subject.total} {subject.label}
+              </span>
+            ) : null}
+            <span className="font-semibold">{runningNode.label}</span>
+            <span className="text-ng-secondary">{runningNode.desc}</span>
+            <span className="ml-auto shrink-0 tabular-nums font-semibold text-ng-accent">
+              {elapsed}s
+            </span>
+          </>
+        ) : (
+          <span>Run complete — every step below is where the loop actually went.</span>
+        )}
+      </div>
+    ) : null}
 
     <div className="-mx-1 overflow-x-auto px-1 pb-1">
       <svg

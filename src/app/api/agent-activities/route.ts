@@ -1,6 +1,6 @@
 import { actionLabel, agentTitle } from "@/lib/server/agents/labels";
 import { api, pagination } from "@/lib/server/http";
-import { listAgentActivities } from "@/lib/server/observability/activity";
+import { listAgentActivities, parseActivityContext } from "@/lib/server/observability/activity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,5 +21,6 @@ export const GET = api(({ query }) => {
     ...activity,
     agent_title: agentTitle(activity.agent_name),
     action_label: actionLabel(activity.action),
+    context: parseActivityContext(activity.context),
   }));
 });

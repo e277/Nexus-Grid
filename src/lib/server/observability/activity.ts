@@ -28,6 +28,25 @@ export function listAgentActivities(options: {
   return agentActivities.list(options);
 }
 
+/**
+ * Recover the `{ payload, outputs }` an agent ran with and returned, from the
+ * JSON string `recordAgentActivity` wrote it as.
+ *
+ * Never throws: a row this can't parse is dropped to `null` rather than
+ * failing the request it's attached to — this is context for a client-side
+ * status readout, not a value anything server-side depends on.
+ */
+export function parseActivityContext(
+  context: string | null
+): { payload: Record<string, unknown>; outputs: Record<string, unknown> } | null {
+  if (!context) return null;
+  try {
+    return JSON.parse(context);
+  } catch {
+    return null;
+  }
+}
+
 export function recordAudit(params: {
   actor: string;
   action: string;

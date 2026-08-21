@@ -12,5 +12,6 @@ export const GET = api(() => {
     app: settings.appName,
     version: settings.appVersion,
     environment: settings.environment,
+    agent_poll_interval_seconds: settings.agentPollIntervalSeconds,
   };
 });

@@ -166,3 +166,16 @@ export function groupOf(id: PageId): string {
   return NAV_GROUPS.find((g) => g.pages.some((p) => p.id === id))?.label ?? "";
 }
 
+/**
+ * The page that renders one analysis domain, if any.
+ *
+ * `impact` has no page of its own — it was folded into Farm-to-Market's
+ * sourcing view — so this genuinely returns `null` for it rather than a
+ * fallback page, and callers driving navigation off an analysis result
+ * (a domain rollup, say) need to handle that rather than assume every
+ * domain is a click away.
+ */
+export function pageForDomain(domain: AnalysisDomain): PageId | null {
+  return PAGES.find((p) => p.domain === domain)?.id ?? null;
+}
+

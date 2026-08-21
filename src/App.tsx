@@ -73,7 +73,9 @@ export default function App() {
             </p>
           </div>
 
-          {page === "dashboard" ? <DashboardView /> : null}
+          {page === "dashboard" ? (
+            <DashboardView health={health} onNavigate={setPage} />
+          ) : null}
           {page === "crop-planning" ? <CropPlanningView /> : null}
           {page === "freight" ? <FreightView /> : null}
           {page === "visibility" ? <VisibilityView /> : null}

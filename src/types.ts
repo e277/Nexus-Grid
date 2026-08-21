@@ -7,6 +7,8 @@ export interface AgentActivity {
   /** Readable forms the route derives from `agent_name` and `action`. */
   agent_title?: string;
   action_label?: string;
+  /** What the agent ran with and returned — `outputs` shape is agent-specific. */
+  context?: { payload: Record<string, unknown>; outputs: Record<string, unknown> } | null;
 }
 
 export interface AuditLog {
@@ -25,6 +27,8 @@ export interface Health {
   app: string;
   version: string;
   environment: string;
+  /** How often the supply agent's background scan ticks, in seconds. */
+  agent_poll_interval_seconds?: number;
 }
 
 /** What a human may answer at the approval gate. */

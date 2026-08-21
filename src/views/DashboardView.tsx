@@ -1,10 +1,11 @@
 "use client";
 
-import { Circle, CircleCheck, Play, RotateCcw } from "lucide-react";
+import { Play, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { api, streamWorkflow } from "../api";
 import { DispatchPanel } from "../components/analysis/DispatchPanel";
+import { ScanStatusPanel } from "../components/analysis/ScanStatusPanel";
 import { AgentDecisionChart, GateOutcomeChart } from "../components/charts/AgentCharts";
 import { FormError } from "../components/Fields";
 import { ApprovalPanel, type HeldRecommendation } from "../components/pipeline/ApprovalPanel";
@@ -15,14 +16,11 @@ import {
   summarizeUpdate,
   type NodeState,
 } from "../components/pipeline/model";
-import { PHASES, type PhaseId } from "../components/pipeline/phases";
-import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
-import { PillTabs, type PillOption } from "../components/ui/tabs";
 import { usePoll } from "../hooks";
-import { cn } from "../lib/utils";
-import type { GateDecision, SubstitutionOpportunity } from "../types";
+import type { PageId } from "../navigation";
+import type { GateDecision, Health, SubstitutionOpportunity } from "../types";
 
 /**
  * Nodes with exactly one outgoing edge, so the graph's position is known the
@@ -62,22 +60,6 @@ function successorOf(id: string, gated: boolean): string | undefined {
   }
 }
 
-const PHASE_OPTIONS: PillOption<PhaseId | "all">[] = [
-  { value: "all", label: "All" },
-  ...PHASES.map((phase) => ({
-    value: phase.id,
-    label: phase.label,
-    dot: `var(--phase-${phase.id})`,
-  })),
-];
-
-const DECISION_COPY: Record<GateDecision, { label: string; tone: "success" | "info" | "danger" | "warning" }> = {
-  approved: { label: "Approved", tone: "success" },
-  modified: { label: "Approved with amendment", tone: "info" },
-  rejected: { label: "Rejected", tone: "danger" },
-  escalated: { label: "Escalated", tone: "warning" },
-};
-
 export interface ActingAgent {
   name: string;
   title: string;
@@ -107,7 +89,13 @@ interface FinalState {
   monitor_result?: { disruption_detected?: boolean; will_replan?: boolean };
 }
 
-export function DashboardView() {
+export function DashboardView({
+  health,
+  onNavigate,
+}: {
+  health: Health | null;
+  onNavigate: (page: PageId) => void;
+}) {
   const [gaps, setGaps] = useState<SubstitutionOpportunity[]>([]);
   const [climateByIso3, setClimateByIso3] = useState<Record<string, string>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -158,10 +146,6 @@ export function DashboardView() {
    * to run.
    */
   const [demoMode, setDemoMode] = useState(false);
-  const [focus, setFocus] = useState<PhaseId | "all">("all");
-
-
-
   const [nodes, setNodes] = useState<Record<string, NodeState>>(buildInitialNodes());
   /**
    * Which specialist acted at each step, as each step reports.
@@ -199,6 +183,13 @@ export function DashboardView() {
    */
   const { data: analysis } = usePoll(() => api.analysisOverview(), 30_000);
 
+  // The autonomous scan's own heartbeat, independent of whatever sweep is
+  // (or isn't) running below — see ScanStatusPanel for why this exists.
+  const { data: lastScans } = usePoll(
+    () => api.agentActivities({ agent_name: "supply_intelligence", limit: 1 }),
+    15_000
+  );
+
   /**
    * A short sweep runs Jamaica's largest gap, and only that.
    *
@@ -232,6 +223,14 @@ export function DashboardView() {
    * decoration.
    */
   async function consume(body: Record<string, unknown>, signal: AbortSignal) {
+    // The `finished` event's own `data.value` carries only
+    // `{ thread_id, status, interrupt }` — never the graph's channel state —
+    // so the execute node's own update is the only place its dispatch outcome
+    // actually appears in the stream. A disruption can send the run through
+    // `execute` twice (the capped re-plan loop); the later one is the real
+    // outcome, so each new one simply overwrites the last.
+    let executionResult: FinalState["execution"] | undefined;
+
     for await (const { event, data } of streamWorkflow(body, signal)) {
       if (event === "started") {
         setThreadId(String(data.thread_id));
@@ -264,6 +263,7 @@ export function DashboardView() {
         }
 
         if (id === "recommend") setRecommendation(update.recommendation);
+        if (id === "execute") executionResult = update.execution as FinalState["execution"];
         continue;
       }
 
@@ -292,7 +292,8 @@ export function DashboardView() {
             return null;
           }
           const current = gapsRef.current[index];
-          setCompleted((done) => [...done, { gap: current, state: (data.value ?? {}) as FinalState }]);
+          const state = { ...(data.value ?? {}), execution: executionResult } as FinalState;
+          setCompleted((done) => [...done, { gap: current, state }]);
           void runFrom(index + 1);
           return index;
         });
@@ -448,28 +449,113 @@ export function DashboardView() {
       }
     : null;
 
-  const activePhase = focus === "all" ? null : focus;
+  // The most recent completed gap's actual dispatch outcome — not whether
+  // the gateway happens to be configured, but what happened when this
+  // specific plan tried to reach it. Nothing to show before the first one.
+  const lastCompleted = completed.length > 0 ? completed[completed.length - 1] : null;
+  const lastDispatch = lastCompleted?.state.execution?.dispatch_status
+    ? {
+        gapLabel: `${lastCompleted.gap.importer} · ${lastCompleted.gap.commodity}`,
+        status: lastCompleted.state.execution.dispatch_status,
+        target: lastCompleted.state.execution.dispatch_target,
+        detail: lastCompleted.state.execution.dispatch_detail,
+      }
+    : null;
 
   return (
     <div className="space-y-4">
 
-      <PillTabs
-        label="Filter the diagram by phase"
-        options={PHASE_OPTIONS}
-        value={focus}
-        onChange={setFocus}
-      />
-
       {loadError ? <FormError message={loadError} /> : null}
       {runError ? <FormError message={runError} /> : null}
 
+      {/* One card: the autonomous loop's own status (top, unconditional —
+          it runs whether or not anyone is watching) and the manual sweep's
+          run control (bottom) — two different mechanisms, not two cards.
+          No per-gap checklist in the control row — gaps carry no honest
+          per-domain classification (every domain's analysis reads the same
+          full list; see DOMAIN_BRIEF in analysis.ts), so there is nowhere
+          else to move it to. A swept gap's outcome still shows up in the
+          decision charts below and in Visibility's audit trail. */}
+      <Card className="overflow-hidden p-0 divide-y divide-ng-border">
+        <ScanStatusPanel
+          health={health}
+          lastScan={lastScans?.[0] ?? null}
+          analyses={analysis?.analyses}
+          onNavigate={onNavigate}
+        />
+
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+          <div className="min-w-0">
+            <h2 className="text-ng-base font-semibold text-ng-primary">Coordination sweep</h2>
+            <p className="mt-0.5 text-ng-2xs text-ng-secondary">
+              {gaps.length === 0
+                ? "Loading live trade data…"
+                : `${done.size} of ${sweepGaps.length} sourcing gap${sweepGaps.length === 1 ? "" : "s"} swept${
+                    demoMode ? ` · ${gaps.length} found` : ""
+                  }`}
+            </p>
+          </div>
+
+          <span className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-ng-muted sm:w-32">
+            <span
+              className="block h-full rounded-full bg-ng-accent transition-[width] duration-300"
+              style={{ width: `${(done.size / Math.max(1, sweepGaps.length)) * 100}%` }}
+            />
+          </span>
+
+          <label className="ml-auto flex shrink-0 items-center gap-2 text-ng-xs text-ng-secondary">
+            <input
+              type="checkbox"
+              checked={requireApproval}
+              disabled={running || awaitingApproval}
+              onChange={(e) => setRequireApproval(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-ng-border text-ng-accent focus:ring-ng-accent"
+            />
+            Gate urgent plans
+          </label>
+
+          {/* Named for what it is. A sweep that silently ran three of twelve
+              would be a demo lying about its own scope. */}
+          <label className="flex shrink-0 items-center gap-2 text-ng-xs text-ng-secondary">
+            <input
+              type="checkbox"
+              checked={demoMode}
+              disabled={running || awaitingApproval}
+              onChange={(e) => setDemoMode(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-ng-border text-ng-accent focus:ring-ng-accent"
+            />
+            Short sweep
+            <span className="hidden text-ng-2xs text-ng-disabled xl:inline">
+              · Jamaica only
+            </span>
+          </label>
+
+          <Button
+            onClick={runAll}
+            disabled={running || awaitingApproval || sweepGaps.length === 0}
+            className="shrink-0 rounded-full"
+          >
+            {running ? (
+              <>
+                <RotateCcw size={14} className="animate-spin" aria-hidden />
+                Running…
+              </>
+            ) : (
+              <>
+                <Play size={14} aria-hidden />
+                Run sweep
+              </>
+            )}
+          </Button>
+        </div>
+      </Card>
 
       {/* ── The loop ────────────────────────────────────────────────────── */}
       <Card className="p-3 sm:p-4">
         <PipelineDiagram
           nodes={nodes}
           trace={trace}
-          focus={activePhase}
+          focus={null}
           awaitingApproval={awaitingApproval}
           modelSource={modelSource === "minimax" ? "MiniMax" : modelSource ? "Rule-based" : null}
           agentByNode={agentByNode}
@@ -486,175 +572,7 @@ export function DashboardView() {
               : null
           }
         />
-
       </Card>
-
-      {/* ── The sweep: the control and the list it advances ──────────────
-             Every gap is listed from the start and ticks off as it finishes.
-             Showing only the completed ones hid the shape of the work: a
-             reader could not tell whether two done meant two of three or two
-             of twelve, and the gap currently in the diagram had no place in
-             the list it came from.
-
-             The card is always here, never gated on the gaps having loaded.
-             The run button belongs to the loop, not to the list, and a button
-             that appears once data arrives cannot be found by someone waiting
-             for it — it goes inert instead, which is the same rule the
-             approval gate follows. */}
-        <Card className="overflow-hidden p-0">
-          {/* The control and the list it advances, in one card. They were two
-              stacked cards that both counted the same gaps — one as "12
-              sourcing gaps" beside the button, the other as "0 of 12 swept"
-              over the progress bar. The same number under two headings, with
-              nothing to say they were the same number. */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-ng-border px-4 py-3">
-            <div className="min-w-0">
-              <h2 className="text-ng-base font-semibold text-ng-primary">Coordination sweep</h2>
-              <p className="mt-0.5 text-ng-2xs text-ng-secondary">
-                {gaps.length === 0
-                  ? "Loading live trade data…"
-                  : `${done.size} of ${sweepGaps.length} sourcing gap${sweepGaps.length === 1 ? "" : "s"} swept${
-                      demoMode ? ` · ${gaps.length} found` : ""
-                    }`}
-              </p>
-            </div>
-
-            <span className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-ng-muted sm:w-32">
-              <span
-                className="block h-full rounded-full bg-ng-accent transition-[width] duration-300"
-                style={{ width: `${(done.size / Math.max(1, sweepGaps.length)) * 100}%` }}
-              />
-            </span>
-
-            <label className="ml-auto flex shrink-0 items-center gap-2 text-ng-xs text-ng-secondary">
-              <input
-                type="checkbox"
-                checked={requireApproval}
-                disabled={running || awaitingApproval}
-                onChange={(e) => setRequireApproval(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border-ng-border text-ng-accent focus:ring-ng-accent"
-              />
-              Gate urgent plans
-            </label>
-
-            {/* Named for what it is. A sweep that silently ran three of twelve
-                would be a demo lying about its own scope. */}
-            <label className="flex shrink-0 items-center gap-2 text-ng-xs text-ng-secondary">
-              <input
-                type="checkbox"
-                checked={demoMode}
-                disabled={running || awaitingApproval}
-                onChange={(e) => setDemoMode(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border-ng-border text-ng-accent focus:ring-ng-accent"
-              />
-              Short sweep
-              <span className="hidden text-ng-2xs text-ng-disabled xl:inline">
-                · Jamaica only
-              </span>
-            </label>
-
-            <Button
-              onClick={runAll}
-              disabled={running || awaitingApproval || sweepGaps.length === 0}
-              className="shrink-0 rounded-full"
-            >
-              {running ? (
-                <>
-                  <RotateCcw size={14} className="animate-spin" aria-hidden />
-                  Running…
-                </>
-              ) : (
-                <>
-                  <Play size={14} aria-hidden />
-                  Run sweep
-                </>
-              )}
-            </Button>
-          </div>
-
-          {sweepGaps.length === 0 ? (
-            <p className="px-4 py-6 text-ng-sm text-ng-secondary">
-              Reading the regional trade picture…
-            </p>
-          ) : null}
-
-          {/* Columns, not a single stack. Twelve gaps down one column is
-              twelve rows of mostly empty line — the text is short and the
-              status is a glyph, so three of them fit across a desktop and the
-              card stops growing with the region's gap count. */}
-          <ul className="grid grid-cols-1 gap-px bg-ng-border sm:grid-cols-2 2xl:grid-cols-3">
-            {sweepGaps.map((gap, index) => {
-              const key = `${gap.importer_iso3}-${gap.commodity_code}`;
-              const outcome = done.get(key) ?? null;
-              const active = running && !outcome && queueIndex === index;
-
-              return (
-                <li key={key} className="flex items-center gap-2 bg-ng-surface px-3 py-2">
-                  {/* State is a glyph, not just a colour: done, running, or
-                      not yet reached. */}
-                  {outcome ? (
-                    <CircleCheck size={14} className="shrink-0 text-ng-success" aria-label="Swept" />
-                  ) : active ? (
-                    <RotateCcw
-                      size={14}
-                      className="shrink-0 animate-spin text-ng-accent"
-                      aria-label="Running"
-                    />
-                  ) : (
-                    <Circle size={14} className="shrink-0 text-ng-disabled" aria-label="Waiting" />
-                  )}
-
-                  <span
-                    className={cn(
-                      "min-w-0 flex-1 truncate text-ng-xs font-medium",
-                      outcome || active ? "text-ng-primary" : "text-ng-secondary"
-                    )}
-                    title={`${gap.importer} · ${gap.commodity}`}
-                  >
-                    {gap.importer} · {gap.commodity}
-                  </span>
-                  {outcome?.gap_severity ? (
-                    <Badge
-                      size="sm"
-                      variant={
-                        outcome.gap_severity === "critical"
-                          ? "danger"
-                          : outcome.gap_severity === "material"
-                            ? "warning"
-                            : "muted"
-                      }
-                    >
-                      {outcome.gap_severity}
-                    </Badge>
-                  ) : null}
-                  {outcome?.gate_decision ? (
-                    <Badge size="sm" variant={DECISION_COPY[outcome.gate_decision].tone}>
-                      {DECISION_COPY[outcome.gate_decision].label}
-                    </Badge>
-                  ) : null}
-
-                  {!outcome ? (
-                    <span className="shrink-0 text-ng-2xs text-ng-secondary">
-                      {active ? "running…" : "waiting"}
-                    </span>
-                  ) : (
-                    <span
-                      className="shrink-0 text-ng-2xs text-ng-secondary"
-                      title={
-                        String(outcome.recovery?.next_step ?? "—").replace(/_/g, " ") +
-                        (outcome.execution?.dispatch_status
-                          ? ` · dispatch ${outcome.execution.dispatch_status}`
-                          : "")
-                      }
-                    >
-                      {String(outcome.recovery?.next_step ?? "—").replace(/_/g, " ").split(" ")[0]}
-                    </span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
 
       {/* ── The gate ────────────────────────────────────────────────────
              Always on screen, inert until a run parks here. A control that
@@ -671,10 +589,11 @@ export function DashboardView() {
         gateEnabled={requireApproval}
       />
 
-      {/* Beside the gate, not filed under the analysis: approving a plan into
-          a deployment with nowhere to send it is the failure this warns about,
-          and it has to be legible at the moment of the decision. */}
-      {analysis ? <DispatchPanel dispatch={analysis.dispatch} /> : null}
+      {/* Beside the gate, not filed under the analysis: what happened when the
+          last completed plan tried to reach an operator has to be legible at
+          the moment of the decision, not buried in a finished run's detail.
+          Absent until a plan has actually gone through execute. */}
+      {lastDispatch ? <DispatchPanel {...lastDispatch} /> : null}
 
       {/* ── What the loop has decided, across every run ──────────────────
              These are the loop's own records — what each agent decided and

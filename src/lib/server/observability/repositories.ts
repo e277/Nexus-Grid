@@ -32,9 +32,9 @@ function createRepository<T extends Row>(select: () => Table<T>): Repository<T> 
       const entries = Object.entries(filters).filter(
         ([, value]) => value !== undefined && value !== null
       );
-      const matches = select().rows.filter((row) =>
-        entries.every(([field, value]) => row[field as keyof T] === value)
-      );
+      const matches = select()
+        .rows.filter((row) => entries.every(([field, value]) => row[field as keyof T] === value))
+        .sort((a, b) => b.id - a.id);
       return matches.slice(skip, skip + limit);
     },
     create(data) {
