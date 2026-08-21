@@ -125,7 +125,7 @@ export function FreightView() {
 
       <CaribbeanMap lanes={lanes} ports={data.ports ?? []} />
 
-      <div className="rounded-[10px] border border-ng-border bg-ng-surface">
+      <div className="rounded-xl border border-ng-border/50 bg-ng-surface shadow-ng-sm">
         {/* Scrolls in both directions with a capped height, which is what lets
             the header stick: `position: sticky` resolves against the nearest
             scrollport, so a container that only scrolled sideways would pin

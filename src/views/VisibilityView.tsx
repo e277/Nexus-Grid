@@ -125,7 +125,7 @@ export function VisibilityView() {
           </p>
         </Card>
       ) : (
-        <div className="rounded-[10px] border border-ng-border bg-ng-surface">
+        <div className="rounded-xl border border-ng-border/50 bg-ng-surface shadow-ng-sm">
           <div className="max-h-[65vh] overflow-auto">
           <table className="w-full min-w-[680px] text-left">
             <thead>

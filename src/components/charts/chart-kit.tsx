@@ -209,13 +209,13 @@ export function ChartLegend({ items }: { items: { label: string; color: string }
  * shares this definition instead of carrying a second copy that can drift.
  */
 export const CARD_CHROME = {
-  primary: "overflow-hidden rounded-[10px] border border-ng-border bg-ng-surface",
-  supporting: "overflow-hidden rounded-[10px] border border-ng-border/60 bg-ng-bg",
+  primary: "overflow-hidden rounded-xl border border-ng-border/50 bg-ng-surface shadow-ng-sm",
+  supporting: "overflow-hidden rounded-xl border border-ng-border/25 bg-ng-bg",
 } as const;
 
 export const CARD_HEADER_CHROME = {
-  primary: "border-b border-ng-border px-4 py-3",
-  supporting: "px-4 py-3",
+  primary: "border-b border-ng-border/40 px-4 py-3.5",
+  supporting: "px-4 py-3.5",
 } as const;
 
 export const CARD_TITLE_CHROME = {

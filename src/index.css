@@ -96,9 +96,13 @@
     --div-pos-2: #1D5FA8;
     --div-pos-3: #3987e5;
 
-    --shadow-xs: 0 1px 2px rgba(0,0,0,.4);
-    --shadow-sm: 0 1px 3px rgba(0,0,0,.5), 0 1px 2px rgba(0,0,0,.4);
-    --shadow-md: 0 6px 18px rgba(0,0,0,.55);
+    /* A drop shadow alone barely registers this close to a near-black page
+       background, so cards also carry a hairline inset highlight along their
+       top edge — light catching a raised surface, the same trick most dark
+       UIs use to read as "elevated" without a bright halo. */
+    --shadow-xs: 0 1px 2px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.03);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,.5), 0 1px 2px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.04);
+    --shadow-md: 0 6px 18px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.05);
 
     color-scheme: dark;
   }

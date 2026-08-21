@@ -92,7 +92,7 @@ export function ApprovalPanel({
   return (
     <div
       className={cn(
-        "rounded-[10px] border bg-ng-surface transition-opacity",
+        "rounded-xl border bg-ng-surface shadow-ng-sm transition-opacity",
         active ? "border-ng-warning-bd" : "border-ng-border opacity-70"
       )}
     >

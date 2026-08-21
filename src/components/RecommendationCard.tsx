@@ -56,8 +56,8 @@ export function RecommendationCard({ recommendation }: { recommendation: unknown
   const band = typeof rec.confidence === "number" ? confidenceBadge(rec.confidence) : null;
 
   return (
-    <div className="rounded-[10px] border border-ng-ai-bd bg-ng-surface">
-      <div className="flex flex-wrap items-center gap-2 border-b border-ng-border px-4 py-2.5">
+    <div className="rounded-xl border border-ng-ai-bd bg-ng-surface shadow-ng-sm">
+      <div className="flex flex-wrap items-center gap-2 border-b border-ng-border/40 px-4 py-2.5">
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ng-ai text-white">
           <Sparkles size={13} aria-hidden />
         </span>

@@ -38,7 +38,7 @@ export function CoverageNote({
     <section
       aria-label="Coverage"
       className={cn(
-        "rounded-[10px] border p-4",
+        "rounded-xl border p-4",
         partial ? "border-ng-info-bd bg-ng-info-bg" : "border-ng-border bg-ng-bg"
       )}
     >

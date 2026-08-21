@@ -95,9 +95,9 @@ export function SourceBar({
   return (
     <section
       aria-label="Sources for this page"
-      className="overflow-hidden rounded-[10px] border border-ng-border bg-ng-surface"
+      className="overflow-hidden rounded-xl border border-ng-border/50 bg-ng-surface shadow-ng-sm"
     >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-ng-border px-4 py-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-ng-border/40 px-4 py-2">
         <h2 className="text-ng-2xs font-bold uppercase tracking-[.7px] text-ng-secondary">
           Sources on this page
         </h2>
