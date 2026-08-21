@@ -202,7 +202,7 @@ export function ConfidenceChart({ findings }: { findings: Finding[] }) {
 
   if (findings.length === 0) {
     return (
-      <ChartFrame title="Confidence" subtitle="Nothing to score yet">
+      <ChartFrame title="Confidence" subtitle="Nothing to score yet" variant="supporting">
         <p className="py-6 text-center text-ng-sm text-ng-secondary">No findings to score.</p>
       </ChartFrame>
     );
@@ -225,6 +225,7 @@ export function ConfidenceChart({ findings }: { findings: Finding[] }) {
     <ChartFrame
       title="Confidence across findings"
       subtitle="How many findings sit at each confidence level. Low confidence is not wrong — it means the agent wants the figure checked before it is acted on"
+      variant="supporting"
     >
       <div className="h-[210px] w-full">
         <ResponsiveContainer width="100%" height="100%">
@@ -293,7 +294,7 @@ const FACTOR_KEYS = [
 export function SupplierScoreChart({ match }: { match: GapMatch | null }) {
   if (!match || match.matches.length === 0) {
     return (
-      <ChartFrame title="Supplier ranking" subtitle="Select a sourcing gap">
+      <ChartFrame title="Supplier ranking" subtitle="Select a sourcing gap" variant="supporting">
         <p className="py-6 text-center text-ng-sm text-ng-secondary">
           No ranked suppliers for this gap.
         </p>
@@ -339,6 +340,7 @@ export function SupplierScoreChart({ match }: { match: GapMatch | null }) {
     <ChartFrame
       title={`Supplier ranking — ${match.importer} needs ${match.commodity.toLowerCase()}`}
       subtitle={`${compact(match.external_usd)} bought outside the region · scored on four observed factors, best first`}
+      variant="supporting"
     >
       <ChartLegend
         items={FACTOR_KEYS.map((factor, index) => ({ label: factor, color: SERIES[index] }))}

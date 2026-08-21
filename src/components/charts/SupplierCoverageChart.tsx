@@ -64,7 +64,7 @@ export function SupplierCoverageChart({
 
   if (rows.length === 0) {
     return (
-      <ChartFrame title="Regional coverage by gap" subtitle="No ranked suppliers yet">
+      <ChartFrame title="Regional coverage by gap" subtitle="No ranked suppliers yet" variant="supporting">
         <p className="py-6 text-center text-ng-sm text-ng-secondary">
           No gap has a scored regional supplier.
         </p>
@@ -103,6 +103,7 @@ export function SupplierCoverageChart({
     <ChartFrame
       title="Regional coverage by gap"
       subtitle={`Best regional supplier score for each of ${rows.length} gaps, strongest first — click a bar for its factor breakdown`}
+      variant="supporting"
     >
       <div className="w-full" style={{ height: rows.length * 26 + 44 }}>
         <ResponsiveContainer width="100%" height="100%">

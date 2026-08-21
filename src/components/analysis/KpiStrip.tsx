@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 
 import { cn } from "../../lib/utils";
+import { CARD_CHROME } from "../charts/chart-kit";
 
 /**
  * The headline row, in the idiom a BI dashboard uses for one.
@@ -15,9 +16,22 @@ import { cn } from "../../lib/utils";
  * make a display-size number look loose. Tabular figures belong where numbers
  * stack vertically, which is the tables, not here.
  */
-export function KpiStrip({ children }: { children: ReactNode }) {
+export function KpiStrip({
+  children,
+  variant = "primary",
+}: {
+  children: ReactNode;
+  /** Shares `ChartFrame`'s chrome weights — "supporting" for a strip that
+   *  isn't the page's primary data. */
+  variant?: "primary" | "supporting";
+}) {
   return (
-    <div className="grid grid-cols-1 divide-y divide-ng-border overflow-hidden rounded-[10px] border border-ng-border bg-ng-surface sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+    <div
+      className={cn(
+        "grid grid-cols-1 divide-y divide-ng-border sm:grid-cols-3 sm:divide-x sm:divide-y-0",
+        CARD_CHROME[variant]
+      )}
+    >
       {children}
     </div>
   );

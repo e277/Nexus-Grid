@@ -43,6 +43,30 @@ export const SEVERITY_COLOR: Record<string, string> = {
 };
 
 /**
+ * How bad severities rank against each other, worst first.
+ *
+ * Not a new judgement — it's the ordering already implicit in
+ * `SEVERITY_COLOR` above (danger > warning > muted > success), made explicit
+ * so a worst-of-many rollup has one true ranking to reduce to instead of
+ * every caller inventing its own.
+ */
+const SEVERITY_RANK: Record<string, number> = {
+  critical: 3,
+  watch: 2,
+  gap: 1,
+  opportunity: 0,
+};
+
+/** The single worst severity among a set of findings, or `null` if there are none. */
+export function worstSeverity(findings: { severity: string }[]): string | null {
+  if (findings.length === 0) return null;
+  return findings.reduce(
+    (worst, f) => (SEVERITY_RANK[f.severity] > SEVERITY_RANK[worst] ? f.severity : worst),
+    findings[0].severity
+  );
+}
+
+/**
  * Confidence is ordinal, not a status.
  *
  * One hue stepped light to dark, because low → medium → high has a natural
@@ -170,19 +194,52 @@ export function ChartLegend({ items }: { items: { label: string; color: string }
  * confidence levels, four gate outcomes — which is exactly the case where
  * labelling every mark is legible rather than noise.
  */
+/**
+ * The two chrome weights a card on an analysis page can carry.
+ *
+ * "Primary" is the unchanged original: a raised surface, a divided header,
+ * full-weight title ink. It's what every card used before this pair existed,
+ * so it stays the default — every existing call site with no `variant` is a
+ * zero-diff no-op.
+ *
+ * "Supporting" is a real demotion, not a colour tweak: the surface drops
+ * flush with the page instead of sitting raised on it, the header loses its
+ * dividing rule, and the title steps down a weight. Exported so `KpiStrip`
+ * (which needs the identical treatment but isn't a `ChartFrame` consumer)
+ * shares this definition instead of carrying a second copy that can drift.
+ */
+export const CARD_CHROME = {
+  primary: "overflow-hidden rounded-[10px] border border-ng-border bg-ng-surface",
+  supporting: "overflow-hidden rounded-[10px] border border-ng-border/60 bg-ng-bg",
+} as const;
+
+export const CARD_HEADER_CHROME = {
+  primary: "border-b border-ng-border px-4 py-3",
+  supporting: "px-4 py-3",
+} as const;
+
+export const CARD_TITLE_CHROME = {
+  primary: "text-ng-base font-semibold text-ng-primary",
+  supporting: "text-ng-sm font-medium text-ng-secondary",
+} as const;
+
 export function ChartFrame({
   title,
   subtitle,
   children,
+  variant = "primary",
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
+  /** "supporting" for context/derived charts — everything that isn't the
+   *  page's primary data (the findings matrix, the findings table itself). */
+  variant?: "primary" | "supporting";
 }) {
   return (
-    <section className="overflow-hidden rounded-[10px] border border-ng-border bg-ng-surface">
-      <div className="border-b border-ng-border px-4 py-3">
-        <h3 className="text-ng-base font-semibold text-ng-primary">{title}</h3>
+    <section className={CARD_CHROME[variant]}>
+      <div className={CARD_HEADER_CHROME[variant]}>
+        <h3 className={CARD_TITLE_CHROME[variant]}>{title}</h3>
         {subtitle ? <p className="mt-0.5 text-ng-xs text-ng-secondary">{subtitle}</p> : null}
       </div>
       <div className="p-4">{children}</div>

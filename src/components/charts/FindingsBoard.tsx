@@ -91,63 +91,102 @@ export function FindingsMatrix({
                   </span>
                 </th>
               ))}
+              {/* A total isn't a severity value, so it gets a divider and
+                  plain ink rather than the heat shading the 12 real cells
+                  use — the shading would misrepresent it as a reading. */}
+              <th
+                scope="col"
+                className="border-l border-ng-border px-1 py-1 text-center text-ng-2xs font-bold uppercase tracking-[.5px] text-ng-secondary"
+              >
+                Total
+              </th>
             </tr>
           </thead>
           <tbody>
-            {SEVERITY_ORDER.map((severity) => (
-              <tr key={severity}>
-                <th
-                  scope="row"
-                  className="whitespace-nowrap px-1 py-1 text-left text-ng-xs font-medium text-ng-primary"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <span
-                      aria-hidden
-                      className="h-2 w-2 shrink-0 rounded-[2px]"
-                      style={{ background: SEVERITY_COLOR[severity] }}
-                    />
-                    {SEVERITY_LABEL[severity]}
-                  </span>
-                </th>
-                {CONFIDENCE_ORDER.map((confidence) => {
-                  const count = findings.filter(
-                    (f) => f.severity === severity && f.confidence === confidence
-                  ).length;
-                  const active =
-                    selected?.severity === severity && selected?.confidence === confidence;
-                  return (
-                    <td key={confidence} className="p-0">
-                      <button
-                        disabled={count === 0}
-                        onClick={() =>
-                          onSelect?.(active ? null : { severity, confidence })
-                        }
-                        aria-label={`${count} ${SEVERITY_LABEL[severity]} findings at ${confidence} confidence`}
-                        className={cn(
-                          "h-11 w-full rounded text-ng-base font-bold tabular-nums transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent",
-                          count === 0
-                            ? "cursor-default border border-dashed border-ng-border text-ng-disabled"
-                            : "text-ng-primary",
-                          active && "ring-2 ring-ng-accent"
-                        )}
-                        style={
-                          count === 0
-                            ? undefined
-                            : {
-                                background: `color-mix(in oklab, ${SEVERITY_COLOR[severity]} ${Math.round(
-                                  18 + (count / max) * 62
-                                )}%, var(--color-surface))`,
-                              }
-                        }
-                      >
-                        {count === 0 ? "·" : count}
-                      </button>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+            {SEVERITY_ORDER.map((severity) => {
+              const rowTotal = findings.filter((f) => f.severity === severity).length;
+              return (
+                <tr key={severity}>
+                  <th
+                    scope="row"
+                    className="whitespace-nowrap px-1 py-1 text-left text-ng-xs font-medium text-ng-primary"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span
+                        aria-hidden
+                        className="h-2 w-2 shrink-0 rounded-[2px]"
+                        style={{ background: SEVERITY_COLOR[severity] }}
+                      />
+                      {SEVERITY_LABEL[severity]}
+                    </span>
+                  </th>
+                  {CONFIDENCE_ORDER.map((confidence) => {
+                    const count = findings.filter(
+                      (f) => f.severity === severity && f.confidence === confidence
+                    ).length;
+                    const active =
+                      selected?.severity === severity && selected?.confidence === confidence;
+                    return (
+                      <td key={confidence} className="p-0">
+                        <button
+                          disabled={count === 0}
+                          onClick={() =>
+                            onSelect?.(active ? null : { severity, confidence })
+                          }
+                          aria-label={`${count} ${SEVERITY_LABEL[severity]} findings at ${confidence} confidence`}
+                          className={cn(
+                            "h-11 w-full rounded text-ng-base font-bold tabular-nums transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent",
+                            count === 0
+                              ? "cursor-default border border-dashed border-ng-border text-ng-disabled"
+                              : "text-ng-primary",
+                            active && "ring-2 ring-ng-accent"
+                          )}
+                          style={
+                            count === 0
+                              ? undefined
+                              : {
+                                  background: `color-mix(in oklab, ${SEVERITY_COLOR[severity]} ${Math.round(
+                                    18 + (count / max) * 62
+                                  )}%, var(--color-surface))`,
+                                }
+                          }
+                        >
+                          {count === 0 ? "·" : count}
+                        </button>
+                      </td>
+                    );
+                  })}
+                  <td className="border-l border-ng-border px-1 py-1 text-center text-ng-base font-bold tabular-nums text-ng-secondary">
+                    {rowTotal}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
+          <tfoot>
+            <tr>
+              <th
+                scope="row"
+                className="whitespace-nowrap border-t border-ng-border px-1 py-1 text-left text-ng-2xs font-bold uppercase tracking-[.5px] text-ng-secondary"
+              >
+                Total
+              </th>
+              {CONFIDENCE_ORDER.map((confidence) => {
+                const colTotal = findings.filter((f) => f.confidence === confidence).length;
+                return (
+                  <td
+                    key={confidence}
+                    className="border-t border-ng-border px-1 py-1 text-center text-ng-base font-bold tabular-nums text-ng-secondary"
+                  >
+                    {colTotal}
+                  </td>
+                );
+              })}
+              <td className="border-l border-t border-ng-border px-1 py-1 text-center text-ng-base font-bold tabular-nums text-ng-primary">
+                {findings.length}
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </ChartFrame>
@@ -186,6 +225,13 @@ export function FindingsBoard({
 
   if (findings.length === 0) return null;
 
+  // Every domain page (DomainView) only ever fetches one domain, so this
+  // column repeats the page's own title on every row there. Derived from the
+  // data rather than a caller-set flag, so it reappears on its own if this
+  // ever renders findings that genuinely span domains.
+  const showDomain = new Set(findings.map((f) => f.domain)).size > 1;
+  const columns = ["Severity", ...(showDomain ? ["Domain"] : []), "Finding", "Key figure", "Confidence"];
+
   return (
     <div className="rounded-[10px] border border-ng-border bg-ng-surface">
       <div className="max-h-[65vh] overflow-auto">
@@ -202,13 +248,13 @@ export function FindingsBoard({
               <span aria-hidden>#</span>
               <span className="sr-only">Row number</span>
             </th>
-            {["Severity", "Domain", "Finding", "Key figure", "Confidence"].map((column, i) => (
+            {columns.map((column) => (
               <th
                 key={column}
                 className={cn(
                   "px-3 py-2 text-ng-2xs font-bold uppercase tracking-[.6px] text-ng-secondary",
                   "sticky top-0 z-10 bg-ng-surface border-b border-ng-border",
-                  i === 3 && "text-right"
+                  column === "Key figure" && "text-right"
                 )}
               >
                 {column}
@@ -259,9 +305,11 @@ export function FindingsBoard({
                     </span>
                   </span>
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 text-ng-xs text-ng-secondary">
-                  {finding.domain}
-                </td>
+                {showDomain ? (
+                  <td className="whitespace-nowrap px-3 py-2 text-ng-xs text-ng-secondary">
+                    {finding.domain}
+                  </td>
+                ) : null}
                 <td className="px-3 py-2 text-ng-sm font-medium leading-snug text-ng-primary">
                   {finding.title}
                 </td>
@@ -316,9 +364,9 @@ export function FindingsBoard({
                 <tr>
                   {/* Spans the table so the detail is not squeezed into one
                       column's width. */}
-                  <td colSpan={6} className="bg-ng-bg p-0">
+                  <td colSpan={showDomain ? 6 : 5} className="bg-ng-bg p-0">
                     <div className="px-3 py-3">
-                      <FindingDetail finding={finding} />
+                      <FindingDetail finding={finding} showDomain={showDomain} />
                     </div>
                   </td>
                 </tr>

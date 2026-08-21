@@ -78,6 +78,7 @@ export function ActivityTimeline({ activities }: { activities: AgentActivity[] }
     <ChartFrame
       title="When each agent acted"
       subtitle={`${points.length} actions across ${agents.length} agents over ${minutes} minute${minutes === 1 ? "" : "s"} — one lane per agent, marker size is the confidence it recorded`}
+      variant="supporting"
     >
       <div className="w-full" style={{ height: agents.length * 34 + 56 }}>
         <ResponsiveContainer width="100%" height="100%">

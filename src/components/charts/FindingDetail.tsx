@@ -12,6 +12,7 @@ const DOMAIN_LABEL: Record<string, string> = {
   planting: "Planting",
   logistics: "Logistics",
   impact: "Outcomes",
+  distribution: "Distribution",
 };
 
 const SEVERITY_LABEL: Record<string, string> = {
@@ -37,17 +38,22 @@ const SEVERITY_VARIANT: Record<string, "danger" | "success" | "warning" | "muted
 export function FindingDetail({
   finding,
   className,
+  showDomain = true,
 }: {
   finding: TaggedFinding;
   /** Set when this is nested — an expanded row supplies its own frame. */
   className?: string;
+  /** Off when the collapsed row above already omitted the same domain badge. */
+  showDomain?: boolean;
 }) {
   return (
     <Card className={cn("border-ng-accent p-4 sm:p-5", className)}>
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="muted" size="sm">
-          {DOMAIN_LABEL[finding.domain] ?? finding.domain}
-        </Badge>
+        {showDomain ? (
+          <Badge variant="muted" size="sm">
+            {DOMAIN_LABEL[finding.domain] ?? finding.domain}
+          </Badge>
+        ) : null}
         <h3 className="text-ng-lg font-semibold leading-snug text-ng-primary">{finding.title}</h3>
         <Badge variant={SEVERITY_VARIANT[finding.severity]} size="sm">
           {SEVERITY_LABEL[finding.severity]}

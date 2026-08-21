@@ -36,7 +36,7 @@ export function SourcingAnalysis({ data }: { data: AnalysisOverview }) {
 
   return (
     <div className="space-y-4">
-      <KpiStrip>
+      <KpiStrip variant="supporting">
         <Kpi
           label="Addressable imports"
           value={compact(addressableUsd)}

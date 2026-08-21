@@ -81,6 +81,7 @@ export function CaribbeanMap({
     <ChartFrame
       title="The region, and the lanes between it"
       subtitle={`${drawable.length} lanes across ${positions.size} member states. Line weight is the import value a lane could displace; colour is the weather at its two ends`}
+      variant="supporting"
     >
       <div className="overflow-x-auto">
         <svg
