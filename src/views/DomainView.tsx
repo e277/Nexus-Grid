@@ -5,6 +5,8 @@ import { useState } from "react";
 
 import { api } from "../api";
 import { ConfidenceChart } from "../components/charts/AgentCharts";
+import { CalendarLockChart } from "../components/charts/CalendarLockChart";
+import { PerCapitaExposureChart } from "../components/charts/PerCapitaExposureChart";
 import { PlantingCoverageChart } from "../components/charts/PlantingCoverageChart";
 import { SoilCoverageChart } from "../components/charts/SoilCoverageChart";
 import { SourcingAnalysis } from "../components/analysis/SourcingAnalysis";
@@ -193,6 +195,17 @@ export function DomainView({
             </>
           }
         />
+      ) : null}
+
+      {/* The same two figures the CoverageNote above names as covered but had
+          no chart of their own for — calendar-lock timing and per-capita
+          exposure, both derived from the same picture the findings text
+          reads, not a second source. */}
+      {domain === "distribution" ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <CalendarLockChart />
+          <PerCapitaExposureChart />
+        </div>
       ) : null}
 
       {/* The soil agent reasons over each state's growing-area readings, so
