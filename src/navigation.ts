@@ -132,20 +132,24 @@ export const NAV_GROUPS: NavGroup[] = [
           "Coordination layers for port operations, customs processing, and inter-island freight movement.",
       },
       {
+        id: "distribution",
+        label: "Distribution",
+        icon: Warehouse,
+        domain: "distribution",
+        title: "Food Distribution & Inventory Optimization",
+        description:
+          "Optimization systems for food distribution, warehouse management, and inventory across island markets.",
+      },
+      {
+        // Last on purpose: this is the audit trail over what the other seven
+        // pages' agents did, not a step in the analysis itself — it belongs
+        // after the domains it reports on, not ahead of the last one.
         id: "visibility",
         label: "Supply Chain Visibility",
         icon: Activity,
         title: "Supply Chain Visibility & Tracking",
         description:
           "End-to-end visibility systems that track food from farm to market across the regional supply chain.",
-      },
-      {
-        id: "distribution",
-        label: "Distribution",
-        icon: Warehouse,
-        title: "Food Distribution & Inventory Optimization",
-        description:
-          "Optimization systems for food distribution, warehouse management, and inventory across island markets.",
       },
     ],
   },

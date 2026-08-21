@@ -104,6 +104,20 @@ export const LOGISTICS_SOURCES: SourceUse[] = [
   },
 ];
 
+/** Distribution — calendar-lock timing, per-capita exposure, and observed cereal scale. */
+export const DISTRIBUTION_SOURCES: SourceUse[] = [
+  {
+    slot: "indicators",
+    contributes:
+      "Population (for per-resident import exposure) and directly observed cereal production, in metric tons, per member state.",
+  },
+  {
+    slot: "agroclimate",
+    contributes:
+      "Every regional supplier's rain-fed planting window, checked against the current month to find gaps with no window open right now.",
+  },
+];
+
 /**
  * Impact Metrics reads every domain, so it names every publisher behind them.
  *
@@ -151,6 +165,8 @@ export function sourcesForDomain(domain: AnalysisDomain): SourceUse[] {
       return PLANTING_SOURCES;
     case "logistics":
       return LOGISTICS_SOURCES;
+    case "distribution":
+      return DISTRIBUTION_SOURCES;
     default:
       // The outcome reading draws on the whole picture rather than one slice.
       return ANALYSIS_SOURCES;

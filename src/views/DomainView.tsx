@@ -158,6 +158,42 @@ export function DomainView({
         />
       ) : null}
 
+      {/* Distribution has a demand half (observable, drives this reading)
+          and a stock half (not published anywhere free). Said here rather
+          than left for a reader to infer from an absence. */}
+      {domain === "distribution" ? (
+        <CoverageNote
+          level="partial"
+          covered={
+            <>
+              Which sourcing gaps have no regional supplier able to start a rain-fed season on
+              that commodity this month, so the gap is calendar-locked to external sourcing
+              until a specific future month; how food-import exposure concentrates per resident
+              across member states; and the region&rsquo;s directly observed cereal production
+              scale. The distribution agent&rsquo;s reading of all three is above.
+            </>
+          }
+          missing={
+            <>
+              Warehouse and inventory optimisation. There is no stock position, no storage
+              capacity, no spoilage rate and no distribution schedule anywhere in this
+              platform, and no finding infers one.
+            </>
+          }
+          requires={
+            <>
+              Per-market inventory and warehouse data — held by ministries, distributors and
+              port operators, and not published as an open feed for any CARICOM member state.
+              Trade statistics record what crossed a border, not what is sitting in a
+              warehouse behind it. The nearest open dataset is WFP&rsquo;s market price series
+              on the Humanitarian Data Exchange, free and keyless, but it covers 1 of the 15
+              CARICOM member states — Haiti — so it is not wired in for that reason rather
+              than an access one.
+            </>
+          }
+        />
+      ) : null}
+
       {/* The planting agent reasons over the region's calendar, so the
           calendar itself belongs on its page — and it is the one view here
           that looks forward rather than reporting the present. */}

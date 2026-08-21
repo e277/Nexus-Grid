@@ -32,7 +32,7 @@ export type GateDecision = "approved" | "modified" | "rejected" | "escalated";
 
 // ── Agent analysis ────────────────────────────────────────────────────────
 
-export type AnalysisDomain = "market" | "soil" | "planting" | "logistics" | "impact";
+export type AnalysisDomain = "market" | "soil" | "planting" | "logistics" | "impact" | "distribution";
 
 export type FindingSeverity = "critical" | "opportunity" | "watch" | "gap";
 
@@ -253,6 +253,8 @@ export interface StateProfile {
   year: number | null;
   cereal_yield_kg_ha: number | null;
   cereal_land_ha: number | null;
+  cereal_production_mt: number | null;
+  cereal_production_year: number | null;
   agricultural_land_pct: number | null;
   soil: SoilProfile | null;
   rain_fed_months: string[];

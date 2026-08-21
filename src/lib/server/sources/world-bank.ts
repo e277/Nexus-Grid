@@ -32,6 +32,7 @@ const INDICATORS: { id: string; label: string; unit: string }[] = [
   // Production capacity — what a state can actually grow, not just what it buys
   { id: "AG.YLD.CREL.KG", label: "Cereal yield", unit: "kg per hectare" },
   { id: "AG.LND.CREL.HA", label: "Land under cereal production", unit: "hectares" },
+  { id: "AG.PRD.CREL.MT", label: "Cereal production", unit: "metric tons" },
   { id: "AG.LND.AGRI.ZS", label: "Agricultural land", unit: "% of land area" },
 ];
 

@@ -18,13 +18,13 @@
  */
 
 import { byIso3, byName } from "../sources/caricom";
-import type { RegionalPicture } from "../projection";
+import type { RegionalPicture, SubstitutionOpportunity } from "../projection";
 import type { CoordinationOutcome } from "../observability/coordination";
 import type { Lane, PortExposure } from "../lanes";
 import type { GapMatch } from "../matching";
 import { callModelJson, resolveProvider } from "./provider";
 
-export type AnalysisDomain = "market" | "soil" | "planting" | "logistics" | "impact";
+export type AnalysisDomain = "market" | "soil" | "planting" | "logistics" | "impact" | "distribution";
 
 export const ANALYSIS_DOMAINS: AnalysisDomain[] = [
   "market",
@@ -32,6 +32,7 @@ export const ANALYSIS_DOMAINS: AnalysisDomain[] = [
   "planting",
   "logistics",
   "impact",
+  "distribution",
 ];
 
 export type FindingSeverity = "critical" | "opportunity" | "watch" | "gap";
@@ -132,6 +133,8 @@ Focus on: which supplier-to-importer lanes are viable, what the transit and weat
 
   impact: `You analyse what the coordination layer is achieving.
 Focus on: the size of the addressable gap against the region's import bill, what the agents have actually decided so far and how confident they were, and whether the decisions taken are moving the region toward regional sourcing.`,
+
+  distribution: `You analyse distribution and inventory timing with no stock, warehouse, or spoilage data — none exists in any source you are given. Focus on: which sourcing gaps have no regional supplier able to start a rain-fed season on that commodity this month at all, so the gap is calendar-locked to external sourcing until a specific future month; how food-import exposure concentrates per resident across member states; and the region's directly observed cereal production scale. Never state a stock level, a delivery date, or a spoilage window — none of those are derivable from what you are given, and rain_fed_months marks when a season can start, not when a harvest is ready.`,
 };
 
 function systemPrompt(domain: AnalysisDomain): string {
@@ -146,6 +149,73 @@ ${BASE_RULES}`;
 
 function usd(value: number): string {
   return `$${Math.round(value).toLocaleString()}`;
+}
+
+// ── Distribution helpers ─────────────────────────────────────────────────
+//
+// No stock, warehouse or spoilage data exists in any source, so "distribution
+// timing" can only mean: which gaps have no regional planting-window option
+// open right now. `rain_fed_months` marks when a season can start, not a
+// harvest date, so this never becomes "arrives in N weeks" — only "not before
+// month X".
+
+const MONTH_ORDER = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/** The nearest of `months` from the current calendar month, following month order. */
+function nearestUpcomingMonth(months: string[]): { month: string; monthsAway: number } | null {
+  const currentIndex = new Date().getMonth();
+  let best: { month: string; monthsAway: number } | null = null;
+  for (const m of months) {
+    const idx = MONTH_ORDER.indexOf(m);
+    if (idx === -1) continue;
+    const monthsAway = (idx - currentIndex + 12) % 12;
+    if (best === null || monthsAway < best.monthsAway) best = { month: m, monthsAway };
+  }
+  return best;
+}
+
+interface CalendarLock {
+  opportunity: SubstitutionOpportunity;
+  nextOpenMonth: string;
+  monthsAway: number;
+}
+
+/**
+ * Gaps where none of the regional suppliers can start a rain-fed season on
+ * the commodity this month.
+ *
+ * Uses the opportunity's raw `regional_suppliers`, not `matching.ts`'s
+ * geo-filtered shortlist — whether a lane can be routed is irrelevant to
+ * whether a state can agronomically start supplying something right now.
+ * A gap with no planting-calendar data for any candidate is left out rather
+ * than called "locked": that is missing data, not a timing claim.
+ */
+function calendarLockedGaps(picture: RegionalPicture): CalendarLock[] {
+  const monthsByName = new Map(picture.states.map((s) => [s.name, s.rain_fed_months]));
+  return picture.substitution_opportunities
+    .map((opportunity): CalendarLock | null => {
+      const openMonths = new Set<string>();
+      for (const supplier of opportunity.regional_suppliers) {
+        for (const m of monthsByName.get(supplier) ?? []) openMonths.add(m);
+      }
+      if (openMonths.size === 0) return null;
+      const nearest = nearestUpcomingMonth([...openMonths]);
+      if (nearest === null || nearest.monthsAway === 0) return null;
+      return { opportunity, nextOpenMonth: nearest.month, monthsAway: nearest.monthsAway };
+    })
+    .filter((x): x is CalendarLock => x !== null)
+    .sort((a, b) => b.opportunity.external_usd - a.opportunity.external_usd);
+}
+
+/** States ranked by food-import dollars per resident — an exposure proxy, not a risk score. */
+function perCapitaExposure(picture: RegionalPicture) {
+  return picture.states
+    .filter((s): s is typeof s & { population: number } => (s.population ?? 0) > 0 && s.food_imports_usd > 0)
+    .map((s) => ({ state: s, usdPerCapita: s.food_imports_usd / s.population }))
+    .sort((a, b) => b.usdPerCapita - a.usdPerCapita);
 }
 
 function buildUserPrompt(domain: AnalysisDomain, inputs: AnalysisInputs): string {
@@ -315,6 +385,56 @@ ${storms || "None in the basin."}
 NOT OBSERVED: berth congestion, queue length, vessel capacity and sailing schedules are not published by any CARICOM port authority or free freight API, so they carry no weight in the scoring — never rank on them. Transit figures are great-circle distance at a documented average sea speed plus fixed port handling. Where a climate risk reads "no current reading", the weather station did not answer: that is missing data, not clear weather.
 
 ${coordination}
+
+${gaps}`;
+  }
+
+  if (domain === "distribution") {
+    const locked = calendarLockedGaps(picture);
+    const lockedText = locked
+      .slice(0, 8)
+      .map(
+        (x) =>
+          `${x.opportunity.importer} buys ${usd(x.opportunity.external_usd)} of ${x.opportunity.commodity} externally; ` +
+          `none of its regional suppliers (${x.opportunity.regional_suppliers.join(", ")}) can start a rain-fed season on it ` +
+          `until ${x.nextOpenMonth} (${x.monthsAway} month(s) away).`
+      )
+      .join("\n");
+
+    const perCapita = perCapitaExposure(picture);
+    const perCapitaText = perCapita
+      .slice(0, 8)
+      .map(
+        (x) =>
+          `${x.state.name}: ${usd(x.usdPerCapita)} of food imports per resident ` +
+          `(population ${x.state.population.toLocaleString()}).`
+      )
+      .join("\n");
+
+    const cereal = picture.states
+      .filter((s) => s.cereal_production_mt !== null)
+      .sort((a, b) => (b.cereal_production_mt ?? 0) - (a.cereal_production_mt ?? 0));
+    const cerealText = cereal
+      .slice(0, 8)
+      .map(
+        (s) =>
+          `${s.name}: ${s.cereal_production_mt!.toLocaleString()} metric tons of cereal production ` +
+          `observed in ${s.cereal_production_year}.`
+      )
+      .join("\n");
+
+    return `${totals}
+
+CALENDAR-LOCKED SOURCING GAPS — no regional supplier can start this commodity's rain-fed season this month
+${lockedText || "No gap is calendar-locked to a future month — every gap either has a regional supplier whose window is open now, or no gap has planting-calendar data for any candidate."}
+
+PER-CAPITA FOOD-IMPORT EXPOSURE
+${perCapitaText || "No state has both population and import data."}
+
+OBSERVED REGIONAL CEREAL PRODUCTION
+${cerealText || "No state has an observed cereal-production figure."}
+
+NOT OBSERVED: there is no stock position, warehouse capacity, spoilage rate or distribution schedule anywhere in this platform's sources. rain_fed_months marks when a season can start, not when a harvest is ready — there is no crop-cycle-length data to derive a delivery date from. Cereal production is a metric-ton figure with no price series behind it — never convert it to or net it against a USD value.
 
 ${gaps}`;
   }
@@ -541,6 +661,64 @@ function ruleFindings(domain: AnalysisDomain, inputs: AnalysisInputs): { summary
           ...(l.distance_km !== null
             ? [{ label: "Distance", value: Math.round(l.distance_km), unit: "km" as const, of: null }]
             : []),
+        ],
+      });
+    }
+  }
+
+  if (domain === "distribution") {
+    for (const x of calendarLockedGaps(picture).slice(0, 2)) {
+      const { opportunity: o, nextOpenMonth, monthsAway } = x;
+      findings.push({
+        title: `${o.importer} is calendar-locked on ${o.commodity.toLowerCase()} until ${nextOpenMonth}`,
+        finding: `No regional supplier of ${o.commodity.toLowerCase()} for ${o.importer} has a rain-fed window open this month; the nearest is ${nextOpenMonth}, ${monthsAway} month(s) away.`,
+        recommendation: `Treat this ${usd(o.external_usd)} gap as external-only for now rather than a near-term substitution candidate.`,
+        evidence: [
+          `Regional suppliers checked: ${o.regional_suppliers.join(", ")} (NASA POWER rain-fed calendars)`,
+          `${usd(o.external_usd)} bought outside CARICOM on this commodity (UN Comtrade)`,
+        ],
+        severity: monthsAway >= 6 ? "critical" : "watch",
+        confidence: "medium",
+        states: [o.importer],
+        metrics: [
+          { label: "Months until any regional window opens", value: monthsAway, unit: "months", of: 12 },
+          { label: "Bought outside the region", value: o.external_usd, unit: "usd", of: null },
+        ],
+      });
+    }
+
+    const topExposure = perCapitaExposure(picture)[0];
+    if (topExposure) {
+      findings.push({
+        title: `${topExposure.state.name} carries the region's highest per-resident import exposure`,
+        finding: `${topExposure.state.name} imports ${usd(topExposure.usdPerCapita)} of food per resident, the highest ratio of any covered member state.`,
+        recommendation: `Weigh ${topExposure.state.name} first if resilience effort is being rationed across the region rather than spread evenly.`,
+        evidence: [
+          `${usd(topExposure.state.food_imports_usd)} total food imports over a population of ${topExposure.state.population.toLocaleString()} (World Bank, UN Comtrade)`,
+        ],
+        severity: "watch",
+        confidence: "medium",
+        states: [topExposure.state.name],
+        metrics: [
+          { label: "Food imports per resident", value: Math.round(topExposure.usdPerCapita), unit: "usd", of: null },
+        ],
+      });
+    }
+
+    const topCereal = picture.states
+      .filter((s) => s.cereal_production_mt !== null)
+      .sort((a, b) => (b.cereal_production_mt ?? 0) - (a.cereal_production_mt ?? 0))[0];
+    if (topCereal) {
+      findings.push({
+        title: `${topCereal.name} carries the region's largest observed cereal base`,
+        finding: `${topCereal.name} produced ${topCereal.cereal_production_mt!.toLocaleString()} metric tons of cereal in ${topCereal.cereal_production_year}, the largest observed figure of any covered state.`,
+        recommendation: `Treat this as the scale of what a regional cereal distribution plan would need to move, not a stock level available today.`,
+        evidence: [`${topCereal.cereal_production_mt!.toLocaleString()} metric tons in ${topCereal.cereal_production_year} (World Bank)`],
+        severity: "opportunity",
+        confidence: "medium",
+        states: [topCereal.name],
+        metrics: [
+          { label: "Cereal production", value: topCereal.cereal_production_mt!, unit: "count", of: null },
         ],
       });
     }

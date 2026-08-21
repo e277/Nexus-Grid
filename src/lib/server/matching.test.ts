@@ -21,6 +21,8 @@ function state(overrides: Partial<StateProfile> & Pick<StateProfile, "iso3" | "n
     year: 2023,
     cereal_yield_kg_ha: null,
     cereal_land_ha: null,
+    cereal_production_mt: null,
+    cereal_production_year: null,
     agricultural_land_pct: null,
     soil: null,
     rain_fed_months: [],

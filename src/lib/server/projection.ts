@@ -38,6 +38,11 @@ export interface StateProfile {
   /** What the state can grow, not just what it buys. */
   cereal_yield_kg_ha: number | null;
   cereal_land_ha: number | null;
+  /** Directly observed (World Bank `AG.PRD.CREL.MT`) — not land × yield, which
+   *  would silently multiply two indicators `latest()` may pick from different
+   *  years. */
+  cereal_production_mt: number | null;
+  cereal_production_year: number | null;
   agricultural_land_pct: number | null;
   /** Soil under the main growing area, when the grid covers it. */
   soil: SoilProfile | null;
@@ -141,6 +146,7 @@ export function buildRegionalPicture(bundle: SourceBundle): RegionalPicture {
     const population = latest(observations, state.iso3, "SP.POP.TOTL");
     const cerealYield = latest(observations, state.iso3, "AG.YLD.CREL.KG");
     const cerealLand = latest(observations, state.iso3, "AG.LND.CREL.HA");
+    const cerealProduction = latest(observations, state.iso3, "AG.PRD.CREL.MT");
     const agriLand = latest(observations, state.iso3, "AG.LND.AGRI.ZS");
     const calendar = calendarByIso3.get(state.iso3) ?? null;
 
@@ -157,6 +163,8 @@ export function buildRegionalPicture(bundle: SourceBundle): RegionalPicture {
       year: foodImports?.year ?? null,
       cereal_yield_kg_ha: cerealYield ? Math.round(cerealYield.value) : null,
       cereal_land_ha: cerealLand ? Math.round(cerealLand.value) : null,
+      cereal_production_mt: cerealProduction ? Math.round(cerealProduction.value) : null,
+      cereal_production_year: cerealProduction?.year ?? null,
       agricultural_land_pct: agriLand ? round(agriLand.value) : null,
       soil: soilByIso3.get(state.iso3) ?? null,
       rain_fed_months: calendar?.rain_fed_months ?? [],
