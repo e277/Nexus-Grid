@@ -42,13 +42,13 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        "flex w-rail shrink-0 flex-col border-r border-ng-border/60 bg-ng-surface transition-[width] duration-200",
+        "flex w-rail shrink-0 flex-col border-r border-ng-border/20 bg-ng-surface transition-[width] duration-200",
         collapsed ? "lg:w-rail" : "lg:w-sidebar"
       )}
     >
       <div
         className={cn(
-          "flex h-14 shrink-0 items-center border-b border-ng-border/50 px-2",
+          "flex h-14 shrink-0 items-center border-b border-ng-border/15 px-2",
           collapsed ? "justify-center" : "justify-center lg:justify-start lg:gap-2.5 lg:px-4"
         )}
       >
@@ -70,7 +70,7 @@ export function Sidebar({
           still, grey dot rather than a reassuring animation. */}
       <div
         className={cn(
-          "flex shrink-0 items-center border-b border-ng-border/50 px-2 py-2.5",
+          "flex shrink-0 items-center border-b border-ng-border/15 px-2 py-2.5",
           collapsed ? "justify-center" : "justify-center lg:justify-start lg:gap-2"
         )}
       >
@@ -122,7 +122,7 @@ export function Sidebar({
           onClick={onToggleCollapsed}
           aria-label="Expand sidebar"
           title="Expand sidebar"
-          className="hidden h-8 shrink-0 items-center justify-center border-b border-ng-border/50 text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent lg:flex"
+          className="hidden h-8 shrink-0 items-center justify-center border-b border-ng-border/15 text-ng-secondary transition-colors hover:bg-ng-bg hover:text-ng-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ng-accent lg:flex"
         >
           <PanelLeftOpen size={15} />
         </button>

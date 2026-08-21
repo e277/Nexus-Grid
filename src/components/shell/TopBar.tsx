@@ -13,7 +13,7 @@ export function TopBar({ page }: TopBarProps) {
   const active = findPage(page);
 
   return (
-    <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b border-ng-border/50 bg-ng-surface/85 px-4 backdrop-blur-md sm:gap-3 sm:px-6">
+    <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b border-ng-border/15 bg-ng-surface/85 px-4 backdrop-blur-md sm:gap-3 sm:px-6">
 
       {/* Breadcrumb: the group, then the page. Two segments is the whole tree,
           so there is nothing to truncate on a phone but the group. */}

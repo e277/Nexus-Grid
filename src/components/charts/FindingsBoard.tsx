@@ -233,7 +233,7 @@ export function FindingsBoard({
   const columns = ["Severity", ...(showDomain ? ["Domain"] : []), "Finding", "Key figure", "Confidence"];
 
   return (
-    <div className="rounded-xl border border-ng-border/50 bg-ng-surface shadow-ng-sm">
+    <div className="rounded-xl bg-ng-surface shadow-ng-sm">
       <div className="max-h-[65vh] overflow-auto">
       <table className="w-full min-w-[720px] text-left">
         <thead>

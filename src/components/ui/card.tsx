@@ -7,7 +7,7 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
     <div
       ref={ref}
       className={cn(
-        "overflow-hidden rounded-xl border border-ng-border/50 bg-ng-surface shadow-ng-sm",
+        "overflow-hidden rounded-xl bg-ng-surface shadow-ng-sm",
         className
       )}
       {...props}
@@ -21,7 +21,7 @@ const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
     <div
       ref={ref}
       className={cn(
-        "flex items-start justify-between gap-3 border-b border-ng-border/40 px-5 py-3.5",
+        "flex items-start justify-between gap-3 border-b border-ng-border/15 px-5 py-3.5",
         className
       )}
       {...props}
