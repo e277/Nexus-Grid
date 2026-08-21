@@ -9,6 +9,7 @@ import { LiveIndicator } from "../components/LiveIndicator";
 import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
 import { Pagination, usePagination } from "../components/ui/pagination";
+import { ScrollFade } from "../components/ui/scroll-fade";
 import { Skeleton } from "../components/ui/skeleton";
 import { usePoll } from "../hooks";
 import { cn } from "../lib/utils";
@@ -126,7 +127,7 @@ export function VisibilityView() {
         </Card>
       ) : (
         <div className="rounded-xl bg-ng-surface shadow-ng-sm">
-          <div className="max-h-[65vh] overflow-auto">
+          <ScrollFade className="max-h-[65vh] overflow-auto">
           <table className="w-full min-w-[680px] text-left">
             <thead>
               <tr>
@@ -188,7 +189,7 @@ export function VisibilityView() {
               ))}
             </tbody>
           </table>
-          </div>
+          </ScrollFade>
           <Pagination
             {...paged}
             onPage={paged.setPage}

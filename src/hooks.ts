@@ -1,5 +1,40 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+/**
+ * Whether a horizontally-scrollable element has more content past either
+ * edge, so a caller can show a fade there instead of relying on a scrollbar
+ * a touch device never renders.
+ *
+ * Recomputes on scroll and on resize (a table's own content can change
+ * `scrollWidth` without the container itself resizing, e.g. new columns).
+ */
+export function useScrollEdges<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [atStart, setAtStart] = useState(true);
+  const [atEnd, setAtEnd] = useState(true);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const update = () => {
+      setAtStart(el.scrollLeft <= 1);
+      setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 1);
+    };
+    update();
+
+    el.addEventListener("scroll", update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener("scroll", update);
+      observer.disconnect();
+    };
+  }, []);
+
+  return { ref, atStart, atEnd };
+}
+
 interface PollState<T> {
   data: T | null;
   error: string | null;

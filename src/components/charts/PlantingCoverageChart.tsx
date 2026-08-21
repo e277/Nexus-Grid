@@ -4,6 +4,7 @@ import { api } from "../../api";
 import { usePoll } from "../../hooks";
 import { cn } from "../../lib/utils";
 import { ChartFrame } from "./chart-kit";
+import { ScrollFade } from "../ui/scroll-fade";
 import { Skeleton } from "../ui/skeleton";
 
 const MONTHS = [
@@ -64,7 +65,7 @@ export function PlantingCoverageChart() {
       subtitle={`How many of ${states.length} member states can start a rain-fed season in each month. Thinnest: ${thinMonths.join(", ")} at ${thinnest} — a long-run normal from NASA POWER, not a forecast. Coordination is between member states, not individual farms: no farm-level planting data is published for the region`}
       variant="supporting"
     >
-      <div className="overflow-x-auto">
+      <ScrollFade className="overflow-x-auto" fadeFrom="ng-bg">
         <table className="w-full min-w-[560px] border-separate border-spacing-[2px]">
           <thead>
             <tr>
@@ -145,7 +146,7 @@ export function PlantingCoverageChart() {
             </tr>
           </tfoot>
         </table>
-      </div>
+      </ScrollFade>
     </ChartFrame>
   );
 }

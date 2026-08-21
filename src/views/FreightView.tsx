@@ -11,6 +11,7 @@ import { SourceBar } from "../components/SourceBar";
 import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
 import { Pagination, usePagination } from "../components/ui/pagination";
+import { ScrollFade } from "../components/ui/scroll-fade";
 import { Skeleton } from "../components/ui/skeleton";
 import { usePoll } from "../hooks";
 import { cn } from "../lib/utils";
@@ -130,7 +131,7 @@ export function FreightView() {
             the header stick: `position: sticky` resolves against the nearest
             scrollport, so a container that only scrolled sideways would pin
             the header to a box that never moves vertically. */}
-        <div className="max-h-[65vh] overflow-auto">
+        <ScrollFade className="max-h-[65vh] overflow-auto">
         <table className="w-full min-w-[820px] text-left">
           <thead>
             <tr>
@@ -202,7 +203,7 @@ export function FreightView() {
             ))}
           </tbody>
         </table>
-        </div>
+        </ScrollFade>
         <Pagination {...paged} onPage={paged.setPage} onPageSize={paged.setPageSize} noun="lanes" />
       </div>
 

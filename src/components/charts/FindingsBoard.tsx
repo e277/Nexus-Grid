@@ -6,6 +6,7 @@ import { AlertTriangle, ChevronDown, CircleHelp, Eye, TrendingUp } from "lucide-
 
 import { cn } from "../../lib/utils";
 import { Pagination, usePagination } from "../ui/pagination";
+import { ScrollFade } from "../ui/scroll-fade";
 import type { Finding, FindingSeverity } from "../../types";
 import { ChartFrame, CONFIDENCE_COLOR, SEVERITY_COLOR } from "./chart-kit";
 import { FindingDetail } from "./FindingDetail";
@@ -68,7 +69,7 @@ export function FindingsMatrix({
       title="Severity against confidence"
       subtitle="Where the agents' conclusions sit — click a cell to filter"
     >
-      <div className="overflow-x-auto">
+      <ScrollFade className="overflow-x-auto">
         <table className="w-full min-w-[420px] border-separate border-spacing-1">
           <thead>
             <tr>
@@ -188,7 +189,7 @@ export function FindingsMatrix({
             </tr>
           </tfoot>
         </table>
-      </div>
+      </ScrollFade>
     </ChartFrame>
   );
 }
@@ -234,7 +235,7 @@ export function FindingsBoard({
 
   return (
     <div className="rounded-xl bg-ng-surface shadow-ng-sm">
-      <div className="max-h-[65vh] overflow-auto">
+      <ScrollFade className="max-h-[65vh] overflow-auto">
       <table className="w-full min-w-[720px] text-left">
         <thead>
           <tr>
@@ -376,7 +377,7 @@ export function FindingsBoard({
           })}
         </tbody>
       </table>
-      </div>
+      </ScrollFade>
       <Pagination
         {...paged}
         onPage={paged.setPage}
