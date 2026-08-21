@@ -6,6 +6,7 @@ import { useState } from "react";
 import { api } from "../api";
 import { ConfidenceChart } from "../components/charts/AgentCharts";
 import { PlantingCoverageChart } from "../components/charts/PlantingCoverageChart";
+import { SoilCoverageChart } from "../components/charts/SoilCoverageChart";
 import { SourcingAnalysis } from "../components/analysis/SourcingAnalysis";
 import {
   FindingsBoard,
@@ -193,6 +194,11 @@ export function DomainView({
           }
         />
       ) : null}
+
+      {/* The soil agent reasons over each state's growing-area readings, so
+          those readings belong on its page — this was the one domain with
+          no chart of its own, just the generic findings table below. */}
+      {domain === "soil" ? <SoilCoverageChart /> : null}
 
       {/* The planting agent reasons over the region's calendar, so the
           calendar itself belongs on its page — and it is the one view here
