@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #EDEFF3; color: #283244; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
+  .doc { box-sizing: border-box; max-width: 8.5in; margin: 0 auto; background: #FFFFFF; padding: 0.85in clamp(24px, 5vw, 0.85in) 0.7in; box-shadow: 0 1px 40px rgba(11,18,32,.10); }
+  .doc-frame { width: 100%; border-collapse: collapse; }
+  .doc-frame td { padding: 0; }
+  .pad-top, .pad-bottom { display: none; }
+  h1, h2, h3, h4 { text-wrap: balance; color: #0B1220; }
+  p, li { text-wrap: pretty; }
+  a { color: #0E7490; }
+  img.fig { width: 100%; display: block; }
+  @page { size: letter; margin: 0; }
+  @media print {
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    html, body { margin: 0; padding: 0; background: #fff; }
+    .doc { max-width: none !important; margin: 0 !important; padding: 0 0.7in !important; box-shadow: none !important; }
+    .pad-top, .pad-bottom { display: table-cell; height: 0.7in; }
+    h1, h2, h3, h4 { break-after: avoid; }
+    figure, pre, blockquote, .keep { break-inside: avoid; }
+    p, li { orphans: 3; widows: 3; }
+    .screen-only { display: none !important; }
+  }
+</style>
+</helmet>
+<main class="doc">
+<table class="doc-frame" role="presentation">
+<thead><tr><td class="pad-top"></td></tr></thead>
+<tbody><tr><td>
+
+<!-- ===================== COVER / TITLE ===================== -->
+<div style="display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#0E7490;font-weight:600;">
+  <span style="display:inline-flex;width:22px;height:22px;border-radius:6px;background:#0B1220;align-items:center;justify-content:center;">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" fill="#22D3EE"/><circle cx="12" cy="12" r="9" stroke="#22D3EE" stroke-width="1.5" stroke-dasharray="3 3"/></svg>
+  </span>
+  Nexus-Grid · Technical Architecture — As Built
+</div>
+
+<h1 style="font-family:'Sora',sans-serif;font-weight:800;font-size:40px;line-height:1.08;letter-spacing:-.02em;margin:18px 0 10px;">Autonomous Agentic Orchestration for Caribbean Food Systems &amp; Supply Chains</h1>
+
+<p style="font-size:17px;line-height:1.55;color:#3A4658;max-width:62ch;margin:0 0 22px;">An AI orchestration layer that perceives regional trade gaps, reasons over supply and demand, plans a coordination response, and — for urgent plans — pauses for a human before executing. This edition matches the code: <a href="ARCHITECTURE.md">ARCHITECTURE.md</a> is the source of truth, and the original pitch document (<code>../Nexus-Grid Architecture.dc.html</code>) is kept unchanged for the record.</p>
+
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+  <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;padding:6px 11px;border:1px solid #DCE1E8;border-radius:999px;color:#475569;">As built</span>
+  <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;padding:6px 11px;border:1px solid #DCE1E8;border-radius:999px;color:#475569;">Track · Food Systems &amp; Supply Chains</span>
+  <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;padding:6px 11px;border:1px solid #DCE1E8;border-radius:999px;color:#475569;">Future Caribbean Buildathon 2026</span>
+  <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;padding:6px 11px;border:1px solid #0B1220;background:#0B1220;border-radius:999px;color:#22D3EE;">OpenClaw × LangGraph</span>
+</div>
+
+<div style="height:1px;background:linear-gradient(90deg,#0B1220,#22D3EE,transparent);margin:26px 0 30px;"></div>
+
+<!-- ===================== EXECUTIVE SUMMARY ===================== -->
+<h2 style="font-family:'Sora',sans-serif;font-weight:700;font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#0E7490;margin:0 0 14px;">01 · Executive Summary</h2>
+
+<p style="font-size:15.5px;line-height:1.7;margin:0 0 14px;">Nexus-Grid is an autonomous, AI-powered orchestration platform that reads live UN Comtrade trade flows across 15 CARICOM member states and finds the part of the region's $1.52B food-import bill it could supply itself. It functions as a coordination layer, not a marketplace: it holds no domain records — farmers, crops, shipments and customs filings live in the systems it coordinates — and it does not buy, sell, hold stock, or list supply. A control loop reasons over each sourcing gap and, for urgent plans, posts an operator's decision to a real dashboard rather than acting unattended.</p>
+
+<div class="keep" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:22px 0 8px;">
+  <div style="border:1px solid #E6E9EF;border-radius:12px;padding:14px 14px 16px;">
+    <div style="font-family:'Sora',sans-serif;font-weight:800;font-size:26px;color:#0B1220;letter-spacing:-.02em;">6</div>
+    <div style="font-size:12.5px;color:#5B6675;line-height:1.4;margin-top:3px;">Keyless public data sources — no paid or credentialed feed</div>
+  </div>
+  <div style="border:1px solid #E6E9EF;border-radius:12px;padding:14px 14px 16px;">
+    <div style="font-family:'Sora',sans-serif;font-weight:800;font-size:26px;color:#0B1220;letter-spacing:-.02em;">7</div>
+    <div style="font-size:12.5px;color:#5B6675;line-height:1.4;margin-top:3px;">Agents — 1 supervisor + 6 specialists (src/lib/server/agents)</div>
+  </div>
+  <div style="border:1px solid #E6E9EF;border-radius:12px;padding:14px 14px 16px;">
+    <div style="font-family:'Sora',sans-serif;font-weight:800;font-size:26px;color:#0B1220;letter-spacing:-.02em;">1×</div>
+    <div style="font-size:12.5px;color:#5B6675;line-height:1.4;margin-top:3px;">Re-plan cap per coordination run (MAX_REPLANS)</div>
+  </div>
+  <div style="border:1px solid #E6E9EF;border-radius:12px;padding:14px 14px 16px;">
+    <div style="font-family:'Sora',sans-serif;font-weight:800;font-size:26px;color:#0B1220;letter-spacing:-.02em;">10<span style="font-size:14px;">s</span></div>
+    <div style="font-size:12.5px;color:#5B6675;line-height:1.4;margin-top:3px;">Supply agent scan interval while the process runs</div>
+  </div>
+</div>
+
+<!-- ===================== PROBLEM ===================== -->
+<h2 style="font-family:'Sora',sans-serif;font-weight:700;font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#0E7490;margin:34px 0 14px;">02 · The Problem</h2>
+
+<p style="font-size:15.5px;line-height:1.7;margin:0 0 18px;">The Caribbean imports roughly 80% of its food while holding the capacity to produce more of it. The constraint is not the absence of systems — agriculture, logistics, trade and distribution systems all exist and all work. They do not work <em>together</em>: production decisions are made without visibility into regional demand, planting is not aligned across islands, and a state routinely buys a commodity from outside the region while a fellow member state already exports that same commodity into it.</p>
+
+<div class="keep" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
+  <div style="display:flex;gap:11px;align-items:flex-start;border:1px solid #E6E9EF;border-radius:11px;padding:13px 14px;">
+    <span style="flex:none;width:7px;height:7px;border-radius:50%;background:#FB7185;margin-top:6px;"></span>
+    <p style="margin:0;font-size:14px;line-height:1.55;color:#3A4658;">A state buys externally while a CARICOM neighbor <strong>already exports the same commodity</strong> into it.</p>
+  </div>
+  <div style="display:flex;gap:11px;align-items:flex-start;border:1px solid #E6E9EF;border-radius:11px;padding:13px 14px;">
+    <span style="flex:none;width:7px;height:7px;border-radius:50%;background:#FB7185;margin-top:6px;"></span>
+    <p style="margin:0;font-size:14px;line-height:1.55;color:#3A4658;">Only <strong>9.1% of observed food imports</strong> move inside CARICOM — the rest crosses the region's own border outward.</p>
+  </div>
+  <div style="display:flex;gap:11px;align-items:flex-start;border:1px solid #E6E9EF;border-radius:11px;padding:13px 14px;">
+    <span style="flex:none;width:7px;height:7px;border-radius:50%;background:#FB7185;margin-top:6px;"></span>
+    <p style="margin:0;font-size:14px;line-height:1.55;color:#3A4658;">Rain-fed planting calendars are set <strong>island by island</strong>, with no shared view of complementary windows.</p>
+  </div>
+  <div style="display:flex;gap:11px;align-items:flex-start;border:1px solid #E6E9EF;border-radius:11px;padding:13px 14px;">
+    <span style="flex:none;width:7px;height:7px;border-radius:50%;background:#FB7185;margin-top:6px;"></span>
+    <p style="margin:0;font-size:14px;line-height:1.55;color:#3A4658;">Climate risk at a lane's two endpoints is <strong>never scored together</strong> before a coordination decision is made.</p>
+  </div>
+</div>
+
+<div class="keep" style="display:flex;gap:16px;align-items:center;background:#0B1220;border-radius:14px;padding:20px 24px;margin:18px 0 6px;">
+  <div style="flex:none;">
+    <svg width="46" height="46" viewBox="0 0 24 24" fill="none"><path d="M12 2L3 7v6c0 5 3.5 8 9 9 5.5-1 9-4 9-9V7l-9-5z" stroke="#22D3EE" stroke-width="1.4"/><path d="M9 12l2 2 4-4" stroke="#22D3EE" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </div>
+  <div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:#22D3EE;margin-bottom:5px;">The Nexus-Grid thesis</div>
+    <p style="margin:0;font-family:'Sora',sans-serif;font-weight:600;font-size:17px;line-height:1.45;color:#EAF1F7;">Make the region's trade, soil, planting and climate data observable together, then reason over the result — surfacing where regional supply could displace an outside import, and routing the ones worth acting on to a human.</p>
+  </div>
+</div>
+
+<!-- ===================== 03 · SYSTEM ARCHITECTURE ===================== -->
+<h2 style="font-family:'Sora',sans-serif;font-weight:700;font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#0E7490;margin:36px 0 6px;">03 · High-Level System Architecture</h2>
+<p style="font-size:15px;line-height:1.65;color:#3A4658;margin:0 0 18px;">Six public datasets flow in; two outputs flow out. There is no farmer, buyer, customs or logistics-provider integration — the platform's audience is one operator console and, for approved plans only, one OpenClaw dashboard.</p>
+
+<figure style="margin:0 0 10px;">
+  <img class="fig" src="diagrams/system-architecture.svg" alt="System architecture — six keyless sources into the coordination core, out to the operator console and the OpenClaw dashboard">
+  <figcaption style="font-size:11.5px;color:#7A8696;font-family:'IBM Plex Mono',monospace;margin-top:10px;text-align:center;">Fig. 1 — What the original pitch called "signal sources" and "network actors" are, as built, six public datasets in and two outputs out.</figcaption>
+</figure>
+
+<!-- ===================== 04 · AGENTIC CONTROL LOOP ===================== -->
+<h2 style="font-family:'Sora',sans-serif;font-weight:700;font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#0E7490;margin:36px 0 6px;">04 · The Control Loop</h2>
+<p style="font-size:15px;line-height:1.65;color:#3A4658;margin:0 0 16px;">Each detected sourcing gap opens one fresh coordination run — a single LangGraph thread — rather than one process looping forever. Continuity comes from outside the graph: the Supply agent's 10-second scan opens a new run per gap. Inside one run, a disruption caught at <code>monitor</code> can send that run back to <code>assess</code> once.</p>
+
+<figure style="margin:0 0 10px;">
+  <img class="fig" src="diagrams/control-loop.svg" alt="The control loop, simplified — an open horseshoe, not a closed ring, with the human approval gate and the one re-plan edge shown">
+  <figcaption style="font-size:11.5px;color:#7A8696;font-family:'IBM Plex Mono',monospace;margin-top:10px;text-align:center;">Fig. 2 — Drawn open on purpose: a run ends at <code>recover</code>, it does not loop back to <code>perceive</code>.</figcaption>
+</figure>
+
+<!-- ===================== 05 · LANGGRAPH ===================== -->
+<h2 style="font-family:'Sora',sans-serif;font-weight:700;font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#0E7490;margin:36px 0 6px;">05 · LangGraph Agent Graph</h2>
+<p style="font-size:15px;line-height:1.65;color:#3A4658;margin:0 0 16px;">Nexus-Grid is implemented as a stateful LangGraph with 8 nodes: <code>perceive → assess → recommend → plan → (hold) → execute → monitor → recover</code>. There is no separate "sensing" lane before routing — each specialist is invoked from inside a specific node: Demand Intelligence at <code>assess</code>, Planting or Logistics at <code>plan</code>, Climate Risk at <code>monitor</code>. <code>plan</code> branches to the human approval gate (<code>hold</code>) only when a plan is urgent and approval is required; <code>monitor</code> branches back to <code>assess</code>, not to a supervisor node, capped at one re-plan.</p>
+
+<figure style="margin:0 0 10px;">
+  <img class="fig" src="diagrams/coordination-graph.svg" alt="The coordination graph — 8 real LangGraph nodes, the human approval gate, and the re-plan edge back to assess">
+  <figcaption style="font-size:11.5px;color:#7A8696;font-family:'IBM Plex Mono',monospace;margin-top:10px;text-align:center;">Fig. 3 — Every specialist call happens inside a node. The Agronomy agent runs outside this graph entirely, on the decoupled event/supervisor path shown in Fig. 1.</figcaption>
+</figure>
+
+<!-- ===================== 06 · WHERE OUTPUT LANDS ===================== -->
+<h2 style="font-family:'Sora',sans-serif;font-weight:700;font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#0E7490;margin:36px 0 6px;">06 · Stakeholder Data Flow <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:none;color:#B27708;background:#FFFBEB;border:1px solid #FDE68A;border-radius:999px;padding:3px 9px;vertical-align:2px;">not built as envisioned</span></h2>
+<p style="font-size:15px;line-height:1.65;color:#3A4658;margin:0 0 16px;">The original pitch (this document's earlier draft) proposed a hub exchanging data bidirectionally with five stakeholder types — Farmers, Distributors, Logistics Providers, Customs Authorities, Commercial Buyers — each with its own live integration. None of that exists: there is no farmer or buyer portal, no ERP/POS connector, no ASYCUDA or customs integration, and no carrier booking API. Building it would require paid, credentialed, per-country integrations the project deliberately avoided (see <a href="ARCHITECTURE.md">ARCHITECTURE.md §4</a>, "Not wired").</p>
+
+<div class="keep" style="display:flex;gap:16px;align-items:center;background:#0B1220;border-radius:14px;padding:20px 24px;margin:0 0 6px;">
+  <div style="flex:none;">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#FBBF24" stroke-width="1.5"/><path d="M12 7v6" stroke="#FBBF24" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="16.3" r="1" fill="#FBBF24"/></svg>
+  </div>
+  <div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:#FBBF24;margin-bottom:5px;">What shipped instead</div>
+    <p style="margin:0;font-family:'Sora',sans-serif;font-weight:600;font-size:15.5px;line-height:1.5;color:#EAF1F7;">Two real outputs, not five stakeholder integrations: an operator console any team member can read over REST, and — for a plan a human has approved or amended — one notice posted into an OpenClaw dashboard. See Fig. 1.</p>
+  </div>
+</div>
+
+<!-- ===================== 07 · TECH STACK ===================== -->
+<h2 style="font-family:'Sora',sans-serif;font-weight:700;font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#0E7490;margin:36px 0 6px;">07 · Technology Stack</h2>
+<p style="font-size:15px;line-height:1.65;color:#3A4658;margin:0 0 16px;">Six layers, same grammar as the original pitch — from the operator-facing console down to the one process and one Docker host that run it. Each layer is still independently swappable, and orchestration (L05) is still the platform's heart; what changed is which vendor sits in each slot.</p>
+
+<figure style="margin:0 0 10px;">
+  <img class="fig" src="diagrams/tech-stack.svg" alt="Technology stack — six layers, real components as solid chips next to what the original pitch named for that layer that was not built, as dashed chips">
+  <figcaption style="font-size:11.5px;color:#7A8696;font-family:'IBM Plex Mono',monospace;margin-top:10px;text-align:center;">Fig. 5 — Every dashed row is something the pitch named for that layer that this build does not have.</figcaption>
+</figure>
+
+<!-- ===================== 08 · DEPLOYMENT TOPOLOGY ===================== -->
+<h2 style="font-family:'Sora',sans-serif;font-weight:700;font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#0E7490;margin:36px 0 6px;">08 · Deployment Topology</h2>
+<p style="font-size:15px;line-height:1.65;color:#3A4658;margin:0 0 16px;">One Docker host runs the app and the OpenClaw gateway it dispatches to, sharing a network namespace for one specific reason: the gateway grants operator scopes only to connections from <code>127.0.0.1</code>, so reaching it by service name across a normal container network authenticates successfully and is then permitted nothing. There is no edge layer, no store-and-forward sync, and no multi-region cluster — six public HTTP APIs are polled directly.</p>
+
+<figure style="margin:0 0 10px;">
+  <img class="fig" src="diagrams/deployment.svg" alt="Deployment topology — one Docker host, the app and gateway sharing a network namespace, no Kubernetes or edge layer">
+  <figcaption style="font-size:11.5px;color:#7A8696;font-family:'IBM Plex Mono',monospace;margin-top:10px;text-align:center;">Fig. 6 — The vision doc's Kubernetes cluster, edge gateways, and mobile/SMS clients are not part of the shipped topology.</figcaption>
+</figure>
+
+<!-- ===================== 09 · DISRUPTION RECOVERY ===================== -->
+<h2 style="font-family:'Sora',sans-serif;font-weight:700;font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#0E7490;margin:36px 0 6px;">09 · Disruption-Recovery Sequence</h2>
+<p style="font-size:15px;line-height:1.65;color:#3A4658;margin:0 0 16px;">A worked example, taken from an actual recorded trace rather than a hypothetical: elevated climate risk at the importing state is caught by <code>monitor</code>, which sends the run back to <code>assess</code> for exactly one automatic re-plan before continuing on to <code>recover</code>. This is a re-plan of the coordination recommendation, not a live shipment reroute — no shipment-level tracking exists yet, so there is no carrier to rebook and no buyer-facing ETA to push.</p>
+
+<figure style="margin:0 0 10px;">
+  <img class="fig" src="diagrams/replan-trace.svg" alt="A real 12-step trace — climate risk elevated at monitor, one re-plan back to assess, replan cap reached at recover">
+  <figcaption style="font-size:11.5px;color:#7A8696;font-family:'IBM Plex Mono',monospace;margin-top:10px;text-align:center;">Fig. 7 — Five nodes execute twice. The <code>hold</code> approval gate is not on this particular trace; see Fig. 2 / 3 for the gated path.</figcaption>
+</figure>
+
+<!-- ===================== 10 · REAL COORDINATION JOURNEY ===================== -->
+<h2 style="font-family:'Sora',sans-serif;font-weight:700;font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#0E7490;margin:36px 0 6px;">10 · One Coordination Run, End to End <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:none;color:#B27708;background:#FFFBEB;border:1px solid #FDE68A;border-radius:999px;padding:3px 9px;vertical-align:2px;">revised</span></h2>
+<p style="font-size:15px;line-height:1.65;color:#3A4658;margin:0 0 18px;">The original pitch walked a harvest lot through six stakeholder handoffs — declared, matched, routed, cleared, monitored, paid. No individual farmer, buyer, or harvest lot exists in this system: it reasons over aggregate UN Comtrade trade statistics, not transactions. This is what actually happens, six steps, no stakeholder actors involved.</p>
+
+<figure class="keep" style="margin:0 0 10px;border:1px solid #E6E9EF;border-radius:16px;padding:22px 18px;background:#FBFCFD;">
+  <div style="position:relative;">
+    <div style="position:absolute;top:18px;left:8.3%;right:8.3%;height:2px;background:linear-gradient(90deg,#22D3EE,#60A5FA,#818CF8,#A78BFA,#FBBF24,#2DD4BF);"></div>
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:7px;position:relative;">
+
+      <div style="display:flex;flex-direction:column;align-items:center;text-align:center;">
+        <div style="width:36px;height:36px;border-radius:50%;background:#fff;border:2px solid #22D3EE;display:flex;align-items:center;justify-content:center;font-family:'Sora',sans-serif;font-weight:800;font-size:14px;color:#0E7490;">1</div>
+        <div style="font-family:'Sora',sans-serif;font-weight:700;font-size:12px;color:#0B1220;margin-top:9px;">Gap Detected</div>
+        <div style="font-size:10.5px;color:#5B6675;line-height:1.4;margin-top:4px;">Supply agent's scan finds a lane past the $5M / 60% threshold.</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8.5px;margin-top:7px;color:#0E7490;border:1px solid #A5F0FB;background:#ECFEFF;border-radius:6px;padding:3px 7px;">perceive</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;text-align:center;">
+        <div style="width:36px;height:36px;border-radius:50%;background:#fff;border:2px solid #60A5FA;display:flex;align-items:center;justify-content:center;font-family:'Sora',sans-serif;font-weight:800;font-size:14px;color:#2563EB;">2</div>
+        <div style="font-family:'Sora',sans-serif;font-weight:700;font-size:12px;color:#0B1220;margin-top:9px;">Severity Assessed</div>
+        <div style="font-size:10.5px;color:#5B6675;line-height:1.4;margin-top:4px;">Demand Intelligence agent scores it; a decision is chosen.</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8.5px;margin-top:7px;color:#2563EB;border:1px solid #BFDBFE;background:#EFF6FF;border-radius:6px;padding:3px 7px;">assess</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;text-align:center;">
+        <div style="width:36px;height:36px;border-radius:50%;background:#fff;border:2px solid #818CF8;display:flex;align-items:center;justify-content:center;font-family:'Sora',sans-serif;font-weight:800;font-size:14px;color:#4F46E5;">3</div>
+        <div style="font-family:'Sora',sans-serif;font-weight:700;font-size:12px;color:#0B1220;margin-top:9px;">LLM Recommendation</div>
+        <div style="font-size:10.5px;color:#5B6675;line-height:1.4;margin-top:4px;">MiniMax-M2 (or rule-derived, if no key) returns a structured schema.</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8.5px;margin-top:7px;color:#4F46E5;border:1px solid #C7D2FE;background:#EEF2FF;border-radius:6px;padding:3px 7px;">recommend</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;text-align:center;">
+        <div style="width:36px;height:36px;border-radius:50%;background:#fff;border:2px solid #A78BFA;display:flex;align-items:center;justify-content:center;font-family:'Sora',sans-serif;font-weight:800;font-size:14px;color:#7C3AED;">4</div>
+        <div style="font-family:'Sora',sans-serif;font-weight:700;font-size:12px;color:#0B1220;margin-top:9px;">Plan Built</div>
+        <div style="font-size:10.5px;color:#5B6675;line-height:1.4;margin-top:4px;">Logistics or Planting agent shapes plan_data and a priority.</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8.5px;margin-top:7px;color:#7C3AED;border:1px solid #DDD6FE;background:#F5F3FF;border-radius:6px;padding:3px 7px;">plan</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;text-align:center;">
+        <div style="width:36px;height:36px;border-radius:50%;background:#fff;border:2px solid #FBBF24;display:flex;align-items:center;justify-content:center;font-family:'Sora',sans-serif;font-weight:800;font-size:14px;color:#B45309;">5</div>
+        <div style="font-family:'Sora',sans-serif;font-weight:700;font-size:12px;color:#0B1220;margin-top:9px;">Gate, If Urgent</div>
+        <div style="font-size:10.5px;color:#5B6675;line-height:1.4;margin-top:4px;">A human answers approved / modified / rejected / escalated.</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8.5px;margin-top:7px;color:#B45309;border:1px solid #FDE68A;background:#FFFBEB;border-radius:6px;padding:3px 7px;">hold</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;text-align:center;">
+        <div style="width:36px;height:36px;border-radius:50%;background:#0B1220;border:2px solid #0B1220;display:flex;align-items:center;justify-content:center;font-family:'Sora',sans-serif;font-weight:800;font-size:14px;color:#2DD4BF;">6</div>
+        <div style="font-family:'Sora',sans-serif;font-weight:700;font-size:12px;color:#0B1220;margin-top:9px;">Posted, If Approved</div>
+        <div style="font-size:10.5px;color:#5B6675;line-height:1.4;margin-top:4px;">chat.inject puts it on the OpenClaw dashboard; rejected plans are never sent.</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8.5px;margin-top:7px;color:#0D9488;border:1px solid #99F6E4;background:#F0FDFA;border-radius:6px;padding:3px 7px;">execute</div>
+      </div>
+    </div>
+  </div>
+  <figcaption style="font-size:11.5px;color:#7A8696;font-family:'IBM Plex Mono',monospace;margin-top:18px;text-align:center;">Fig. 8 — No farmer, buyer, or harvest lot appears anywhere in this run. `monitor` and `recover` continue after step 6; see Fig. 2 / 3.</figcaption>
+</figure>
+
+<!-- ===================== OUTCOMES ===================== -->
+<h2 style="font-family:'Sora',sans-serif;font-weight:700;font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#0E7490;margin:38px 0 14px;">11 · What Actually Holds Up</h2>
+<div class="keep" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+  <div style="border:1px solid #E6E9EF;border-radius:12px;padding:15px 16px;"><div style="font-family:'Sora',sans-serif;font-weight:700;font-size:14px;color:#0B1220;">Observed, not estimated</div><p style="margin:6px 0 0;font-size:13px;line-height:1.55;color:#4A5568;">The $1.12B addressable figure is the sum of real UN Comtrade flows where one CARICOM state buys externally what another already supplies — not a projection.</p></div>
+  <div style="border:1px solid #E6E9EF;border-radius:12px;padding:15px 16px;"><div style="font-family:'Sora',sans-serif;font-weight:700;font-size:14px;color:#0B1220;">A monitor step that watches</div><p style="margin:6px 0 0;font-size:13px;line-height:1.55;color:#4A5568;">Elevated climate risk triggers one automatic re-plan back through assess before a human sees the recommendation — not a one-shot answer.</p></div>
+  <div style="border:1px solid #E6E9EF;border-radius:12px;padding:15px 16px;"><div style="font-family:'Sora',sans-serif;font-weight:700;font-size:14px;color:#0B1220;">Runs on a laptop</div><p style="margin:6px 0 0;font-size:13px;line-height:1.55;color:#4A5568;">Built on LangGraph + OpenClaw, checkpointed to one SQLite file. `docker compose up` — no cloud region, no Kubernetes, no edge sync required.</p></div>
+  <div style="border:1px solid #E6E9EF;border-radius:12px;padding:15px 16px;"><div style="font-family:'Sora',sans-serif;font-weight:700;font-size:14px;color:#0B1220;">Coordination, not a marketplace</div><p style="margin:6px 0 0;font-size:13px;line-height:1.55;color:#4A5568;">It augments the actors already in the system instead of asking them to migrate to a new platform — the one claim from the original pitch that needed no revision.</p></div>
+</div>
+
+<div style="height:1px;background:linear-gradient(90deg,#0B1220,#22D3EE,transparent);margin:28px 0 16px;"></div>
+<p style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#8693A2;text-align:center;margin:0;">Nexus-Grid v1.0 · Future Caribbean Buildathon 2026 · Food Systems &amp; Supply Chains · OpenClaw × LangGraph</p>
+
+<!--SECTIONS-END-->
+
+</td></tr></tbody>
+<tfoot><tr><td class="pad-bottom"></td></tr></tfoot>
+</table>
+</main>
+</x-dc>
+</body>
+</html>
