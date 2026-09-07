@@ -1,0 +1,45 @@
+# /opt/openclaw/docker-compose.yml — the OpenClaw gateway, in a Docker
+# container managed by systemd (openclaw.service). The app runs on the host
+# under systemd and reaches the gateway at ws://127.0.0.1:18789 — the
+# gateway grants shared-token operator scopes only from loopback, so the
+# port mapping is loopback-only and the gateway is never reachable from
+# outside the VM.
+#
+# Token plumbing: the gateway token is a single secret with two readers
+# (this container and the nexus-grid service). It lives at
+# /etc/openclaw/gateway.token on the host, in `KEY=VALUE` form. Both
+# consumers read it — systemd via EnvironmentFile=, this container via
+# env_file:. The token never lives in the app env file.
+#
+# Volume: openclaw-state holds the gateway's persistent state (WhatsApp
+# pairing, etc.). Named volume rather than a bind mount because the
+# gateway writes into /home/node/.openclaw and we want it to survive
+# container replacement.
+
+services:
+  gateway:
+    image: ghcr.io/openclaw/openclaw:latest
+    command: ["node", "openclaw.mjs", "gateway", "--bind", "lan", "--auth", "token"]
+    env_file:
+      - /etc/openclaw/gateway.token
+    ports:
+      # Loopback only. Same defense-in-depth as docker-compose.yml at the
+      # repo root: --bind lan inside the container, port mapping loopback
+      # only outside.
+      - "127.0.0.1:18789:18789"
+    volumes:
+      - openclaw-state:/home/node/.openclaw
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:18789/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  openclaw-state:

@@ -1,0 +1,16 @@
+# /etc/sudoers.d/nexus-grid-deploy
+#
+# Passwordless sudo for the `deploy` user (the SSH login GitHub Actions
+# uses). Strictly limited to the deploy script and the few systemctl
+# subcommands needed to drive a deploy. No broad sudo, no shell as
+# nexus-grid from anywhere.
+#
+# !requiretty because `useradd --system` gives the deploy user no TTY,
+# and the default /etc/sudoers requiretty would break sudo from there.
+
+deploy ALL=(ALL) NOPASSWD: /opt/nexus-grid/bin/deploy.sh *
+deploy ALL=(ALL) NOPASSWD: /bin/systemctl restart nexus-grid
+deploy ALL=(ALL) NOPASSWD: /bin/systemctl status  nexus-grid
+deploy ALL=(ALL) NOPASSWD: /bin/systemctl show -p ActiveState nexus-grid
+
+Defaults !requiretty

@@ -28,3 +28,9 @@ Thumbs.db
 .nexus-grid/
 
 # OpenClaw gateway state and its generated token
+openclaw/openclaw-state/
+openclaw/openclaw-keys/
+
+# Stray installer / docs that have ended up at the repo root.
+*.exe
+*.docx

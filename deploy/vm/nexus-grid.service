@@ -1,0 +1,36 @@
+[Unit]
+Description=Nexus-Grid
+# The app needs the gateway for real dispatch. Wants (not Requires) — if
+# the gateway is down the app still starts and dispatch is reported as
+# unconfigured honestly rather than deadlocked on a dependency.
+After=network.target openclaw.service
+Wants=openclaw.service
+
+[Service]
+Type=simple
+# Type=simple is critical: docs/ARCHITECTURE.md flags the single-process
+# invariant as a deployment assumption, and the in-memory observability
+# store / agent memory / checkpointer are all process-local singletons.
+User=nexus-grid
+WorkingDirectory=/opt/nexus-grid/current
+
+# Two EnvironmentFiles, in declaration order. The first carries the app
+# settings; the second carries the gateway token. The token never lives
+# in /etc/nexus-grid/nexus-grid.env — only root and the openclaw group
+# can read /etc/openclaw/gateway.token, and the nexus-grid process picks
+# the merged value up as OPENCLAW_GATEWAY_TOKEN.
+EnvironmentFile=/etc/nexus-grid/nexus-grid.env
+EnvironmentFile=/etc/openclaw/gateway.token
+
+Environment=NODE_ENV=production
+Environment=NEXT_TELEMETRY_DISABLED=1
+Environment=PORT=5180
+Environment=HOSTNAME=127.0.0.1
+
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+MemoryMax=1536M
+
+[Install]
+WantedBy=multi-user.target
