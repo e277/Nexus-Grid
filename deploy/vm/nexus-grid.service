@@ -27,7 +27,7 @@ Environment=NEXT_TELEMETRY_DISABLED=1
 Environment=PORT=5180
 Environment=HOSTNAME=127.0.0.1
 
-ExecStart=/usr/bin/node server.js
+ExecStart=/usr/bin/node .next/standalone/server.js
 Restart=always
 RestartSec=5
 MemoryMax=1536M
