@@ -121,6 +121,20 @@ Optional configuration lives in `.env` — see `.env.example`. Setting
 `MINIMAX_API_KEY` (or `SHO_API_KEY`) activates the workflow's LLM recommendation
 step; without it that step returns a labelled stub.
 
+## Deploying
+
+Every push to `main` deploys to a single Linux server running the same compose
+stack as above, with Caddy in front for HTTPS. The workflow copies the source
+over SSH, runs `docker compose up -d --build` there, and checks `/api/health`
+before it reports success. A failed build leaves the running release in place.
+
+It has to be one server, not a serverless or static host: paused approval gates
+are checkpointed to disk, the runtime assumes a single process, and the gateway
+must be reachable on loopback.
+
+One-time setup (Docker, a deploy user, the server's `.env`, and four repo
+secrets) is in [deploy/compose/README.md](deploy/compose/README.md).
+
 ## Structure
 
 ```
