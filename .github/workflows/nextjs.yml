@@ -1,172 +1,120 @@
-# Build the Next.js standalone bundle on every push to `main`, ship it to the
-# VM, atomic-swap it under /opt/nexus-grid/current, and verify the live
-# deployment via /api/health and /api/health/db.
+# Deploy on every push to `main`: copy the source to the server and run
+# `docker compose up -d --build` there, then verify the live console.
 #
-# This file replaces the previous GitHub-Pages workflow. The app uses
-# output: "standalone" with runtime: nodejs API routes, so it cannot be
-# hosted as a static site — Pages was always going to fail.
+# The server runs exactly the stack docker-compose.yml describes (app +
+# OpenClaw gateway sharing one network namespace, checkpoint DB on a named
+# volume), plus Caddy for HTTPS from deploy/compose/docker-compose.prod.yml.
+# One-time server setup is in deploy/compose/README.md.
 #
-# Local sanity before pushing (run on the host, not in CI):
-#
-#   npm ci && npm run build
-#   NODE_ENV=production node .next/standalone/server.js &
-#   sleep 5 && curl -sS http://127.0.0.1:5180/api/health
-#   curl -sS http://127.0.0.1:5180/api/health/db
+# If the image build fails on the server, `up` stops before touching the
+# running containers, so the previous release keeps serving.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
-#   VM_SSH_HOST     SSH target, e.g. nexus.example.com
-#   VM_SSH_USER     dedicated deploy user (see deploy/vm/README.md)
-#   VM_SSH_KEY      ed25519 private key — public half in deploy@host:~/.ssh/authorized_keys
+#   VM_SSH_HOST     server hostname or IP, e.g. nexus.example.com
+#   VM_SSH_USER     deploy user on the server (member of the docker group)
+#   VM_SSH_KEY      ed25519 private key; public half in that user's authorized_keys
 #   VM_PUBLIC_URL   https URL the verify step probes, e.g. https://nexus.example.com
 
-name: Deploy to VM
+name: Deploy
 
 on:
   push:
     branches: ["main"]
   workflow_dispatch:
-    inputs:
-      rollback_to:
-        description: "Release timestamp to roll back to (e.g. 2026-09-06T14-22-10Z-abc1234). Empty = normal deploy."
-        required: false
-        default: ""
 
-# Two deploys against the same VM would race on /opt/nexus-grid/current and
-# the SQLite checkpointer. The second one queues, sees the first one's
-# success, and exits clean. Never cancel in-flight — once a deploy has
-# ssh'd into the VM and is mid-swap, interrupting it leaves the live app on
-# a half-extracted release.
+# Two deploys against the same server would race on the source directory and
+# the compose project. The second queues; never cancel one mid-`up`.
 concurrency:
-  group: "vm-deploy"
+  group: "server-deploy"
   cancel-in-progress: false
 
 permissions:
   contents: read
-  # No `pages`, no `id-token`, no `packages` — we deploy over SSH.
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # Full history so the artifact can carry the short SHA and the
-          # VM-side rollback script can identify the release by commit.
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-
-      - name: Install
-        run: npm ci
-
-      - name: Build (standalone)
-        # No .env file is needed at build time — every secret is read
-        # server-side and missing keys only downgrade the LLM step to
-        # rule-derived output.
-        env:
-          NEXT_TELEMETRY_DISABLED: "1"
-        run: npm run build
-
-      - name: Compose release directory
-        # Mirrors the Dockerfile so the runtime shape is identical whether
-        # the artifact lands in a container or under systemd.
-        id: compose
-        run: |
-          set -euo pipefail
-          RELEASE="release-$(date -u +%Y-%m-%dT%H-%M-%SZ)-${GITHUB_SHA::7}"
-          mkdir -p "$RELEASE/.next/standalone/.next/static"
-          cp -a .next/standalone/. "$RELEASE/.next/standalone/"
-          # .next/static lives alongside .next/standalone in the build, not
-          # inside it. Without this overlay the console 404s every chunk.
-          cp -a .next/static/. "$RELEASE/.next/standalone/.next/static/"
-          # Belt-and-braces: re-copy the external packages the Dockerfile
-          # explicitly copies. Next 16's trace already includes them, but
-          # if a future minor changes the trace logic the runtime still
-          # has them.
-          for pkg in better-sqlite3 bindings file-uri-to-path; do
-            cp -a "node_modules/$pkg" "$RELEASE/.next/standalone/node_modules/$pkg"
-          done
-          # CRITICAL: strip .env files from the artifact. Next.js 16 copies
-          # the build's .env into .next/standalone/.env, which would ship
-          # dev secrets to the VM. The systemd EnvironmentFile is the
-          # single source of truth on the runtime.
-          find "$RELEASE" -maxdepth 3 -name ".env*" -type f -delete
-          # Record provenance in the artifact itself — the VM script reads
-          # this to name the release directory on disk.
-          echo "$GITHUB_SHA"  > "$RELEASE/COMMIT"
-          echo "$(date -u +%Y-%m-%dT%H-%M-%SZ)" > "$RELEASE/BUILT_AT"
-          tar -C "$RELEASE" -czf "nexus-grid-${RELEASE}.tar.gz" .
-          echo "ARTIFACT_NAME=nexus-grid-${RELEASE}.tar.gz" >> "$GITHUB_OUTPUT"
-          echo "RELEASE_TAG=${RELEASE}"                          >> "$GITHUB_OUTPUT"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: nexus-grid-release
-          path: ${{ steps.compose.outputs.ARTIFACT_NAME }}
-          # 7 days is enough for rollback — the script keeps the last 5
-          # releases on disk and the artifact only matters if those are
-          # gone.
-          retention-days: 7
-
   deploy:
-    needs: build
     runs-on: ubuntu-latest
+    # Same environment name as before, so secrets scoped to it still apply.
     environment:
       name: vm
+    env:
+      SSH_HOST: ${{ secrets.VM_SSH_HOST }}
+      SSH_USER: ${{ secrets.VM_SSH_USER }}
+      SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+      VM_PUBLIC_URL: ${{ secrets.VM_PUBLIC_URL }}
+      APP_DIR: /opt/nexus-grid
+      COMPOSE: docker compose -f docker-compose.yml -f deploy/compose/docker-compose.prod.yml
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: nexus-grid-release
-          path: dist
+      - name: Check secrets
+        # Fail with a readable message instead of a bare exit 1 from ssh-keyscan.
+        run: |
+          missing=""
+          for name in SSH_HOST SSH_USER SSH_KEY VM_PUBLIC_URL; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repo secrets:$missing (the VM_ prefixed names; see deploy/compose/README.md)"
+            exit 1
+          fi
 
-      - name: Extract to VM (atomic symlink swap)
-        env:
-          SSH_HOST: ${{ secrets.VM_SSH_HOST }}
-          SSH_USER: ${{ secrets.VM_SSH_USER }}
-          SSH_KEY:  ${{ secrets.VM_SSH_KEY }}
-          DEPLOY_DIR: /opt/nexus-grid
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
-          printf '%s' "$SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-          rsync -avz -e "ssh -i ~/.ssh/id_ed25519" \
-            dist/nexus-grid-release-*.tar.gz \
-            "$SSH_USER@$SSH_HOST:$DEPLOY_DIR/staging/"
-          ssh -i ~/.ssh/id_ed25519 "$SSH_USER@$SSH_HOST" \
-            "sudo /opt/nexus-grid/bin/deploy.sh /opt/nexus-grid/staging/nexus-grid-release-*.tar.gz"
+          if ! ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/tmp/keyscan.err; then
+            cat /tmp/keyscan.err
+            echo "::error::Could not reach $SSH_HOST on port 22. Is the server up and the hostname right?"
+            exit 1
+          fi
 
-      - name: Verify post-deploy
-        env:
-          VM_PUBLIC_URL: ${{ secrets.VM_PUBLIC_URL }}
+      - name: Copy source to server
+        # .env and the runtime state are excluded, and rsync never deletes an
+        # excluded path, so the server's configuration survives every deploy.
         run: |
           set -euo pipefail
-          # Probe both endpoints until each returns 200, up to ~60s.
+          rsync -az --delete \
+            --exclude .git --exclude node_modules --exclude .next \
+            --exclude '.env' --exclude '.env.*' --exclude .nexus-grid \
+            -e "ssh -i ~/.ssh/id_ed25519" \
+            ./ "$SSH_USER@$SSH_HOST:$APP_DIR/"
+
+      - name: Build and start
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_ed25519 "$SSH_USER@$SSH_HOST" bash -s <<EOF
+          set -euo pipefail
+          cd "$APP_DIR"
+          echo "$GITHUB_SHA" > REVISION
+          $COMPOSE up -d --build --remove-orphans
+          $COMPOSE ps
+          docker image prune -f >/dev/null
+          EOF
+
+      - name: Verify
+        run: |
+          set -euo pipefail
+          # The app waits on the gateway's healthcheck, so allow up to ~2 min.
           for endpoint in /api/health /api/health/db; do
             code=000
-            for i in $(seq 1 30); do
-              code=$(curl -sS -o /tmp/body -w '%{http_code}' \
-                "$VM_PUBLIC_URL$endpoint" || true)
+            for i in $(seq 1 60); do
+              code=$(curl -sS -o /tmp/body -w '%{http_code}' "$VM_PUBLIC_URL$endpoint" || true)
               if [ "$code" = "200" ]; then
-                echo "OK $endpoint (attempt $i)"
-                cat /tmp/body; echo
+                echo "OK $endpoint (attempt $i)"; cat /tmp/body; echo
                 break
               fi
               echo "wait $i: $endpoint -> $code"
               sleep 2
             done
-            [ "$code" = "200" ] || { echo "FAIL $endpoint after 60s"; exit 1; }
+            [ "$code" = "200" ] || { echo "::error::$endpoint never returned 200"; exit 1; }
           done
-          # Single-process invariant. docs/ARCHITECTURE.md flags this as a
-          # deployment assumption — two consecutive calls must return the
-          # same pid, otherwise two processes are answering and the
-          # in-memory singletons are not shared.
+          # Single-process invariant (docs/ARCHITECTURE.md): two calls must
+          # land in the same process or the in-memory singletons are split.
           pid1=$(curl -sS "$VM_PUBLIC_URL/api/health/db" | jq -r .pid)
           sleep 2
           pid2=$(curl -sS "$VM_PUBLIC_URL/api/health/db" | jq -r .pid)
-          [ "$pid1" = "$pid2" ] || { echo "pid changed: $pid1 -> $pid2"; exit 1; }
+          [ "$pid1" = "$pid2" ] || { echo "::error::pid changed: $pid1 -> $pid2"; exit 1; }
           echo "pid stable: $pid1"

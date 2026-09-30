@@ -1,0 +1,36 @@
+# Production overlay: the root docker-compose.yml plus a public HTTPS front.
+#
+#   docker compose -f docker-compose.yml -f deploy/compose/docker-compose.prod.yml up -d --build
+#
+# The root file publishes the console on 127.0.0.1:5180 only, which is right
+# for a laptop and useless for a server. Rather than opening that port, Caddy
+# terminates TLS (certificates from Let's Encrypt, renewed on its own) and
+# proxies to the console. The console listens inside the gateway's network
+# namespace (the app runs with network_mode: service:gateway), so from here
+# it is reached as gateway:5180.
+services:
+  caddy:
+    image: caddy:2
+    container_name: nexus-grid-caddy
+    restart: unless-stopped
+    environment:
+      # The public hostname, e.g. nexus.example.com. Its DNS A record must
+      # point at this server before the first start, or the certificate
+      # request fails.
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in the project root .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/compose/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates live here. Losing this volume means re-issuing, and
+      # Let's Encrypt rate-limits that.
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - gateway
+
+volumes:
+  caddy-data:
+  caddy-config:

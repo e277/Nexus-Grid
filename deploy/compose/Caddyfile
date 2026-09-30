@@ -1,0 +1,6 @@
+# Only the console is exposed. The gateway's own port (18789) is operator
+# access and stays unpublished.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+	reverse_proxy gateway:5180
+}
