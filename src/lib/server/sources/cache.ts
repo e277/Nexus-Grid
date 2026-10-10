@@ -11,6 +11,8 @@
  * readers share one in-flight fetch, so polling cannot stampede a public API.
  */
 
+import { waitUntil } from "@vercel/functions";
+
 import { provenance, type Snapshot, type SourceId } from "./types";
 
 interface Entry {
@@ -109,6 +111,11 @@ function refresh<T>(
   })();
 
   cache.inflight.set(key, run as unknown as Promise<Snapshot<unknown>>);
+  // On Vercel an instance can be frozen as soon as the response is sent, which
+  // would strand a background refresh half-way and leave the source `pending`
+  // for every later reader. This keeps it running to completion; anywhere else
+  // it is a no-op and the process simply carries on.
+  waitUntil(run.catch(() => undefined));
   return run;
 }
 

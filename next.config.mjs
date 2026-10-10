@@ -11,7 +11,9 @@ const nextConfig = {
    * dependency tree. `serverExternalPackages` below is excluded from that
    * trace by design, so the Dockerfile copies those modules explicitly.
    */
-  output: "standalone",
+  // Vercel packages each route as its own function and sets VERCEL during the
+  // build, so the self-contained server bundle is only built elsewhere.
+  output: process.env.VERCEL ? undefined : "standalone",
   // Next writes AGENTS.md/CLAUDE.md to the repo root otherwise.
   agentRules: false,
   /**

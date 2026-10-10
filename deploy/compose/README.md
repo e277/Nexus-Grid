@@ -1,8 +1,9 @@
 # Server deploy: Docker Compose, one-time setup
 
-After this setup, every push to `main` runs `.github/workflows/nextjs.yml`.
-That workflow copies the source to the server, runs `docker compose up -d --build`,
-and checks `/api/health` and `/api/health/db` over HTTPS.
+After this setup, run **Actions → Deploy to server → Run workflow**
+(`.github/workflows/nextjs.yml`). It copies the source to the server, runs
+`docker compose up -d --build`, and checks `/api/health` and `/api/health/db`
+over HTTPS. It is manual-only because `main` deploys to Vercel on every push.
 
 The server runs the same stack as `docker-compose.yml` on a laptop: the app and
 the OpenClaw gateway share one network namespace, and the checkpoint database
@@ -78,7 +79,7 @@ In the repo, go to **Settings → Secrets and variables → Actions** and add:
 
 ## 5. Deploy
 
-Push to `main`, or go to **Actions → Deploy → Run workflow**. The first run
+Go to **Actions → Deploy to server → Run workflow**. The first run
 takes longest: it pulls the base images, builds the app, and Caddy requests
 the certificate.
 
