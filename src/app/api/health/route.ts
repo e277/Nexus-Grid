@@ -4,14 +4,17 @@ import { api } from "@/lib/server/http";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Liveness probe: the process is up and serving requests. */
-export const GET = api(() => {
-  const settings = getSettings();
-  return {
-    status: "ok",
-    app: settings.appName,
-    version: settings.appVersion,
-    environment: settings.environment,
-    agent_poll_interval_seconds: settings.agentPollIntervalSeconds,
-  };
-});
+/** Liveness probe: the process is up and serving requests. Public, for uptime checks. */
+export const GET = api(
+  () => {
+    const settings = getSettings();
+    return {
+      status: "ok",
+      app: settings.appName,
+      version: settings.appVersion,
+      environment: settings.environment,
+      agent_poll_interval_seconds: settings.agentPollIntervalSeconds,
+    };
+  },
+  { access: "public" }
+);

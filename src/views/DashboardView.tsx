@@ -17,6 +17,7 @@ import {
   type NodeState,
 } from "../components/pipeline/model";
 import { Button } from "../components/ui/button";
+import { useCanOperate } from "../viewer";
 import { Card } from "../components/ui/card";
 import { usePoll } from "../hooks";
 import type { PageId } from "../navigation";
@@ -96,6 +97,7 @@ export function DashboardView({
   health: Health | null;
   onNavigate: (page: PageId) => void;
 }) {
+  const canOperate = useCanOperate();
   const [gaps, setGaps] = useState<SubstitutionOpportunity[]>([]);
   const [climateByIso3, setClimateByIso3] = useState<Record<string, string>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -532,7 +534,8 @@ export function DashboardView({
 
           <Button
             onClick={runAll}
-            disabled={running || awaitingApproval || sweepGaps.length === 0}
+            disabled={!canOperate || running || awaitingApproval || sweepGaps.length === 0}
+            title={canOperate ? undefined : "Running a sweep needs the operator role"}
             className="shrink-0 rounded-full"
           >
             {running ? (
@@ -585,7 +588,7 @@ export function DashboardView({
         recommendation={held}
         onDecide={decide}
         busy={resuming}
-        active={awaitingApproval && held !== null}
+        active={canOperate && awaitingApproval && held !== null}
         gateEnabled={requireApproval}
       />
 

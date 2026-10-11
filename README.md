@@ -82,8 +82,11 @@ npm install
 npm run dev     # http://localhost:5180
 ```
 
-No database, broker, or API key is required, and there is no sign-in — identity
-belongs to the system integrating this one. The first request warms the source
+The landing page is at `/` and the console at `/console`, behind sign-in. For
+local work, put `AUTH_SECRET=<anything long>` and `AUTH_DEV_LOGIN=1` in
+`.env.local` for a one-click development sign-in (see
+[Authentication](#authentication)). No database, broker, or model key is
+required. The first request warms the source
 caches in the background; UN Comtrade takes around a minute to answer, and the
 console shows each publisher as `pending` until it does rather than showing a
 zero.
@@ -121,12 +124,54 @@ Optional configuration lives in `.env` — see `.env.example`. Setting
 `MINIMAX_API_KEY` (or `SHO_API_KEY`) activates the workflow's LLM recommendation
 step; without it that step returns a labelled stub.
 
+## Authentication
+
+The console and every API route except the health probes require sign-in.
+Identity comes from your organisation's provider through
+[Auth.js](https://authjs.dev); Nexus-Grid stores no passwords and keeps no user
+table. Sessions are encrypted cookies that last eight hours.
+
+1. Set `AUTH_SECRET` (`npx auth secret` or `openssl rand -base64 32`).
+2. Configure one or more providers and register
+   `https://<host>/api/auth/callback/<id>` with each:
+
+   | Provider | Variables | `<id>` |
+   |---|---|---|
+   | Microsoft Entra ID | `AUTH_MICROSOFT_ENTRA_ID_ID`, `_SECRET`, `_ISSUER` | `microsoft-entra-id` |
+   | Okta, Auth0, Keycloak, any OIDC | `AUTH_OIDC_ISSUER`, `AUTH_OIDC_ID`, `AUTH_OIDC_SECRET`, `AUTH_OIDC_NAME` | `oidc` |
+   | Google Workspace | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | `google` |
+   | GitHub | `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET` | `github` |
+
+3. Say who may sign in. Anyone not listed is refused.
+
+   | Role | Can | Granted by |
+   |---|---|---|
+   | viewer | read every page and API | `AUTH_VIEWER_EMAILS`, or `AUTH_ALLOWED_DOMAINS` |
+   | operator | also run sweeps and decide approval gates | `AUTH_OPERATOR_EMAILS` |
+   | admin | also read `/api/metrics` | `AUTH_ADMIN_EMAILS` |
+
+   `AUTH_DEFAULT_ROLE` changes the role an allowed domain gets. Roles are
+   re-checked on every request, so removing an address takes effect as soon as
+   the change is deployed.
+
+4. On your own server (not Vercel), also set `AUTH_URL=https://<host>` and
+   `AUTH_TRUST_HOST=true`.
+
+Integrations call the API with a service-account token:
+`npm run token:new -- <name> <role>` prints the token and the
+`AUTH_API_TOKENS` entry, which holds only its hash. Send it as
+`Authorization: Bearer <token>`. The audit trail records the signed-in person
+or `service:<name>` for every state change; the old `X-Actor` header is no
+longer trusted.
+
 ## Deploying
 
 ### Vercel
 
 Import the repository at [vercel.com/new](https://vercel.com/new) and accept
-the detected Next.js settings. No environment variables are required. Add
+the detected Next.js settings, then set the sign-in variables from
+[Authentication](#authentication); until they are set the console stays closed
+and the sign-in page says so. Add
 `MINIMAX_API_KEY` under Settings → Environment Variables if you want model
 readings rather than rule-derived ones. After that, every push to `main`
 deploys to production and every pull request gets a preview URL.

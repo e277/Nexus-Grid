@@ -4,6 +4,7 @@ import { ChevronRight } from "lucide-react";
 
 import { findPage, groupOf, type PageId } from "../../navigation";
 import { ThemeToggle } from "../ThemeToggle";
+import { UserMenu } from "./UserMenu";
 
 interface TopBarProps {
   page: PageId;
@@ -33,6 +34,7 @@ export function TopBar({ page }: TopBarProps) {
           trust. */}
       <div className="flex shrink-0 items-center gap-2">
         <ThemeToggle />
+        <UserMenu />
       </div>
     </header>
   );

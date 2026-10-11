@@ -3,8 +3,9 @@ import type { Metadata } from "next";
 import "../index.css";
 
 export const metadata: Metadata = {
-  title: "Nexus-Grid · Operator Console",
-  description: "Autonomous Caribbean Food Supply Chain AI",
+  title: { default: "Nexus-Grid · Caribbean food supply coordination", template: "%s · Nexus-Grid" },
+  description:
+    "Finds the food the Caribbean imports from outside the region while a CARICOM member already supplies it, and coordinates the swap.",
 };
 
 /**

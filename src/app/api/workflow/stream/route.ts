@@ -1,5 +1,5 @@
 import { ensureBootstrapped } from "@/lib/server/bootstrap";
-import { HttpError, jsonBody } from "@/lib/server/http";
+import { authorize, HttpError, jsonBody } from "@/lib/server/http";
 import {
   NOT_AWAITING_DECISION,
   newThreadId,
@@ -12,6 +12,7 @@ import { optionalBool, optionalInt, optionalString } from "@/lib/server/validati
 import { Command } from "@langchain/langgraph";
 
 import { expireAnalysis } from "@/lib/server/interpretation/analysis";
+import { recordAudit } from "@/lib/server/observability/activity";
 import { recordCoordination } from "@/lib/server/observability/coordination";
 
 export const runtime = "nodejs";
@@ -33,10 +34,21 @@ export const dynamic = "force-dynamic";
  *
  * Not wrapped in `api()`: that helper serialises a return value to JSON, and
  * this hands back a live stream. Rate limiting is skipped for the same reason
- * a long poll would be — one request per run, held open.
+ * a long poll would be — one request per run, held open. Authorization is not:
+ * starting a run or deciding a gate is an operator's call.
  */
 export async function POST(request: Request): Promise<Response> {
   ensureBootstrapped();
+
+  let actor: string;
+  try {
+    actor = (await authorize(request, "operator"))?.id ?? "system";
+  } catch (error) {
+    if (error instanceof HttpError) {
+      return Response.json({ detail: error.message }, { status: error.status, headers: error.headers });
+    }
+    throw error;
+  }
 
   let body: Record<string, unknown>;
   try {
@@ -64,7 +76,11 @@ export async function POST(request: Request): Promise<Response> {
       return Response.json({ detail: NOT_AWAITING_DECISION }, { status: 409 });
     }
     threadId = resumeThread;
-    input = new Command({ resume: { decision, note: optionalString(body, "note") } });
+    const note = optionalString(body, "note");
+    input = new Command({ resume: { decision, note } });
+    // The console decides gates through this stream, so this is where the
+    // decision enters the audit trail, under the name of who took it.
+    recordAudit({ actor, action: `workflow.gate_${decision}`, entityType: "workflow", detail: note });
   } else {
     threadId = newThreadId();
     const suppliers = body.regional_suppliers;
@@ -87,6 +103,12 @@ export async function POST(request: Request): Promise<Response> {
     for (const key of Object.keys(input) as (keyof SupplyState)[]) {
       if (input[key] === undefined || input[key] === null) delete input[key];
     }
+    recordAudit({
+      actor,
+      action: "workflow.started",
+      entityType: "workflow",
+      detail: [input.commodity, input.importer].filter(Boolean).join(" → ") || null,
+    });
   }
 
   const encoder = new TextEncoder();

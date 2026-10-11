@@ -1,12 +1,14 @@
 /**
  * Shared plumbing for the route handlers.
  *
- * `api()` is where the cross-cutting concerns live: it rate-limits, records
- * metrics, resolves route params, writes the audit trail for state changes,
- * and turns a thrown error into the `{ "detail": ... }` JSON body the client
- * knows how to read.
+ * `api()` is where the cross-cutting concerns live: it rate-limits, checks the
+ * caller's identity and role, records metrics, resolves route params, writes
+ * the audit trail for state changes, and turns a thrown error into the
+ * `{ "detail": ... }` JSON body the client knows how to read.
  */
 
+import { identify, type Principal } from "./auth/identity";
+import { satisfies, type Role } from "./auth/policy";
 import { ensureBootstrapped } from "./bootstrap";
 import { recordRequest, routeTemplate } from "./metrics";
 import { allow, clientAddress } from "./rate-limit";
@@ -26,6 +28,8 @@ export class HttpError extends Error {
 
 export interface RouteContext<P> {
   request: Request;
+  /** The authenticated caller; null only on a `public` route. */
+  principal: Principal | null;
   params: P;
   /** Query string parameters, already parsed. */
   query: URLSearchParams;
@@ -33,7 +37,18 @@ export interface RouteContext<P> {
 
 type Handler<P> = (context: RouteContext<P>) => unknown | Promise<unknown>;
 
+/**
+ * Who may call a route: anyone (`public`, for probes), or a caller holding at
+ * least this role.
+ */
+export type Access = "public" | Role;
+
 interface Options {
+  /**
+   * Defaults to `viewer` for reads and `operator` for anything that changes
+   * state, so a new route is never open by omission.
+   */
+  access?: Access;
   /** Status for a successful JSON response (201 for creates). */
   status?: number;
   /**
@@ -53,15 +68,26 @@ function jsonResponse(body: unknown, status: number, headers?: Record<string, st
   });
 }
 
+function defaultAccess(method: string): Access {
+  return method === "GET" || method === "HEAD" ? "viewer" : "operator";
+}
+
 /**
- * Who to attribute a state change to.
+ * Resolve the caller and check their role.
  *
- * There is no user model here — this is a coordination layer, and the system
- * integrating it owns identity. An `X-Actor` header lets that system carry its
- * own attribution into the audit trail; otherwise changes are `system`.
+ * 401 when nobody is signed in, 403 when someone is but their role does not
+ * cover the route — the client signs the first out and explains the second.
  */
-function actorFrom(request: Request): string {
-  return request.headers.get("x-actor")?.trim() || "system";
+export async function authorize(request: Request, access: Access): Promise<Principal | null> {
+  if (access === "public") return null;
+  const principal = await identify(request);
+  if (!principal) {
+    throw new HttpError(401, "Sign in to continue.", { "WWW-Authenticate": "Bearer" });
+  }
+  if (!satisfies(principal.role, access)) {
+    throw new HttpError(403, `This action needs the ${access} role; you are signed in as ${principal.role}.`);
+  }
+  return principal;
 }
 
 /**
@@ -83,6 +109,7 @@ function auditAction(method: string, path: string): { entityType: string; action
 
 function recordStateChange(
   request: Request,
+  principal: Principal | null,
   path: string,
   result: unknown,
   refine: Options["audit"]
@@ -93,7 +120,9 @@ function recordStateChange(
   const override = refine?.(result) ?? null;
   const id = (result as { id?: unknown })?.id;
   recordAudit({
-    actor: actorFrom(request),
+    // The verified caller, never a client-supplied header: an audit trail a
+    // caller can write their own name into is not an audit trail.
+    actor: principal?.id ?? "system",
     action: override?.action ?? named.action,
     entityType: named.entityType,
     entityId: typeof id === "number" ? id : null,
@@ -132,12 +161,13 @@ export function api<P = Record<string, string>>(handler: Handler<P>, options: Op
     }
 
     try {
+      const principal = await authorize(request, options.access ?? defaultAccess(request.method));
       const params = ((await context?.params) ?? {}) as P;
-      const result = await handler({ request, params, query: url.searchParams });
+      const result = await handler({ request, principal, params, query: url.searchParams });
 
       if (result instanceof Response) return finish(result);
 
-      recordStateChange(request, path, result, options.audit);
+      recordStateChange(request, principal, path, result, options.audit);
       return finish(jsonResponse(result, options.status ?? 200));
     } catch (error) {
       if (error instanceof HttpError) {

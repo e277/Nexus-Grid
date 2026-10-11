@@ -1,5 +1,42 @@
+const isDev = process.env.NODE_ENV !== "production";
+
+/**
+ * Sent on every response.
+ *
+ * The CSP allows inline scripts because the App Router streams its payload in
+ * inline <script> tags and the layout stamps the theme before paint; moving to
+ * nonces is the next step if a third-party script is ever added. Everything
+ * else is same-origin only: the console calls its own API, and the upstream
+ * publishers are fetched by the server, never the browser.
+ */
+const securityHeaders = [
+  {
+    key: "Content-Security-Policy",
+    value: [
+      "default-src 'self'",
+      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:",
+      "font-src 'self' data:",
+      `connect-src 'self'${isDev ? " ws:" : ""}`,
+      "object-src 'none'",
+      "base-uri 'self'",
+      "frame-ancestors 'none'",
+    ].join("; "),
+  },
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  poweredByHeader: false,
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders }];
+  },
   // The source caches, agent memory, and the workflow checkpointer are
   // process-local singletons held on globalThis, so every route handler
   // declares `export const runtime = "nodejs"` — the Edge runtime would give
