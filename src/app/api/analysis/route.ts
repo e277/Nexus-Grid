@@ -30,8 +30,10 @@ export const GET = api(async () => {
   const picture = buildRegionalPicture(bundle);
   const { lanes, ports, matches } = buildLanes(picture);
 
-  const activities = listAgentActivities({ limit: 500 });
-  const audits = listAuditLogs({ limit: 500 });
+  const [activities, audits] = await Promise.all([
+    listAgentActivities({ limit: 500 }),
+    listAuditLogs({ limit: 500 }),
+  ]);
 
   const inputs: AnalysisInputs = {
     // What the loop has concluded, so a reading builds on the decisions

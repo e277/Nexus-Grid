@@ -107,19 +107,19 @@ function auditAction(method: string, path: string): { entityType: string; action
   return { entityType, action: `${entityType}.${tail}` };
 }
 
-function recordStateChange(
+async function recordStateChange(
   request: Request,
   principal: Principal | null,
   path: string,
   result: unknown,
   refine: Options["audit"]
-): void {
+): Promise<void> {
   const named = auditAction(request.method, path);
   if (named === null) return;
 
   const override = refine?.(result) ?? null;
   const id = (result as { id?: unknown })?.id;
-  recordAudit({
+  await recordAudit({
     // The verified caller, never a client-supplied header: an audit trail a
     // caller can write their own name into is not an audit trail.
     actor: principal?.id ?? "system",
@@ -167,7 +167,10 @@ export function api<P = Record<string, string>>(handler: Handler<P>, options: Op
 
       if (result instanceof Response) return finish(result);
 
-      recordStateChange(request, principal, path, result, options.audit);
+      // Awaited: a state change is not reported as done until its audit row
+      // is written. If that write fails the change has still happened, so the
+      // caller gets a 500 rather than a success the trail cannot back up.
+      await recordStateChange(request, principal, path, result, options.audit);
       return finish(jsonResponse(result, options.status ?? 200));
     } catch (error) {
       if (error instanceof HttpError) {

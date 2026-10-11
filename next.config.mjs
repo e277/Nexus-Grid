@@ -71,6 +71,9 @@ const nextConfig = {
   // better-sqlite3 is a native addon: bundling it breaks the binding lookup,
   // so the checkpointer's driver has to stay an external require at runtime.
   serverExternalPackages: ["better-sqlite3", "@langchain/langgraph-checkpoint-sqlite"],
+  // Instances migrate the database on first use, reading the SQL files at
+  // runtime; nothing imports them, so the tracer has to be told they are needed.
+  outputFileTracingIncludes: { "/**": ["./drizzle/**/*"] },
 };
 
 export default nextConfig;

@@ -13,11 +13,12 @@ export const dynamic = "force-dynamic";
  * what anything downstream should show a person, and having the API supply it
  * keeps one vocabulary rather than a copy in every consumer.
  */
-export const GET = api(({ query }) => {
-  return listAgentActivities({
+export const GET = api(async ({ query }) => {
+  const activities = await listAgentActivities({
     ...pagination(query),
     agent_name: query.get("agent_name"),
-  }).map((activity) => ({
+  });
+  return activities.map((activity) => ({
     ...activity,
     agent_title: agentTitle(activity.agent_name),
     action_label: actionLabel(activity.action),

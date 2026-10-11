@@ -8,6 +8,27 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    # A throwaway database, so the Postgres backend and the migrations are
+    # tested against the real thing on every change.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: nexus_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nexus_ci
+
     steps:
       - uses: actions/checkout@v4
 
@@ -22,8 +43,24 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Migrations match the schema
+        # A schema change committed without its migration would ship tables
+        # the code does not expect. Regenerating must produce nothing new.
+        run: |
+          npx drizzle-kit generate
+          if [ -n "$(git status --porcelain -- drizzle)" ]; then
+            git status --porcelain -- drizzle
+            echo "::error::src/lib/server/db/schema.ts changed without a migration. Run npm run db:generate and commit drizzle/."
+            exit 1
+          fi
+
+      - name: Migrate
+        # Twice: a deploy re-runs migrations against an up-to-date database.
+        run: npm run db:migrate && npm run db:migrate
+
       - name: Test
         run: npm test
 
       - name: Build
-        run: npm run build
+        # Built without DATABASE_URL, as a deployment that has none must still build.
+        run: env -u DATABASE_URL npm run build

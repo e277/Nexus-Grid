@@ -89,8 +89,33 @@ services:
       - openclaw-state:/home/node/.openclaw
       - openclaw-keys:/home/node/.config/openclaw
 
+  # Optional Postgres for the audit trail, user grants and paused runs.
+  # Start with `docker compose --profile postgres up -d`, and point the app at
+  # it in .env: DATABASE_URL=postgresql://nexus:<POSTGRES_PASSWORD>@db:5432/nexus
+  # The app reaches it by service name from inside the gateway's namespace,
+  # which sits on the same compose network.
+  db:
+    image: postgres:16
+    profiles: ["postgres"]
+    container_name: nexus-grid-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nexus
+      POSTGRES_DB: nexus
+      # Not `:?`: that would fail interpolation for every stack, profile or not.
+      # The postgres image itself refuses to start without a password.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    volumes:
+      - nexus-grid-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexus -d nexus"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   nexus-grid-state:
+  nexus-grid-db:
   # Pinned to the names the gateway's own compose project created. Compose
   # otherwise prefixes volumes with the project name, so moving these services
   # into a root-level file would have silently created empty ones — and the

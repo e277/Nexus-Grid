@@ -5,6 +5,7 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { NAV_GROUPS, type PageId } from "../../navigation";
 import type { Health } from "../../types";
+import { useViewer } from "../../viewer";
 
 interface SidebarProps {
   page: PageId;
@@ -38,6 +39,11 @@ export function Sidebar({
 }: SidebarProps) {
   /** Hidden while the rail is icons-only: always under `lg`, and above it when collapsed. */
   const wordsOnly = cn("hidden", collapsed ? "" : "lg:block");
+  const isAdmin = useViewer()?.role === "admin";
+  const visibleGroups = NAV_GROUPS.map((group) => ({
+    ...group,
+    pages: group.pages.filter((item) => !item.adminOnly || isAdmin),
+  })).filter((group) => group.pages.length > 0);
 
   return (
     <aside
@@ -129,7 +135,7 @@ export function Sidebar({
       ) : null}
 
       <nav aria-label="Primary" className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
-        {NAV_GROUPS.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.label} className="space-y-0.5">
             {/* The group reads as a heading where there is room for words and
                 as a rule where there is not. Either way the groups stay

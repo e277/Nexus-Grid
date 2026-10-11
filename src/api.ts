@@ -1,4 +1,7 @@
 import type {
+  AccessOverview,
+  AccessRole,
+  AccessUser,
   AgentActivity,
   AnalysisDomain,
   AnalysisOverview,
@@ -178,6 +181,11 @@ export const api = {
     post<WorkflowResult>(`/workflow/${threadId}/resume`, { decision, note: note ?? null }),
   agentActivities: (params?: { skip?: number; limit?: number; agent_name?: string }) =>
     get<AgentActivity[]>(buildPath("/agent-activities", params)),
+  // Administration
+  accessOverview: () => get<AccessOverview>("/admin/users"),
+  grantAccess: (body: { email: string; role: AccessRole; disabled?: boolean; name?: string | null }) =>
+    post<AccessUser>("/admin/users", body),
+
   auditLogs: (params?: { skip?: number; limit?: number; actor?: string; entity_type?: string }) =>
     get<AuditLog[]>(buildPath("/audit-logs", params)),
 };

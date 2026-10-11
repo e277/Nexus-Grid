@@ -80,7 +80,7 @@ export async function POST(request: Request): Promise<Response> {
     input = new Command({ resume: { decision, note } });
     // The console decides gates through this stream, so this is where the
     // decision enters the audit trail, under the name of who took it.
-    recordAudit({ actor, action: `workflow.gate_${decision}`, entityType: "workflow", detail: note });
+    await recordAudit({ actor, action: `workflow.gate_${decision}`, entityType: "workflow", detail: note });
   } else {
     threadId = newThreadId();
     const suppliers = body.regional_suppliers;
@@ -103,7 +103,7 @@ export async function POST(request: Request): Promise<Response> {
     for (const key of Object.keys(input) as (keyof SupplyState)[]) {
       if (input[key] === undefined || input[key] === null) delete input[key];
     }
-    recordAudit({
+    await recordAudit({
       actor,
       action: "workflow.started",
       entityType: "workflow",
