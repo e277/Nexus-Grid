@@ -76,6 +76,9 @@ export default {
         "ng-lg":   "16px",
         "ng-2xl":  "24px",
         "ng-hero": "32px",
+        // The public landing page's headline only. The console never uses it:
+        // a 48px figure in a data-dense screen is a poster, not a reading.
+        "ng-display": "48px",
       },
       boxShadow: {
         "ng-xs": "var(--shadow-xs)",

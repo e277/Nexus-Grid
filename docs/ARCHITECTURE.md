@@ -509,9 +509,12 @@ which it had not.
 ## 11. What the platform owns
 
 Two tables: agent activities and the audit trail. The audit trail is written by
-the route wrapper and attributed via an optional `X-Actor` header, so an
-integrating system carries its own identity in. There is no user model and no
-authentication — identity belongs to the host system.
+the route wrapper and attributed to the verified caller: the signed-in person's
+address, or `service:<name>` for an API token. There is still no user table:
+people sign in through the deploying organisation's identity provider (Auth.js,
+JWT sessions) and get a viewer, operator or admin role from an allow-list in
+the environment. The wrapper checks that role on every route. See the README's
+Authentication section.
 
 ---
 

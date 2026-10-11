@@ -24,6 +24,16 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * A 401 means the session has ended (expired, or the person was removed from
+ * the access list): send them to sign in again, and come back here after.
+ */
+function onUnauthorized(status: number) {
+  if (status !== 401 || typeof window === "undefined") return;
+  const back = window.location.pathname + window.location.search;
+  window.location.assign(`/signin?callbackUrl=${encodeURIComponent(back)}`);
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -35,6 +45,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   });
 
   if (!response.ok) {
+    onUnauthorized(response.status);
     const payload = await response.json().catch(() => null);
     const detail =
       typeof payload?.detail === "string"
@@ -84,6 +95,7 @@ export async function* streamWorkflow(
   });
 
   if (!response.ok || !response.body) {
+    onUnauthorized(response.status);
     const payload = await response.json().catch(() => null);
     throw new ApiError(
       response.status,

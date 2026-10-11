@@ -18,7 +18,8 @@
     "gateway:cli": "docker compose run --rm cli",
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f app"
+    "docker:logs": "docker compose logs -f app",
+    "token:new": "node scripts/new-api-token.mjs"
   },
   "dependencies": {
     "@langchain/langgraph": "^1.4.9",
@@ -30,6 +31,7 @@
     "d3-geo": "^3.1.1",
     "lucide-react": "^1.31.0",
     "next": "^16.3.0",
+    "next-auth": "^5.0.0-beta.32",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "recharts": "^3.10.1",
