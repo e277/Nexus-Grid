@@ -1,4 +1,4 @@
-# Deploy on every push to `main`: copy the source to the server and run
+# Deploy to your own server: copy the source to the server and run
 # `docker compose up -d --build` there, then verify the live console.
 #
 # The server runs exactly the stack docker-compose.yml describes (app +
@@ -15,11 +15,11 @@
 #   VM_SSH_KEY      ed25519 private key; public half in that user's authorized_keys
 #   VM_PUBLIC_URL   https URL the verify step probes, e.g. https://nexus.example.com
 
-name: Deploy
+name: Deploy to server
 
+# Manual only: the app is deployed on Vercel from `main` (see README), so this
+# runs just when you choose to also ship to your own server.
 on:
-  push:
-    branches: ["main"]
   workflow_dispatch:
 
 # Two deploys against the same server would race on the source directory and

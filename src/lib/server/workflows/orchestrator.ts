@@ -155,6 +155,20 @@ export function resumeRun(
   return run(new Command({ resume: { decision, note } }), threadId);
 }
 
+/**
+ * Why a decision cannot be applied to a thread that is not parked at the gate.
+ *
+ * Resuming such a thread is not an error to LangGraph: it runs nothing and
+ * reports `completed`, which told the operator their approval had gone through
+ * when no plan was ever executed. It happens whenever the checkpoint is gone
+ * (an in-memory checkpointer after a restart, or a serverless deployment where
+ * the decision reaches a different instance) and when a decision is sent twice.
+ */
+export const NOT_AWAITING_DECISION =
+  "This run is not waiting on a decision here. It may already have been decided, " +
+  "or the server that held it has restarted or is not the one that answered. " +
+  "Start the run again to get a fresh approval gate.";
+
 /** Whether a thread is still resumable — a paused gate survives a restart. */
 export async function threadStatus(
   threadId: string

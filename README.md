@@ -121,6 +121,36 @@ Optional configuration lives in `.env` — see `.env.example`. Setting
 `MINIMAX_API_KEY` (or `SHO_API_KEY`) activates the workflow's LLM recommendation
 step; without it that step returns a labelled stub.
 
+## Deploying
+
+### Vercel
+
+Import the repository at [vercel.com/new](https://vercel.com/new) and accept
+the detected Next.js settings. No environment variables are required. Add
+`MINIMAX_API_KEY` under Settings → Environment Variables if you want model
+readings rather than rule-derived ones. After that, every push to `main`
+deploys to production and every pull request gets a preview URL.
+
+What changes on Vercel, because each request may land on a different,
+short-lived instance:
+
+- **Approval gates live in memory.** A paused run is held by the instance
+  that paused it. A decision that reaches a different instance, or arrives
+  after the instance has been recycled, cannot resume the run, which must be
+  started again. Durable gates need a database-backed checkpointer.
+- **No dashboard delivery.** The OpenClaw gateway has to run on loopback next
+  to the app, which Vercel cannot provide, so approved plans are reported as
+  simulated dispatches rather than posted.
+- **Each instance warms its own source caches**, so a cold instance shows
+  sources as `pending` for up to a minute while UN Comtrade answers.
+
+### Your own server
+
+For durable gates and real delivery, run the compose stack above on a single
+Linux server behind Caddy. The one-time setup, and the manual **Deploy to
+server** workflow that ships to it, are in
+[deploy/compose/README.md](deploy/compose/README.md).
+
 ## Structure
 
 ```

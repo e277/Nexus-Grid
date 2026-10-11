@@ -1,6 +1,11 @@
 import { ensureBootstrapped } from "@/lib/server/bootstrap";
 import { HttpError, jsonBody } from "@/lib/server/http";
-import { newThreadId, streamRun, threadStatus } from "@/lib/server/workflows/orchestrator";
+import {
+  NOT_AWAITING_DECISION,
+  newThreadId,
+  streamRun,
+  threadStatus,
+} from "@/lib/server/workflows/orchestrator";
 import type { SupplyState } from "@/lib/server/workflows/supply-chain-graph";
 import { GATE_DECISIONS } from "@/lib/server/workflows/supply-chain-graph";
 import { optionalBool, optionalInt, optionalString } from "@/lib/server/validation";
@@ -54,6 +59,9 @@ export async function POST(request: Request): Promise<Response> {
         { detail: `decision must be one of: ${GATE_DECISIONS.join(", ")}` },
         { status: 422 }
       );
+    }
+    if (!(await threadStatus(resumeThread)).paused) {
+      return Response.json({ detail: NOT_AWAITING_DECISION }, { status: 409 });
     }
     threadId = resumeThread;
     input = new Command({ resume: { decision, note: optionalString(body, "note") } });

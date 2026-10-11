@@ -90,7 +90,12 @@ export function getSettings(): Settings {
     shoBaseUrl: str("SHO_BASE_URL", ""),
     shoModel: str("SHO_MODEL", ""),
 
-    checkpointDbPath: str("CHECKPOINT_DB_PATH", ".nexus-grid/checkpoints.sqlite"),
+    // On Vercel the deployment filesystem is read-only and each instance is
+    // short-lived, so a file would neither open nor outlive the instance.
+    checkpointDbPath: str(
+      "CHECKPOINT_DB_PATH",
+      process.env.VERCEL ? "" : ".nexus-grid/checkpoints.sqlite"
+    ),
 
     openclawGatewayUrl: str("OPENCLAW_GATEWAY_URL", ""),
     openclawGatewayToken: str("OPENCLAW_GATEWAY_TOKEN", ""),

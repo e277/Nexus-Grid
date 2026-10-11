@@ -1,5 +1,9 @@
-import { api, jsonBody } from "@/lib/server/http";
-import { resumeRun } from "@/lib/server/workflows/orchestrator";
+import { api, HttpError, jsonBody } from "@/lib/server/http";
+import {
+  NOT_AWAITING_DECISION,
+  resumeRun,
+  threadStatus,
+} from "@/lib/server/workflows/orchestrator";
 import { GATE_DECISIONS } from "@/lib/server/workflows/supply-chain-graph";
 import { optionalString, requiredEnum } from "@/lib/server/validation";
 
@@ -14,6 +18,10 @@ export const POST = api<{ threadId: string }>(
     // Carries the amendment on `modified` and the reason on `escalated`; the
     // graph records it against the gate either way.
     const note = optionalString(body, "note");
+
+    if (!(await threadStatus(params.threadId)).paused) {
+      throw new HttpError(409, NOT_AWAITING_DECISION);
+    }
 
     return {
       status: "resumed",
