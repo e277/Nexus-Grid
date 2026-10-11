@@ -355,3 +355,28 @@ export interface PictureResponse {
   };
   sources: SourceProvenance[];
 }
+
+export type AccessRole = "viewer" | "operator" | "admin";
+
+/** One person granted access from the console. */
+export interface AccessUser {
+  email: string;
+  name: string | null;
+  role: AccessRole;
+  disabled: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  last_sign_in_at: string | null;
+  /** Set when the environment also names this address; that role wins. */
+  pinned_role: AccessRole | null;
+}
+
+export interface AccessOverview {
+  /** False when no database is configured, so grants cannot be stored. */
+  database: boolean;
+  users: AccessUser[];
+  environment: { email: string; role: AccessRole }[];
+  allowed_domains: string[];
+  default_role: AccessRole;
+}

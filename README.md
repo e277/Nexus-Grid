@@ -152,7 +152,10 @@ table. Sessions are encrypted cookies that last eight hours.
 
    `AUTH_DEFAULT_ROLE` changes the role an allowed domain gets. Roles are
    re-checked on every request, so removing an address takes effect as soon as
-   the change is deployed.
+   the change is deployed. With a [database](#database), admins can also grant,
+   change and remove access from the console's **Access** page; that takes
+   effect within 30 seconds. Addresses named in the environment cannot be
+   changed there, so the deployment's owners cannot be locked out.
 
 4. On your own server (not Vercel), also set `AUTH_URL=https://<host>` and
    `AUTH_TRUST_HOST=true`.
@@ -163,6 +166,28 @@ Integrations call the API with a service-account token:
 `Authorization: Bearer <token>`. The audit trail records the signed-in person
 or `service:<name>` for every state change; the old `X-Actor` header is no
 longer trusted.
+
+## Database
+
+Set `DATABASE_URL` to a Postgres connection string and the platform's own
+records move out of process memory and into the database: the audit trail
+(append-only, enforced by a trigger), the agents' decision log, access granted
+from the console's **Access** page, and paused workflow runs. Every instance
+then shares them, which is what makes approval gates work on Vercel.
+
+Any Postgres 14+ works: Neon or Vercel Postgres on Vercel (use the pooled
+URL), or `docker compose --profile postgres up -d` on your own server with
+`POSTGRES_PASSWORD` and `DATABASE_URL=postgresql://nexus:<password>@db:5432/nexus`
+in `.env`. Instances apply migrations on first use; set
+`DATABASE_AUTO_MIGRATE=0` to run `npm run db:migrate` yourself instead.
+
+Without `DATABASE_URL` nothing changes: the stores stay in memory and paused
+runs use the SQLite file or memory, as before. `/api/health/db` reports which
+store and checkpointer are in use.
+
+Changing a table: edit `src/lib/server/db/schema.ts`, run
+`npm run db:generate`, and commit the new file in `drizzle/`. CI fails if the
+schema and the migrations disagree.
 
 ## Deploying
 
@@ -179,10 +204,10 @@ deploys to production and every pull request gets a preview URL.
 What changes on Vercel, because each request may land on a different,
 short-lived instance:
 
-- **Approval gates live in memory.** A paused run is held by the instance
-  that paused it. A decision that reaches a different instance, or arrives
-  after the instance has been recycled, cannot resume the run, which must be
-  started again. Durable gates need a database-backed checkpointer.
+- **Approval gates live in memory unless a database is set.** Without
+  `DATABASE_URL`, a paused run is held by the instance that paused it, and a
+  decision that reaches a different instance cannot resume it. With a
+  [database](#database) every instance shares paused runs.
 - **No dashboard delivery.** The OpenClaw gateway has to run on loopback next
   to the app, which Vercel cannot provide, so approved plans are reported as
   simulated dispatches rather than posted.

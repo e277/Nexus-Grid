@@ -84,23 +84,55 @@ export function policyFromEnv(env: Env = process.env): AccessPolicy {
   };
 }
 
+function normalise(email: string | null | undefined): string | null {
+  const address = email?.trim().toLowerCase();
+  return address && address.includes("@") ? address : null;
+}
+
+/** A grant stored in the database, managed from the console. */
+export interface StoredGrant {
+  role: Role;
+  disabled: boolean;
+}
+
 /**
  * The role an address is entitled to, or null when it may not sign in.
  *
- * Named addresses win over the domain rule, so an admin at an allowed domain
- * stays an admin rather than collapsing to the domain's default.
+ * In order:
+ * 1. An address named in the environment gets that role — the strongest one
+ *    if it is on several lists. The database cannot override it, so whoever
+ *    deploys can never be locked out from the console.
+ * 2. A grant stored in the database: its role, or nothing if disabled. A
+ *    disabled grant also shuts out an address that its domain would admit.
+ * 3. An allowed domain gets the default role.
  */
-export function resolveRole(email: string | null | undefined, policy: AccessPolicy): Role | null {
-  const address = email?.trim().toLowerCase();
-  if (!address || !address.includes("@")) return null;
+export function resolveRole(
+  email: string | null | undefined,
+  policy: AccessPolicy,
+  stored: StoredGrant | null = null
+): Role | null {
+  const address = normalise(email);
+  if (!address) return null;
 
   for (const role of [...ROLES].reverse()) {
     if (policy.emails[role].has(address)) return role;
   }
 
+  if (stored) return stored.disabled ? null : stored.role;
+
   const domain = address.slice(address.lastIndexOf("@") + 1);
   if (policy.domains.has(domain)) return policy.defaultRole;
 
+  return null;
+}
+
+/** Whether the environment pins this address's role (and so the console cannot change it). */
+export function pinnedByEnvironment(email: string, policy: AccessPolicy): Role | null {
+  const address = normalise(email);
+  if (!address) return null;
+  for (const role of [...ROLES].reverse()) {
+    if (policy.emails[role].has(address)) return role;
+  }
   return null;
 }
 

@@ -7,9 +7,10 @@
  * decision someone was in the middle of making, and the thread id in the
  * client became unresumable with no way to tell why.
  *
- * SQLite is the smallest thing that fixes that: one file, no server, no
- * container. The app keeps its "no database required" property — the file is
- * created on demand and nothing else in the system reads it.
+ * Postgres, when `DATABASE_URL` is set, is the durable choice: every instance
+ * sees every paused run, which is what makes gates work on Vercel. Without it,
+ * SQLite is the smallest thing that fixes a restart on a single server: one
+ * file, no server, no container. Without either, memory.
  */
 
 import { mkdirSync } from "node:fs";
@@ -19,13 +20,15 @@ import { dirname } from "node:path";
 import { MemorySaver, type BaseCheckpointSaver } from "@langchain/langgraph";
 
 import { getSettings } from "../config";
+import { databaseConfigured, getPool } from "../db/client";
+import { ReadyPostgresSaver } from "./postgres-checkpointer";
 
 const globalCheckpointer = globalThis as typeof globalThis & {
   __nexusGridCheckpointer?: BaseCheckpointSaver;
   __nexusGridCheckpointerKind?: CheckpointerKind;
 };
 
-export type CheckpointerKind = "sqlite" | "memory";
+export type CheckpointerKind = "postgres" | "sqlite" | "memory";
 
 /** Which store is actually in use, for the health surface. */
 export function checkpointerKind(): CheckpointerKind {
@@ -41,6 +44,12 @@ export function checkpointerKind(): CheckpointerKind {
  */
 export function getCheckpointer(): BaseCheckpointSaver {
   if (globalCheckpointer.__nexusGridCheckpointer) {
+    return globalCheckpointer.__nexusGridCheckpointer;
+  }
+
+  if (databaseConfigured()) {
+    globalCheckpointer.__nexusGridCheckpointer = new ReadyPostgresSaver(getPool());
+    globalCheckpointer.__nexusGridCheckpointerKind = "postgres";
     return globalCheckpointer.__nexusGridCheckpointer;
   }
 

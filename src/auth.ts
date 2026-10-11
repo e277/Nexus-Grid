@@ -21,6 +21,7 @@ import Google from "next-auth/providers/google";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 
 import { isRole, policyFromEnv, resolveRole, type Role } from "./lib/server/auth/policy";
+import { findGrant, recordSignIn } from "./lib/server/auth/users";
 
 declare module "next-auth" {
   interface Session {
@@ -121,26 +122,34 @@ export function authConfigured(): boolean {
 
 const policy = policyFromEnv();
 
-function roleFor(email: string | null | undefined, provider: unknown): Role | null {
+async function roleFor(email: string | null | undefined, provider: unknown): Promise<Role | null> {
   if (provider === "dev") return devLoginEnabled() ? devRole() : null;
-  return resolveRole(email, policy);
+  return resolveRole(email, policy, await findGrant(email));
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: configuredProviders,
   session: { strategy: "jwt", maxAge: SESSION_MAX_AGE_SECONDS, updateAge: 60 * 60 },
   pages: { signIn: "/signin", error: "/signin" },
+  events: {
+    async signIn({ user }) {
+      if (!user.email) return;
+      await recordSignIn(user.email, user.name).catch((error) => {
+        console.error("Could not record sign-in", error);
+      });
+    },
+  },
   callbacks: {
-    signIn({ user, account, profile }) {
+    async signIn({ user, account, profile }) {
       // An address the provider has not verified is a claim, not an identity.
       // Google and generic OIDC say so explicitly; GitHub only returns a
       // verified primary address, and Entra addresses belong to the tenant.
       if (profile && profile.email_verified === false) return false;
-      return roleFor(user.email, account?.provider) !== null;
+      return (await roleFor(user.email, account?.provider)) !== null;
     },
-    jwt({ token, account }) {
+    async jwt({ token, account }) {
       if (account) token.provider = account.provider;
-      const role = roleFor(token.email, token.provider);
+      const role = await roleFor(token.email, token.provider);
       // No role any more: end the session rather than serve a stale one.
       if (!role) return null;
       token.role = role;

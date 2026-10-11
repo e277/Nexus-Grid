@@ -508,13 +508,18 @@ which it had not.
 
 ## 11. What the platform owns
 
-Two tables: agent activities and the audit trail. The audit trail is written by
-the route wrapper and attributed to the verified caller: the signed-in person's
-address, or `service:<name>` for an API token. There is still no user table:
-people sign in through the deploying organisation's identity provider (Auth.js,
-JWT sessions) and get a viewer, operator or admin role from an allow-list in
-the environment. The wrapper checks that role on every route. See the README's
-Authentication section.
+Three tables: agent activities, the audit trail, and access granted from the
+console. The audit trail is written by the route wrapper and attributed to the
+verified caller: the signed-in person's address, or `service:<name>` for an API
+token. People sign in through the deploying organisation's identity provider
+(Auth.js, JWT sessions) and get a viewer, operator or admin role from the
+environment's allow-lists or a grant an admin stored; the wrapper checks that
+role on every route. See the README's Authentication section.
+
+With `DATABASE_URL` set, all three tables and the workflow checkpoints live in
+Postgres (Drizzle migrations in `drizzle/`, applied on first use, audit rows
+append-only by trigger). Without it they stay process-local, grants cannot be
+stored, and paused runs use SQLite or memory, as before.
 
 ---
 

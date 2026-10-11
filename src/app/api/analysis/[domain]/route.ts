@@ -45,12 +45,12 @@ export const GET = api<{ domain: string }>(async ({ params, query }) => {
   if (domain === "impact") {
     // Readable names, not identifiers: this goes into a prompt, and an
     // analyst handed `supply_intelligence: no_material_gap` quotes it back.
-    inputs.decisions = listAgentActivities({ limit: 200 }).map((a) => ({
+    inputs.decisions = (await listAgentActivities({ limit: 200 })).map((a) => ({
       agent: agentTitle(a.agent_name),
       action: actionLabel(a.action),
       confidence: a.confidence ?? null,
     }));
-    inputs.gateOutcomes = listAuditLogs({ limit: 200 })
+    inputs.gateOutcomes = (await listAuditLogs({ limit: 200 }))
       .filter((log) => log.action.startsWith("workflow.gate_"))
       .reduce<Record<string, number>>((acc, log) => {
         const decision = log.action.replace("workflow.gate_", "");

@@ -45,17 +45,16 @@ export abstract class BaseAgent {
     if (this.memory.length > MEMORY_SIZE) this.memory.shift();
 
 
-    try {
-      recordAgentActivity({
-        agentName: this.name,
-        action: result.action,
-        confidence: result.confidence,
-        context: { payload, outputs: result.outputs },
-      });
-    } catch (error) {
-      // Activity persistence must never break the decision path
+    // Not awaited: the decision path must never wait on, or fail because of,
+    // the log of its own decisions.
+    recordAgentActivity({
+      agentName: this.name,
+      action: result.action,
+      confidence: result.confidence,
+      context: { payload, outputs: result.outputs },
+    }).catch((error) => {
       console.error("Failed to record agent activity", error);
-    }
+    });
     return result;
   }
 
