@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** Read-only: records are written by services, not via the API. */
-export const GET = api(({ query }) => {
+export const GET = api(async ({ query }) => {
   return listAuditLogs({
     ...pagination(query),
     actor: query.get("actor"),

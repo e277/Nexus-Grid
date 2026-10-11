@@ -10,7 +10,7 @@ export function recordAgentActivity(params: {
   action: string;
   confidence?: number | null;
   context?: Record<string, unknown> | null;
-}): AgentActivity {
+}): Promise<AgentActivity> {
   return agentActivities.create({
     agent_name: params.agentName,
     action: params.action,
@@ -24,7 +24,7 @@ export function listAgentActivities(options: {
   skip?: number;
   limit?: number;
   agent_name?: string | null;
-}): AgentActivity[] {
+}): Promise<AgentActivity[]> {
   return agentActivities.list(options);
 }
 
@@ -53,7 +53,7 @@ export function recordAudit(params: {
   entityType?: string | null;
   entityId?: number | null;
   detail?: string | null;
-}): AuditLog {
+}): Promise<AuditLog> {
   return auditLogs.create({
     actor: params.actor,
     action: params.action,
@@ -69,6 +69,6 @@ export function listAuditLogs(options: {
   limit?: number;
   actor?: string | null;
   entity_type?: string | null;
-}): AuditLog[] {
+}): Promise<AuditLog[]> {
   return auditLogs.list(options);
 }

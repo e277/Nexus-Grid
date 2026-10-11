@@ -46,7 +46,7 @@ describe("api() access control", () => {
   it("audits a state change under the verified caller, not X-Actor", async () => {
     identity.current = { id: "ops@coop.tt", role: "operator", kind: "user" };
     expect((await call("POST", "/api/sources/refresh")).status).toBe(200);
-    const [latest] = listAuditLogs({ limit: 1 });
+    const [latest] = await listAuditLogs({ limit: 1 });
     expect(latest.actor).toBe("ops@coop.tt");
     expect(latest.action).toBe("sources.refresh");
   });

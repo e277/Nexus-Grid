@@ -78,3 +78,17 @@ describe("API tokens", () => {
     expect(tokens.map((token) => token.name)).toEqual(["ok"]);
   });
 });
+
+describe("resolveRole with a stored grant", () => {
+  it("uses the stored role for an address the environment does not name", () => {
+    expect(resolveRole("new@coop.tt", policy, { role: "operator", disabled: false })).toBe("operator");
+  });
+
+  it("lets the environment win, so the owners cannot be locked out", () => {
+    expect(resolveRole("chief@ministry.gov.jm", policy, { role: "viewer", disabled: true })).toBe("admin");
+  });
+
+  it("shuts out a disabled grant even at an allowed domain", () => {
+    expect(resolveRole("clerk@ministry.gov.jm", policy, { role: "viewer", disabled: true })).toBeNull();
+  });
+});

@@ -8,6 +8,7 @@ import {
   Truck,
   Warehouse,
   LineChart,
+  UserCog,
   type LucideIcon,
 } from "lucide-react";
 
@@ -22,7 +23,8 @@ export type PageId =
   | "crop-planning"
   | "freight"
   | "distribution"
-  | "visibility";
+  | "visibility"
+  | "access";
 
 export interface Page {
   id: PageId;
@@ -37,6 +39,8 @@ export interface Page {
    * Absent on the dashboard and on the cross-cutting analysis.
    */
   domain?: AnalysisDomain;
+  /** Shown only to admins. The API enforces the same rule. */
+  adminOnly?: boolean;
 }
 
 export interface NavGroup {
@@ -150,6 +154,20 @@ export const NAV_GROUPS: NavGroup[] = [
         title: "Supply Chain Visibility & Tracking",
         description:
           "End-to-end visibility systems that track food from farm to market across the regional supply chain.",
+      },
+    ],
+  },
+  {
+    label: "Administration",
+    pages: [
+      {
+        id: "access",
+        label: "Access",
+        icon: UserCog,
+        adminOnly: true,
+        title: "Access",
+        description:
+          "Who can sign in and what they can do. People named in the deployment's environment are fixed here; everyone else is managed below.",
       },
     ],
   },

@@ -11,6 +11,7 @@ import { DashboardView } from "./views/DashboardView";
 import { DomainView } from "./views/DomainView";
 import { CropPlanningView } from "./views/CropPlanningView";
 import { FreightView } from "./views/FreightView";
+import { AccessView } from "./views/AccessView";
 import { VisibilityView } from "./views/VisibilityView";
 import { ViewerProvider, type Viewer } from "./viewer";
 
@@ -81,6 +82,7 @@ export default function App({ viewer }: { viewer: Viewer }) {
             {page === "crop-planning" ? <CropPlanningView /> : null}
             {page === "freight" ? <FreightView /> : null}
             {page === "visibility" ? <VisibilityView /> : null}
+            {page === "access" && viewer.role === "admin" ? <AccessView /> : null}
             {/* The five specialist readings are one component: they differ in
                 which agent produced them, not in how a reading is presented.
                 `key` remounts on navigation so a cell selected on one page does
