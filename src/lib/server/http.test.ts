@@ -43,6 +43,22 @@ describe("api() access control", () => {
     expect((await call("GET", "/api/metrics", metrics)).status).toBe(403);
   });
 
+  it("shuts demo accounts out of a route marked demo: false, whatever their role", async () => {
+    const access = api(() => ({ ok: true }), { access: "admin", demo: false });
+    identity.current = { id: "admin@demo.nexus-grid.invalid", role: "admin", kind: "user" };
+    const response = await call("POST", "/api/admin/users", access);
+    expect(response.status).toBe(403);
+    expect((await response.json()).detail).toMatch(/Demo accounts/);
+
+    identity.current = { id: "owner@coop.tt", role: "admin", kind: "user" };
+    expect((await call("POST", "/api/admin/users", access)).status).toBe(200);
+  });
+
+  it("lets demo accounts use the routes their role covers", async () => {
+    identity.current = { id: "operator@demo.nexus-grid.invalid", role: "operator", kind: "user" };
+    expect((await call("POST", "/api/sources/refresh")).status).toBe(200);
+  });
+
   it("audits a state change under the verified caller, not X-Actor", async () => {
     identity.current = { id: "ops@coop.tt", role: "operator", kind: "user" };
     expect((await call("POST", "/api/sources/refresh")).status).toBe(200);

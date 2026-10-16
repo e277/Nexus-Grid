@@ -33,7 +33,8 @@ export const GET = api(
       default_role: policy.defaultRole,
     };
   },
-  { access: "admin" }
+  // A demo admin is any visitor; the list names the deployment's real users.
+  { access: "admin", demo: false }
 );
 
 /** Grant, change or disable one person's access. */
@@ -60,6 +61,8 @@ export const POST = api(
   },
   {
     access: "admin",
+    // A grant outlives the demo: a visitor could hand their own account admin.
+    demo: false,
     audit: (result) => {
       const user = result as { email: string; role: string; disabled: boolean };
       return {

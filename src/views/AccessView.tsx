@@ -10,6 +10,7 @@ import { Card } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Skeleton } from "../components/ui/skeleton";
 import { usePoll } from "../hooks";
+import { isDemoEmail } from "../lib/demo";
 import type { AccessRole, AccessUser } from "../types";
 import { useViewer } from "../viewer";
 
@@ -48,6 +49,24 @@ function RoleBadge({ role }: { role: AccessRole }) {
  * nobody can lock the owners out.
  */
 export function AccessView() {
+  const viewer = useViewer();
+  // The server refuses demo accounts here too (`demo: false` on the route);
+  // this only saves them a request and says why instead of showing an error.
+  if (isDemoEmail(viewer?.email)) {
+    return (
+      <Card className="p-5">
+        <h2 className="text-ng-lg font-semibold text-ng-primary">Access is managed by real admins</h2>
+        <p className="mt-1 text-ng-base leading-relaxed text-ng-secondary">
+          You&apos;re signed in with a shared demo account, so this page doesn&apos;t show who has access
+          or let you change it. Everything else an admin can see is open to you.
+        </p>
+      </Card>
+    );
+  }
+  return <AccessManager />;
+}
+
+function AccessManager() {
   const viewer = useViewer();
   const { data, error, refresh } = usePoll(() => api.accessOverview(), 60_000);
 

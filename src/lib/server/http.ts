@@ -7,6 +7,7 @@
  * `{ "detail": ... }` JSON body the client knows how to read.
  */
 
+import { isDemoEmail } from "../demo";
 import { identify, type Principal } from "./auth/identity";
 import { satisfies, type Role } from "./auth/policy";
 import { ensureBootstrapped } from "./bootstrap";
@@ -49,6 +50,13 @@ interface Options {
    * state, so a new route is never open by omission.
    */
   access?: Access;
+  /**
+   * `false` shuts out the shared demo accounts (lib/demo.ts) whatever their
+   * role. Demo sign-in hands any visitor any role, so a route whose effect
+   * outlasts the demo — granting access — or that shows who the real users
+   * are must not be reachable by them.
+   */
+  demo?: boolean;
   /** Status for a successful JSON response (201 for creates). */
   status?: number;
   /**
@@ -162,6 +170,9 @@ export function api<P = Record<string, string>>(handler: Handler<P>, options: Op
 
     try {
       const principal = await authorize(request, options.access ?? defaultAccess(request.method));
+      if (options.demo === false && principal?.kind === "user" && isDemoEmail(principal.id)) {
+        throw new HttpError(403, "Demo accounts can't use this. Sign in with your organisation account.");
+      }
       const params = ((await context?.params) ?? {}) as P;
       const result = await handler({ request, principal, params, query: url.searchParams });
 
