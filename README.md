@@ -167,6 +167,22 @@ Integrations call the API with a service-account token:
 or `service:<name>` for every state change; the old `X-Actor` header is no
 longer trusted.
 
+### Demo accounts
+
+For a public demo, set `AUTH_DEMO_LOGIN=1` (with `AUTH_SECRET`). The sign-in
+page then offers **Sign in as Viewer**, **Operator** and **Admin** buttons, with
+no provider or password needed. Each button signs in as one shared account, such
+as `operator@demo.nexus-grid.invalid`, and the audit trail records it under that
+name.
+
+This works in production, so anyone who can open the sign-in page gets in as
+any role. Demo accounts can do everything their role allows, with one
+exception: they can't see or change who has access, so a visitor can't grant
+their own account admin. They can still read everything a viewer can, including
+the audit trail, which names whoever has acted in the console. Turn it on only
+for a deployment meant to be shown. Unsetting the variable ends every demo
+session at its next request.
+
 ## Database
 
 Set `DATABASE_URL` to a Postgres connection string and the platform's own
